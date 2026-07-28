@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Download arrow icon for SuperIDM -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Arrow down body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 L54,68 M54,68 L36,50 M54,68 L72,50"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="7" />
+    <!-- Base line -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,82 L78,82"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="7" />
+</vector>

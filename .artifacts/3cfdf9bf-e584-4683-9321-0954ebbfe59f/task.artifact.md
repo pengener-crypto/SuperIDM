@@ -1,0 +1,11 @@
+- [x] Fix imports in core classes and ViewModels
+- [x] Implement `SettingsRepository.kt` (User already applied a direct `DataStore` injection)
+- [x] Implement `DownloadServiceHelper.kt` (User already updated `HomeViewModel` to call service directly)
+- [x] Fix navigation parameter names across all screens (`onNavigateBack` -> `onBack`)
+- [x] Fix `Aria2RpcClient` serialization types
+- [x] Fix `QueueManager` and `DownloadEngine` repository calls and coroutine scopes
+- [x] Fix `TorrentEngine` libtorrent4j API mismatches
+- [x] Fix `SuperIDMWidget` Glance API mismatches
+- [x] Fix Google Fonts `Type.kt` and missing certificate resource
+- [x] Run Gradle build (`:app:assembleDebug`)
+- [x] Verify build success

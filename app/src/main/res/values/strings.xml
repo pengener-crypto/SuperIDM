@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">SuperIDM</string>
+    <string name="home_title">SuperIDM</string>
+    <string name="history_title">History</string>
+    <string name="settings_title">Settings</string>
+    <string name="active_downloads">Active Downloads</string>
+    <string name="no_active_downloads">No Active Downloads</string>
+    <string name="add_new_download">Tap the + button to add a new download</string>
+    <string name="search_history">Search downloads...</string>
+    <string name="clear_history">Clear History</string>
+    <string name="confirm_clear_history">This will permanently remove all completed download records.</string>
+    <string name="no_history">No History</string>
+    <string name="history_empty_subtitle">Your completed downloads will appear here</string>
+    <string name="appearance">Appearance</string>
+    <string name="dynamic_color">Dynamic Color</string>
+    <string name="downloads">Downloads</string>
+    <string name="max_concurrent">Max Concurrent Downloads</string>
+    <string name="network_integration">Network &amp; Integration</string>
+    <string name="clipboard_watcher">Clipboard Watcher</string>
+    <string name="cancel">Cancel</string>
+    <string name="clear">Clear</string>
+    <string name="start_download">Start Download</string>
+    <string name="url_hint">URL</string>
+    <string name="file_name_hint">File Name (Optional)</string>
+    <string name="priority">Priority</string>
+</resources>
