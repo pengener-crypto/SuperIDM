@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "341276640488",
+    "project_id": "superidm-4f3a9dd5",
+    "storage_bucket": "superidm-4f3a9dd5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:341276640488:android:49bde1c04f4fe7e2a1f55d",
+        "android_client_info": {
+          "package_name": "com.superidm.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXNI_eqVjvEWccq3YQyN9yQBPMpbnRch4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

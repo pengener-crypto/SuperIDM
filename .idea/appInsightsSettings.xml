@@ -9,10 +9,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.superidm.debug" />
+                  <option name="mobileSdkAppId" value="1:341276640488:android:49bde1c04f4fe7e2a1f55d" />
+                  <option name="projectId" value="superidm-4f3a9dd5" />
+                  <option name="projectNumber" value="341276640488" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
