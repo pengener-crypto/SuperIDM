@@ -1,0 +1,2370 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SuperIDM &mdash; Download Engine v2.4.0</title>
+<meta name="description" content="SuperIDM is a high-performance download manager with multi-connection segmented downloading, queue management, and real-time bandwidth monitoring."/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="tailwind.css" rel="stylesheet"/>
+<style>
+body{background:#111317;color:#e2e2e8;font-family:'Inter',sans-serif;overflow:hidden;user-select:none}
+.material-symbols-outlined{font-family:'Material Symbols Outlined'!important;font-weight:normal!important;font-style:normal!important;font-size:20px!important;line-height:1!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;letter-spacing:normal!important;text-transform:none!important;white-space:nowrap!important;direction:ltr!important;vertical-align:middle!important;overflow:visible!important;flex-shrink:0!important}
+.hdr-icon-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:36px!important;height:36px!important;border-radius:8px!important;color:#b9caca!important;background:rgba(255,255,255,.04)!important;border:1px solid rgba(255,255,255,.08)!important;transition:all .15s cubic-bezier(.2,.8,.2,1)!important;cursor:pointer!important;position:relative!important}
+.hdr-icon-btn:hover{color:#00f5ff!important;background:rgba(0,245,255,.12)!important;border-color:rgba(0,245,255,.35)!important;transform:translateY(-1px)!important}
+.hdr-icon-btn:active{transform:scale(.95)!important}
+#notifDot{position:absolute!important;top:6px!important;right:6px!important;width:8px!important;height:8px!important;border-radius:50%!important;background-color:#00f5ff!important;border:1.5px solid #111317!important}
+html:not(.dark) .hdr-icon-btn{color:#334155!important;background:#ffffff!important;border:1px solid #cbd5e1!important;box-shadow:0 1px 2px rgba(0,0,0,.04)!important}
+html:not(.dark) .hdr-icon-btn:hover{color:#0284c7!important;background:#f0f9ff!important;border-color:#38bdf8!important;box-shadow:0 2px 5px rgba(2,132,199,.12)!important}
+html:not(.dark) #themeIco{color:#d97706!important}
+html:not(.dark) #notifDot{background-color:#0284c7!important;border-color:#ffffff!important}
+.hdr-divider{display:inline-block!important;width:1px!important;height:22px!important;margin:0 14px!important;background:rgba(255,255,255,.12)!important;flex-shrink:0!important}
+html:not(.dark) .hdr-divider{background:#cbd5e1!important}
+.progress-pulse{animation:pulse-op 2s cubic-bezier(.4,0,.6,1) infinite}
+@keyframes pulse-op{0%,100%{opacity:1}50%{opacity:.35}}
+.mini-graph{background:linear-gradient(to top,rgba(0,245,255,.12) 0%,transparent 100%);border-bottom:1px solid #00f5ff}
+.glass-panel{background:rgba(45,48,62,.93);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08)}
+.input-glow:focus-within{border-color:#00f5ff!important;box-shadow:0 0 0 1px #00f5ff}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#1a1c20}
+::-webkit-scrollbar-thumb{background:#333539;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#849495}
+@keyframes slideInUp{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes slideOutDown{from{transform:translateY(0);opacity:1}to{transform:translateY(120%);opacity:0}}
+.toast-enter{animation:slideInUp .4s cubic-bezier(.16,1,.3,1) forwards}
+.toast-exit{animation:slideOutDown .35s ease-in forwards}
+@keyframes fadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+.modal-enter{animation:fadeIn .2s ease forwards}
+@keyframes glow{0%{box-shadow:0 0 0 0 rgba(0,245,255,.4)}70%{box-shadow:0 0 0 8px rgba(0,245,255,0)}100%{box-shadow:0 0 0 0 rgba(0,245,255,0)}}
+.glow-btn{animation:glow 2.5s infinite}
+.slink{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:2px;cursor:pointer;transition:all .15s;color:#b9caca}
+.slink:hover{background:#282a2e;color:#e2e2e8}
+.slink.active{color:#e9feff!important;background:rgba(233,254,255,.1);border-right:2px solid #e9feff}
+.seg-bar{display:flex;gap:2px;height:6px;width:100%;max-width:380px}
+.seg{flex:1;transition:background .5s}
+.seg.done{background:#00f5ff}
+.seg.act{background:rgba(0,245,255,.45);animation:pulse-op 1.4s infinite}
+.seg.empty{background:#333539}
+.dl-row{transition:border-color .2s}
+.dl-row:hover{border-color:rgba(0,245,255,.22)!important}
+.dl-act{opacity:0;transition:opacity .15s}
+.dl-row:hover .dl-act{opacity:1}
+.bw-bars{display:flex;align-items:flex-end;gap:2px;height:60px}
+.bw-bar{flex:1;min-height:2px;background:rgba(0,245,255,.35);border-radius:1px 1px 0 0;transition:height .4s}
+.bw-bar.pk{background:#00f5ff}
+.tab-lnk{border-bottom:2px solid transparent;transition:all .15s;color:#b9caca;cursor:pointer}
+.tab-lnk.active{color:#e9feff;border-color:#e9feff}
+.tab-lnk:not(.active):hover{color:#e2e2e8}
+.tgl-sw{position:relative;display:inline-block;width:36px;height:20px}
+.tgl-sw input{opacity:0;width:0;height:0}
+.tgl-sl{position:absolute;inset:0;background:#333539;border-radius:10px;cursor:pointer;transition:.3s}
+.tgl-sl:before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#849495;border-radius:50%;transition:.3s}
+input:checked+.tgl-sl{background:#00f5ff}
+input:checked+.tgl-sl:before{transform:translateX(16px);background:#003739}
+.det-panel{display:none;background:#1a1c20;border-top:1px solid rgba(58,73,74,.5)}
+.det-panel.open{display:grid}
+input[type=range]{appearance:none;-webkit-appearance:none;height:4px;background:#333539;border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:14px;height:14px;background:#00f5ff;border-radius:50%;cursor:pointer}
+.pri-btn{flex:1;padding:4px 8px;font-family:'JetBrains Mono';font-size:12px;text-align:center;cursor:pointer;border-radius:2px;transition:all .15s;color:#b9caca}
+.pri-btn.sel{background:#00f5ff;color:#003739}
+.pri-btn:not(.sel):hover{background:#282a2e}
+.log-e{font-family:'JetBrains Mono';font-size:12px;padding:3px 0;border-bottom:1px solid #1a1c20}
+.log-e.info{color:#b9caca}.log-e.success{color:#00f5ff}.log-e.warn{color:#ffb59c}.log-e.error{color:#ffb4ab}
+#clipPrompt{animation:slideInUp .4s cubic-bezier(.16,1,.3,1) forwards}
+
+/* ════════ LIGHT MODE HIGH CONTRAST THEME ════════ */
+html:not(.dark) body { background: #f1f5f9 !important; color: #0f172a !important; }
+html:not(.dark) aside { background: #ffffff !important; border-color: #e2e8f0 !important; box-shadow: 1px 0 3px rgba(0,0,0,0.03) !important; }
+html:not(.dark) header { background: rgba(255, 255, 255, 0.95) !important; border-color: #e2e8f0 !important; box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important; }
+
+/* Primary Colors & Headings */
+html:not(.dark) .text-primary { color: #0284c7 !important; }
+html:not(.dark) #pgTitle { color: #0f172a !important; font-weight: 700 !important; }
+html:not(.dark) .text-primary-container { color: #0369a1 !important; }
+html:not(.dark) .bg-primary-container { background-color: #0284c7 !important; color: #ffffff !important; }
+html:not(.dark) .bg-primary-container:hover { background-color: #0369a1 !important; }
+html:not(.dark) .text-on-primary-container { color: #ffffff !important; }
+
+/* Surface containers (Cards, Boxes, Panels) */
+html:not(.dark) .bg-surface-container-lowest { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
+html:not(.dark) .bg-surface-container-low { background-color: #ffffff !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important; }
+html:not(.dark) .bg-surface-container { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
+html:not(.dark) .bg-surface-container-high { background-color: #f8fafc !important; border-color: #cbd5e1 !important; }
+html:not(.dark) .bg-surface-container-highest { background-color: #f1f5f9 !important; border-color: #cbd5e1 !important; }
+
+/* Typography & Contrast */
+html:not(.dark) .text-on-surface { color: #0f172a !important; font-weight: 600 !important; }
+html:not(.dark) .text-on-surface-variant { color: #334155 !important; font-weight: 500 !important; }
+html:not(.dark) .text-on-surface-variant\/50 { color: #64748b !important; }
+html:not(.dark) .text-on-surface-variant\/60 { color: #475569 !important; }
+html:not(.dark) .text-on-surface-variant\/70 { color: #475569 !important; }
+
+/* Borders & Outlines */
+html:not(.dark) .border-outline-variant,
+html:not(.dark) .border-outline-variant\/50,
+html:not(.dark) .border-outline-variant\/60 { border-color: #e2e8f0 !important; }
+
+/* Sidebar Navigation */
+html:not(.dark) .slink { color: #475569 !important; font-weight: 500 !important; }
+html:not(.dark) .slink:hover { background: #f1f5f9 !important; color: #0f172a !important; }
+html:not(.dark) .slink.active { background: #e0f2fe !important; color: #0284c7 !important; font-weight: 700 !important; border-right: 3px solid #0284c7 !important; }
+html:not(.dark) .slink.active .material-symbols-outlined { color: #0284c7 !important; }
+
+/* Top Header Tabs */
+html:not(.dark) .tab-lnk { color: #64748b !important; font-weight: 600 !important; }
+html:not(.dark) .tab-lnk:not(.active):hover { color: #0f172a !important; }
+html:not(.dark) .tab-lnk.active { color: #0284c7 !important; border-color: #0284c7 !important; font-weight: 700 !important; }
+
+/* KPI Stats Card values */
+html:not(.dark) #sDnSpd { color: #0284c7 !important; font-weight: 700 !important; }
+html:not(.dark) #sUpSpd, html:not(.dark) #sAct, html:not(.dark) #sLoad { color: #0f172a !important; font-weight: 700 !important; }
+html:not(.dark) #sTotalDn, html:not(.dark) #sQueuedTxt, html:not(.dark) #sConns { color: #475569 !important; font-weight: 500 !important; }
+
+/* Download Rows & Table */
+html:not(.dark) .dl-row { background-color: #ffffff !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important; }
+html:not(.dark) .dl-row:hover { border-color: #38bdf8 !important; background-color: #f8fafc !important; }
+html:not(.dark) .det-panel { background: #f8fafc !important; border-top: 1px solid #e2e8f0 !important; color: #334155 !important; }
+
+/* Progress Segments in Light Mode */
+html:not(.dark) .seg-bar { background: #e2e8f0 !important; border-radius: 2px !important; }
+html:not(.dark) .seg.done { background: #0284c7 !important; }
+html:not(.dark) .seg.act { background: #38bdf8 !important; }
+html:not(.dark) .seg.empty { background: #e2e8f0 !important; }
+
+/* Status Badges with Crisp Contrast */
+html:not(.dark) .bg-emerald-500\/15,
+html:not(.dark) .border-emerald-500\/30 {
+  background-color: #dcfce7 !important;
+  color: #15803d !important;
+  border-color: #86efac !important;
+  font-weight: 700 !important;
+}
+html:not(.dark) .text-emerald-400 { color: #15803d !important; font-weight: 700 !important; }
+
+html:not(.dark) .bg-primary-container\/15,
+html:not(.dark) .border-primary-container\/30 {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #7dd3fc !important;
+  font-weight: 700 !important;
+}
+
+html:not(.dark) .bg-amber-500\/15,
+html:not(.dark) .border-amber-500\/30 {
+  background-color: #fef3c7 !important;
+  color: #b45309 !important;
+  border-color: #fcd34d !important;
+  font-weight: 700 !important;
+}
+html:not(.dark) .text-amber-400 { color: #b45309 !important; font-weight: 700 !important; }
+
+/* Search & Inputs */
+html:not(.dark) input, html:not(.dark) select, html:not(.dark) textarea {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+html:not(.dark) input::placeholder {
+  color: #64748b !important;
+}
+
+/* Modals & Dialogs */
+html:not(.dark) .modal-bg { background-color: rgba(15, 23, 42, 0.45) !important; backdrop-filter: blur(8px) !important; }
+html:not(.dark) .modal-box,
+html:not(.dark) .glass-panel {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Logs in Light Mode */
+html:not(.dark) .log-e { border-bottom: 1px solid #e2e8f0 !important; }
+html:not(.dark) .log-e.info { color: #334155 !important; }
+html:not(.dark) .log-e.success { color: #15803d !important; font-weight: 600 !important; }
+html:not(.dark) .log-e.warn { color: #b45309 !important; font-weight: 600 !important; }
+html:not(.dark) .log-e.error { color: #b91c1c !important; font-weight: 600 !important; }
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.45);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.75);
+}
+
+html:not(.dark) ::-webkit-scrollbar-track { background: #f1f5f9 !important; }
+html:not(.dark) ::-webkit-scrollbar-thumb { background: #cbd5e1 !important; border-radius: 4px !important; }
+html:not(.dark) ::-webkit-scrollbar-thumb:hover { background: #94a3b8 !important; }
+
+/* Custom smooth scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(6, 182, 212, 0.45) rgba(15, 23, 42, 0.6);
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+html:not(.dark) .custom-scrollbar {
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+</style>
+</head>
+<body class="flex h-screen w-screen overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
+
+<!-- ══ SIDEBAR ══ -->
+<aside class="bg-surface-container w-[280px] h-screen fixed left-0 top-0 border-r border-outline-variant flex flex-col z-50 overflow-y-auto">
+  <div class="p-6 border-b border-outline-variant">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-10 h-10 rounded bg-primary/10 flex items-center justify-center border border-primary/20">
+        <span class="material-symbols-outlined text-primary" style="font-variation-settings:'FILL' 1;font-size:22px">terminal</span>
+      </div>
+      <div>
+        <h1 class="text-[16px] font-bold text-primary tracking-tight" style="font-family:Inter">SuperIDM</h1>
+        <p class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.4.0 Engine</p>
+      </div>
+    </div>
+    <button id="btnAddModal" onclick="openAddModal()" data-act="open-modal" class="w-full py-2 px-4 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded transition-all flex items-center justify-center gap-2 active:scale-95 glow-btn text-[14px]" style="font-family:Inter">
+      <span class="material-symbols-outlined text-[18px]" style="font-variation-settings:'FILL' 1">add</span>Add New Link
+    </button>
+  </div>
+  <nav class="flex-1 py-4 px-3">
+    <p class="text-[11px] text-on-surface-variant uppercase tracking-wider px-3 mb-2" style="font-family:'JetBrains Mono'">Downloads</p>
+    <ul class="space-y-0.5">
+      <li><a class="slink active" id="nav-downloading" data-act="nav" data-view="downloading"><span class="material-symbols-outlined text-[20px]">downloading</span><span class="text-[14px]" style="font-family:Inter">Downloading</span><span id="bdg-dl" class="ml-auto bg-primary-container text-on-primary-container text-[11px] px-2 py-0.5 rounded-full" style="font-family:'JetBrains Mono'">0</span></a></li>
+      <li><a class="slink" id="nav-all" data-act="nav" data-view="all"><span class="material-symbols-outlined text-[20px]">list</span><span class="text-[14px]" style="font-family:Inter">All Downloads</span><span id="bdg-all" class="ml-auto text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"></span></a></li>
+      <li><a class="slink" id="nav-completed" data-act="nav" data-view="completed"><span class="material-symbols-outlined text-[20px]">check_circle</span><span class="text-[14px]" style="font-family:Inter">Completed</span><span id="bdg-comp" class="ml-auto text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"></span></a></li>
+      <li><a class="slink" id="nav-queued" data-act="nav" data-view="queued"><span class="material-symbols-outlined text-[20px]">schedule</span><span class="text-[14px]" style="font-family:Inter">Queued</span><span id="bdg-q" class="ml-auto text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"></span></a></li>
+    </ul>
+    <p class="text-[11px] text-on-surface-variant uppercase tracking-wider px-3 mb-2 mt-5" style="font-family:'JetBrains Mono'">Categories</p>
+    <ul class="space-y-0.5">
+      <li><a class="slink" data-act="cat" data-cat="Videos"><span class="material-symbols-outlined text-[20px]">movie</span><span class="text-[14px]" style="font-family:Inter">Videos</span></a></li>
+      <li><a class="slink" data-act="cat" data-cat="Music"><span class="material-symbols-outlined text-[20px]">music_note</span><span class="text-[14px]" style="font-family:Inter">Music</span></a></li>
+      <li><a class="slink" data-act="cat" data-cat="Documents"><span class="material-symbols-outlined text-[20px]">description</span><span class="text-[14px]" style="font-family:Inter">Documents</span></a></li>
+      <li><a class="slink" data-act="cat" data-cat="Archives"><span class="material-symbols-outlined text-[20px]">folder_zip</span><span class="text-[14px]" style="font-family:Inter">Archives</span></a></li>
+      <li><a class="slink" data-act="cat" data-cat="Programs"><span class="material-symbols-outlined text-[20px]">apps</span><span class="text-[14px]" style="font-family:Inter">Programs</span></a></li>
+    </ul>
+  </nav>
+  <div class="p-4 border-t border-outline-variant">
+    <ul class="space-y-0.5">
+      <li><a class="slink" id="nav-settings" data-act="nav" data-view="settings"><span class="material-symbols-outlined text-[20px]">settings</span><span class="text-[14px]" style="font-family:Inter">Settings</span></a></li>
+      <li><a class="slink" id="nav-logs" data-act="nav" data-view="logs"><span class="material-symbols-outlined text-[20px]">terminal</span><span class="text-[14px]" style="font-family:Inter">Logs</span></a></li>
+    </ul>
+    <div class="mt-3 px-3 flex items-center gap-3">
+      <div class="w-8 h-8 rounded-full bg-primary/15 border border-primary/25 flex items-center justify-center"><span class="material-symbols-outlined text-primary text-[16px]">person</span></div>
+      <div class="text-[11px] text-on-surface-variant truncate flex-1 font-semibold" style="font-family:'JetBrains Mono'">Kutha SoftWorks</div>
+      <div class="w-2 h-2 rounded-full bg-primary-container animate-pulse" title="Connected"></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ══ MAIN ══ -->
+<main class="ml-[280px] flex-1 flex flex-col h-screen max-h-screen overflow-hidden">
+
+  <!-- TOP BAR -->
+  <header class="border-b border-outline-variant flex justify-between items-center h-16 px-6 shrink-0 z-40 bg-surface-container/90 backdrop-blur-md">
+    <div class="flex items-center gap-8">
+      <h2 id="pgTitle" class="text-[22px] font-semibold text-primary" style="font-family:Inter">Network Overview</h2>
+      <nav class="flex gap-5 h-full items-center" id="mainTabs">
+        <a class="tab-lnk active h-16 flex items-center text-[14px] px-1" data-act="tab" data-tab="network">Network</a>
+        <a class="tab-lnk h-16 flex items-center text-[14px] px-1" data-act="tab" data-tab="bandwidth">Bandwidth</a>
+        <a class="tab-lnk h-16 flex items-center text-[14px] px-1" data-act="tab" data-tab="scheduler">Scheduler</a>
+      </nav>
+    </div>
+    <div class="flex items-center">
+      <div class="relative">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" style="font-size:18px">search</span>
+        <input id="srchInput" type="text" placeholder="Search downloads..." class="bg-surface-container-high border border-outline-variant text-on-surface text-[13px] rounded pl-9 pr-4 py-1.5 focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none transition-all w-56 placeholder:text-on-surface-variant/50" style="font-family:Inter" oninput="renderDLs()"/>
+      </div>
+      <div class="hdr-divider"></div>
+      <div class="flex items-center gap-2">
+        <button onclick="toggleTheme()" class="hdr-icon-btn" title="Dark / Light Mode" data-act="theme-tog"><span class="material-symbols-outlined text-[19px]" id="themeIco">dark_mode</span></button>
+        <button onclick="showNotifications()" class="hdr-icon-btn" title="Notifications" id="notifBtn" data-act="notif-tog"><span class="material-symbols-outlined text-[19px]">notifications</span><span id="notifDot" class="hidden"></span></button>
+        <button onclick="pauseAll()" class="hdr-icon-btn" title="Pause all (Ctrl+P)" data-act="pause-all"><span class="material-symbols-outlined text-[19px]">pause</span></button>
+        <button onclick="resumeAll()" class="hdr-icon-btn" title="Resume all (Ctrl+R)" data-act="resume-all"><span class="material-symbols-outlined text-[19px]">play_arrow</span></button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── NETWORK VIEW ── -->
+  <div id="netView" class="p-6 flex-1 overflow-y-auto min-h-0 custom-scrollbar">
+    <!-- Stats -->
+    <div class="grid grid-cols-4 gap-3 mb-4">
+      <div class="bg-surface-container-low border border-outline-variant rounded p-4">
+        <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">Total Down</div>
+        <div class="flex items-baseline gap-1.5"><span id="sDnSpd" class="text-[18px] font-semibold text-primary" style="font-family:'JetBrains Mono'">0.0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">MB/s</span></div>
+        <div class="text-[11px] text-on-surface-variant mt-1" id="sTotalDn" style="font-family:'JetBrains Mono'">0 B downloaded</div>
+      </div>
+      <div class="bg-surface-container-low border border-outline-variant rounded p-4">
+        <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">Total Up</div>
+        <div class="flex items-baseline gap-1.5"><span id="sUpSpd" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0.1</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">MB/s</span></div>
+        <div class="text-[11px] text-on-surface-variant mt-1" style="font-family:'JetBrains Mono'">Heartbeat active</div>
+      </div>
+      <div class="bg-surface-container-low border border-outline-variant rounded p-4">
+        <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">Active Tasks</div>
+        <div class="flex items-baseline gap-1.5"><span id="sAct" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">/ <span id="sTot">0</span></span></div>
+        <div class="text-[11px] text-on-surface-variant mt-1" id="sQueuedTxt" style="font-family:'JetBrains Mono'">0 queued</div>
+      </div>
+      <div class="bg-surface-container-low border border-outline-variant rounded p-4 relative overflow-hidden">
+        <div class="relative z-10">
+          <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">System Load</div>
+          <div class="flex items-baseline gap-1.5"><span id="sLoad" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">%</span></div>
+          <div class="text-[11px] text-on-surface-variant mt-1" id="sConns" style="font-family:'JetBrains Mono'">0 connections</div>
+        </div>
+        <div class="absolute bottom-0 left-0 w-full h-1/2 mini-graph opacity-50 z-0"></div>
+      </div>
+    </div>
+    <!-- Toolbar -->
+    <div class="flex items-center gap-2 mb-3 flex-wrap">
+      <button onclick="openAddModal()" data-act="open-modal" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] bg-primary-container text-on-primary-container rounded hover:bg-primary-fixed-dim transition-all active:scale-95 font-semibold" style="font-family:Inter">
+        <span class="material-symbols-outlined text-[16px]" style="font-variation-settings:'FILL' 1">add</span>Add URL
+      </button>
+      <button onclick="pauseAll()" data-act="pause-all" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high active:scale-95 transition-all" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">pause</span>Pause All</button>
+      <button onclick="resumeAll()" data-act="resume-all" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high active:scale-95 transition-all" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">play_arrow</span>Resume All</button>
+      <button onclick="clearDone()" data-act="clear-done" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high active:scale-95 transition-all" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">delete_sweep</span>Clear Done</button>
+      <div class="ml-auto flex items-center gap-2">
+        <span class="text-[12px] text-on-surface-variant" style="font-family:'JetBrains Mono'">Sort:</span>
+        <select id="sortSel" class="bg-surface-container-high border border-outline-variant text-on-surface-variant text-[12px] rounded px-2 py-1 outline-none" onchange="renderDLs()" style="font-family:'JetBrains Mono'">
+          <option value="date">Date Added</option>
+          <option value="name">Name</option>
+          <option value="size">Size</option>
+          <option value="speed">Speed</option>
+        </select>
+      </div>
+    </div>
+    <!-- Column headers -->
+    <div class="flex items-center gap-4 px-4 py-1.5 text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">
+      <div class="flex-1">File Name</div>
+      <div class="w-32 text-right">Progress</div>
+      <div class="w-24 text-right">Speed</div>
+      <div class="w-20 text-right">ETA</div>
+      <div class="w-20 text-right">Actions</div>
+    </div>
+    <!-- List -->
+    <div id="dlList" class="flex flex-col gap-2"></div>
+    <div id="emptyState" class="hidden flex-col items-center justify-center py-20 text-center">
+      <span class="material-symbols-outlined text-on-surface-variant/30 mb-4" style="font-size:64px">download_for_offline</span>
+      <h3 class="text-[16px] font-semibold text-on-surface-variant mb-2" style="font-family:Inter">No downloads here</h3>
+      <p class="text-[13px] text-on-surface-variant/60 mb-4" style="font-family:Inter">Add a URL or click quick test below</p>
+      <button data-act="open-modal" class="px-4 py-2 bg-primary-container text-on-primary-container rounded text-[13px] font-semibold hover:bg-primary-fixed-dim transition-all" style="font-family:Inter">Add New Download</button>
+    </div>
+  </div>
+
+  <!-- ── BANDWIDTH VIEW ── -->
+  <div id="bwView" class="p-6 flex-1 overflow-y-auto min-h-0 custom-scrollbar hidden">
+    <h3 class="text-[20px] font-semibold text-on-surface mb-1" style="font-family:Inter">Bandwidth Monitor</h3>
+    <p class="text-[13px] text-on-surface-variant mb-5" style="font-family:Inter">Real-time speed over the last 30 samples (400ms intervals)</p>
+    <div class="grid grid-cols-2 gap-4 mb-5">
+      <div class="bg-surface-container border border-outline-variant rounded p-4">
+        <div class="flex justify-between items-center mb-3">
+          <span class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">Download Speed</span>
+          <span class="text-[13px] text-primary-container" style="font-family:'JetBrains Mono'">Peak: <span id="bwPkDn">0.0</span> MB/s</span>
+        </div>
+        <div class="bw-bars" id="bwDnBars"></div>
+        <div class="flex justify-between text-[11px] text-on-surface-variant mt-2" style="font-family:'JetBrains Mono'">
+          <span>30s ago</span><span id="bwCurDn">0.0 MB/s</span><span>Now</span>
+        </div>
+      </div>
+      <div class="bg-surface-container border border-outline-variant rounded p-4">
+        <div class="flex justify-between items-center mb-3">
+          <span class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">Upload Speed</span>
+          <span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">Avg: 0.1 MB/s</span>
+        </div>
+        <div class="bw-bars" id="bwUpBars"></div>
+      </div>
+    </div>
+    <div class="bg-surface-container border border-outline-variant rounded p-5">
+      <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-4" style="font-family:'JetBrains Mono'">Throttle Settings</div>
+      <div class="grid grid-cols-2 gap-6">
+        <div>
+          <label class="text-[12px] text-on-surface-variant block mb-2" style="font-family:Inter">Max Download Speed (0 = unlimited)</label>
+          <input type="range" id="throttleDn" min="0" max="100" value="0" class="w-full" oninput="applyThrottle()"/>
+          <div class="text-[12px] text-primary-container mt-1" id="throttleDnVal" style="font-family:'JetBrains Mono'">Unlimited</div>
+        </div>
+        <div>
+          <label class="text-[12px] text-on-surface-variant block mb-2" style="font-family:Inter">Max connections per download</label>
+          <input type="range" id="maxConnBw" min="1" max="32" value="16" class="w-full" oninput="document.getElementById('maxConnBwVal').textContent=this.value;gMaxConn=parseInt(this.value)"/>
+          <div class="text-[12px] text-primary-container mt-1" id="maxConnBwVal" style="font-family:'JetBrains Mono'">16</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCHEDULER VIEW ── -->
+  <div id="schedView" class="p-6 flex-1 overflow-y-auto min-h-0 custom-scrollbar hidden">
+    <h3 class="text-[20px] font-semibold text-on-surface mb-1" style="font-family:Inter">Download Scheduler</h3>
+    <p class="text-[13px] text-on-surface-variant mb-5" style="font-family:Inter">Schedule downloads to start and stop at specific times</p>
+    <div class="bg-surface-container border border-outline-variant rounded p-5 mb-4">
+      <div class="grid grid-cols-2 gap-5 mb-4">
+        <div>
+          <label class="text-[11px] text-on-surface-variant uppercase tracking-wider block mb-2" style="font-family:'JetBrains Mono'">Start Time</label>
+          <input type="time" id="schedStart" value="22:00" class="bg-surface-container-high border border-outline-variant text-on-surface rounded px-3 py-2 text-[13px] outline-none focus:border-primary-container w-full" style="font-family:'JetBrains Mono'"/>
+        </div>
+        <div>
+          <label class="text-[11px] text-on-surface-variant uppercase tracking-wider block mb-2" style="font-family:'JetBrains Mono'">Stop Time</label>
+          <input type="time" id="schedStop" value="06:00" class="bg-surface-container-high border border-outline-variant text-on-surface rounded px-3 py-2 text-[13px] outline-none focus:border-primary-container w-full" style="font-family:'JetBrains Mono'"/>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="tgl-sw"><input type="checkbox" id="schedEn" onchange="updateSched()"/><span class="tgl-sl"></span></label>
+        <span class="text-[13px] text-on-surface" style="font-family:Inter">Enable Scheduled Downloads</span>
+        <span id="schedSt" class="text-[11px] text-on-surface-variant ml-2 px-2 py-0.5 bg-surface-container-highest rounded" style="font-family:'JetBrains Mono'">Inactive</span>
+      </div>
+    </div>
+    <div class="bg-surface-container border border-outline-variant rounded p-5">
+      <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-4" style="font-family:'JetBrains Mono'">Post-completion actions</div>
+      <div class="space-y-4">
+        <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface" style="font-family:Inter">Auto-extract archives after download</span><label class="tgl-sw"><input type="checkbox" id="autoExtSched" checked/><span class="tgl-sl"></span></label></div>
+        <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface" style="font-family:Inter">Show completion toast notification</span><label class="tgl-sw"><input type="checkbox" id="showToastOpt" checked/><span class="tgl-sl"></span></label></div>
+        <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface" style="font-family:Inter">Clipboard URL monitoring</span><label class="tgl-sw"><input type="checkbox" id="clipMon" checked onchange="toggleClipMon()"/><span class="tgl-sl"></span></label></div>
+        <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface" style="font-family:Inter">Shut down PC after batch completes</span><label class="tgl-sw"><input type="checkbox"/><span class="tgl-sl"></span></label></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SETTINGS VIEW ── -->
+  <div id="settingsView" class="p-6 flex-1 overflow-y-auto min-h-0 custom-scrollbar hidden">
+    <h3 class="text-[22px] font-semibold text-primary mb-5" style="font-family:Inter">Settings</h3>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="bg-surface-container border border-outline-variant rounded p-5">
+        <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-4" style="font-family:'JetBrains Mono'">Download Defaults</div>
+        <div class="space-y-4">
+          <div>
+            <label class="text-[12px] text-on-surface-variant block mb-1.5" style="font-family:Inter">Default save location</label>
+            <div class="flex items-center gap-2 bg-surface-container-low border border-outline-variant rounded px-3 py-2">
+              <span class="material-symbols-outlined text-on-surface-variant text-[16px]">folder</span>
+              <span class="text-[12px] text-on-surface flex-1 truncate" id="defSavePath" style="font-family:'JetBrains Mono'">C:\Users\User\Downloads</span>
+              <button class="text-[12px] text-primary hover:text-primary-container" style="font-family:Inter" data-act="browse-path">Browse</button>
+            </div>
+          </div>
+          <div>
+            <label class="text-[12px] text-on-surface-variant block mb-1.5" style="font-family:Inter">Max simultaneous downloads</label>
+            <div class="flex items-center gap-3"><input type="range" min="1" max="10" value="3" id="maxSimSldr" class="flex-1" oninput="document.getElementById('maxSimV').textContent=this.value;gMaxActive=parseInt(this.value)"/><span class="text-[13px] text-primary-container" id="maxSimV" style="font-family:'JetBrains Mono'">3</span></div>
+          </div>
+          <div>
+            <label class="text-[12px] text-on-surface-variant block mb-1.5" style="font-family:Inter">Connections per download</label>
+            <div class="flex items-center gap-3"><input type="range" min="1" max="32" value="16" id="maxConnSet" class="flex-1" oninput="document.getElementById('maxConnSetV').textContent=this.value;gMaxConn=parseInt(this.value)"/><span class="text-[13px] text-primary-container" id="maxConnSetV" style="font-family:'JetBrains Mono'">16</span></div>
+          </div>
+          <div>
+            <label class="text-[12px] text-on-surface-variant block mb-1.5" style="font-family:Inter">Auto-retry on failure</label>
+            <div class="flex items-center gap-3"><input type="range" min="0" max="10" value="3" class="flex-1" oninput="document.getElementById('retryV').textContent=this.value"/><span class="text-[13px] text-primary-container" id="retryV" style="font-family:'JetBrains Mono'">3</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="bg-surface-container border border-outline-variant rounded p-5">
+        <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-4" style="font-family:'JetBrains Mono'">Interface &amp; Behavior</div>
+        <div class="space-y-3">
+          <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface" style="font-family:Inter">Dark mode</span><label class="tgl-sw"><input type="checkbox" id="themeTogSet" checked onchange="toggleTheme()"/><span class="tgl-sl"></span></label></div>
+          <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface" style="font-family:Inter">Show speed in taskbar</span><label class="tgl-sw"><input type="checkbox" checked/><span class="tgl-sl"></span></label></div>
+          <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface" style="font-family:Inter">Minimize to system tray</span><label class="tgl-sw"><input type="checkbox" checked/><span class="tgl-sl"></span></label></div>
+          <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface" style="font-family:Inter">Sound alert on completion</span><label class="tgl-sw"><input type="checkbox"/><span class="tgl-sl"></span></label></div>
+          <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface" style="font-family:Inter">Force HTTPS only</span><label class="tgl-sw"><input type="checkbox" checked/><span class="tgl-sl"></span></label></div>
+        </div>
+      </div>
+      <!-- Browser Integration Card -->
+      <div class="col-span-2 bg-surface-container border border-primary/30 rounded p-5 relative overflow-hidden">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-primary text-[24px]">extension</span>
+            <div>
+              <h4 class="text-[15px] font-bold text-on-surface" style="font-family:Inter">Browser Integration &amp; Floating Video Grabber</h4>
+              <p class="text-[12px] text-on-surface-variant" style="font-family:Inter">Seamless 1-Click integration for Google Chrome, Microsoft Edge, Brave &amp; Opera</p>
+            </div>
+          </div>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono bg-primary-container/20 text-primary-container border border-primary-container/30">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>Active &amp; Ready
+          </span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          <button onclick="installBrowserExt('chrome')" class="p-3 bg-surface-container-low hover:bg-surface-container-high border border-outline-variant rounded flex items-center gap-3 transition-all active:scale-95 text-left">
+            <div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center border border-primary/20 text-primary font-bold">G</div>
+            <div>
+              <div class="text-[13px] font-semibold text-on-surface" style="font-family:Inter">Google Chrome</div>
+              <div class="text-[11px] text-primary" style="font-family:Inter">1-Click Integrate &rarr;</div>
+            </div>
+          </button>
+
+          <button onclick="installBrowserExt('edge')" class="p-3 bg-surface-container-low hover:bg-surface-container-high border border-outline-variant rounded flex items-center gap-3 transition-all active:scale-95 text-left">
+            <div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center border border-primary/20 text-primary font-bold">E</div>
+            <div>
+              <div class="text-[13px] font-semibold text-on-surface" style="font-family:Inter">Microsoft Edge</div>
+              <div class="text-[11px] text-primary" style="font-family:Inter">1-Click Integrate &rarr;</div>
+            </div>
+          </button>
+
+          <button onclick="installBrowserExt('brave')" class="p-3 bg-surface-container-low hover:bg-surface-container-high border border-outline-variant rounded flex items-center gap-3 transition-all active:scale-95 text-left">
+            <div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center border border-primary/20 text-primary font-bold">B</div>
+            <div>
+              <div class="text-[13px] font-semibold text-on-surface" style="font-family:Inter">Brave Browser</div>
+              <div class="text-[11px] text-primary" style="font-family:Inter">1-Click Integrate &rarr;</div>
+            </div>
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-outline-variant/60 text-[12px]">
+          <div class="text-on-surface-variant flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">folder_zip</span>
+            <span>Unpacked Extension Location:</span>
+            <code class="text-primary font-mono text-[11px] bg-surface-container-lowest px-2 py-0.5 rounded" id="extPathDisplay">%APPDATA%\SuperIDM\extension</code>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="openExtensionFolder()" class="px-3 py-1 bg-surface-container-highest hover:bg-surface-container text-on-surface rounded border border-outline-variant transition-all text-[12px] flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">folder_open</span>Open Folder
+            </button>
+            <button onclick="autoInstallAllBrowsers()" class="px-3 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded transition-all text-[12px] flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">bolt</span>Install All Browsers
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-span-2 bg-surface-container border border-outline-variant rounded p-5">
+        <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-3" style="font-family:'JetBrains Mono'">About SuperIDM</div>
+        <div class="grid grid-cols-4 gap-4 text-[13px]" style="font-family:'JetBrains Mono'">
+          <div class="bg-surface-container-low rounded p-3"><div class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary">2.4.0</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div class="text-[11px] text-on-surface-variant mb-1">Engine</div><div class="text-on-surface">SuperIDM/Rust+Tokio</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface">HTTP/HTTPS/FTP</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant">2026.08.19</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LOGS VIEW ── -->
+  <div id="logsView" class="p-6 flex-1 overflow-y-auto min-h-0 custom-scrollbar hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-[22px] font-semibold text-primary" style="font-family:Inter">Activity Logs</h3>
+      <button data-act="clear-logs" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">clear_all</span>Clear</button>
+    </div>
+    <div id="logBox" class="bg-surface-container-low border border-outline-variant rounded p-4 overflow-y-auto" style="max-height:calc(100vh - 200px)"></div>
+  </div>
+
+</main>
+
+<!-- ══ ADD MODAL ══ -->
+<div id="addModal" class="fixed inset-0 z-[90] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.65);backdrop-filter:blur(10px)">
+  <div class="glass-panel w-full max-w-2xl rounded-xl shadow-2xl flex flex-col modal-enter">
+    <div class="flex justify-between items-center px-6 py-4 border-b border-outline-variant/50">
+      <div class="flex items-center gap-3">
+        <span class="material-symbols-outlined text-primary-container text-[24px]" style="font-variation-settings:'FILL' 1">add_link</span>
+        <h2 class="text-[22px] font-semibold text-on-surface" style="font-family:Inter">New Task Pipeline</h2>
+      </div>
+      <button data-act="close-modal" class="text-on-surface-variant hover:text-on-surface transition-colors active:scale-95"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="p-6 space-y-5 overflow-y-auto" style="max-height:72vh">
+      <!-- URL -->
+      <div class="space-y-2">
+        <label class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">Source URL</label>
+        <div class="relative flex items-center bg-surface-container-lowest rounded border border-outline-variant input-glow transition-colors">
+          <span class="material-symbols-outlined text-on-surface-variant ml-3 absolute text-[20px]">link</span>
+          <input id="urlInp" type="text" class="w-full bg-transparent border-none text-on-surface py-3 pl-10 pr-28 focus:ring-0 outline-none text-[13px]" placeholder="Paste link here..." style="font-family:'JetBrains Mono'" oninput="detectFT()" onkeydown="if(event.key==='Enter')startDL()"/>
+          <div id="ftBadge" class="absolute right-2 flex items-center bg-surface-container px-2 py-1 rounded hidden">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary-container mr-1.5 animate-pulse"></span>
+            <span class="text-[11px] text-primary-container uppercase" style="font-family:'JetBrains Mono'" id="ftText">File</span>
+          </div>
+        </div>
+
+        <!-- Universal Media Extractor Stream Card -->
+        <div id="mediaExtCard" class="hidden bg-surface-container-low border border-primary-container/40 rounded-lg p-3 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary-container text-[20px]">movie</span>
+              <span class="text-[13px] font-semibold text-on-surface" id="extMediaTitle">Media Stream Detected</span>
+            </div>
+            <span class="text-[11px] bg-primary-container/20 text-primary-container px-2 py-0.5 rounded font-mono" id="extStreamType">Adaptive Stream</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="text-[11px] text-on-surface-variant uppercase font-mono">Stream Quality:</label>
+            <select id="extFormatSel" class="flex-1 bg-surface-container-highest border border-outline-variant text-on-surface text-[12px] rounded px-2.5 py-1.5 outline-none font-mono">
+              <option value="best">Auto (Best Quality - 1080p/720p)</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="ytNotice" class="hidden flex items-start gap-2 p-2.5 bg-primary-container/10 border border-primary-container/30 rounded text-[12px] text-on-surface">
+          <span class="material-symbols-outlined text-[18px] text-primary-container flex-shrink-0 mt-0.5">auto_awesome</span>
+          <div class="flex-1 flex items-center justify-between">
+            <div>
+              <span class="font-semibold text-primary-container">Universal Media Extractor:</span> Video webpage detected. SuperIDM can sniff and extract the direct high-speed video stream.
+            </div>
+            <button id="sniffBtn" type="button" onclick="sniffMediaStream()" class="text-[11px] bg-primary-container text-on-primary-container font-semibold px-2.5 py-1.5 rounded transition-all active:scale-95 ml-2 whitespace-nowrap flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">search</span>Sniff &amp; Extract
+            </button>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 pt-1 flex-wrap">
+          <span class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">Quick presets:</span>
+          <button type="button" onclick="fillSample('https://proof.ovh.net/files/10Mb.dat')" data-act="preset" data-url="https://proof.ovh.net/files/10Mb.dat" class="text-[11px] bg-primary-container/15 hover:bg-primary-container/25 text-primary-container border border-primary-container/30 px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">⚡ 10MB Test File</button>
+          <button type="button" onclick="fillSample('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')" data-act="preset" data-url="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">🎬 158MB HD Video</button>
+          <button type="button" onclick="fillSample('https://proof.ovh.net/files/100Mb.dat')" data-act="preset" data-url="https://proof.ovh.net/files/100Mb.dat" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">⚡ 100MB Benchmark</button>
+          <button type="button" onclick="pasteClipToInp()" data-act="paste-clip" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">📋 Paste</button>
+          <button id="batchTogBtn" onclick="togBatch()" class="text-[11px] text-primary hover:text-primary-container ml-auto" style="font-family:'JetBrains Mono'" data-act="tog-batch">+ Batch mode</button>
+        </div>
+        <div id="batchArea" class="hidden"><textarea id="batchInp" class="w-full bg-surface-container-lowest border border-outline-variant text-on-surface text-[12px] rounded p-3 outline-none focus:border-primary-container min-h-[80px] resize-y mt-2" placeholder="One URL per line for batch download..." style="font-family:'JetBrains Mono'"></textarea></div>
+      </div>
+      <!-- Config grid -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="col-span-2 bg-surface-container-low rounded border border-outline-variant p-4 hover:bg-surface-container transition-colors">
+          <label class="text-[11px] text-on-surface-variant uppercase tracking-wider block mb-2" style="font-family:'JetBrains Mono'">Destination Path</label>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 overflow-hidden"><span class="material-symbols-outlined text-on-surface-variant text-[16px]">folder</span><span class="text-[12px] text-on-surface truncate" id="modalPath" style="font-family:'JetBrains Mono'">C:\Users\User\Downloads</span></div>
+            <button class="text-[13px] text-primary hover:text-primary-container font-semibold" style="font-family:Inter" onclick="chgSavePath()" data-act="browse-path">Browse</button>
+          </div>
+        </div>
+        <div class="bg-surface-container-low rounded border border-outline-variant p-4 space-y-3">
+          <div class="flex justify-between items-center"><label class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">Connections</label><span id="connV" class="text-[13px] text-primary-container" style="font-family:'JetBrains Mono'">16</span></div>
+          <input type="range" min="1" max="32" value="16" id="connSldr" class="w-full" oninput="document.getElementById('connV').textContent=this.value"/>
+          <div class="flex justify-between text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"><span>1</span><span>32</span></div>
+        </div>
+        <div class="bg-surface-container-low rounded border border-outline-variant p-4 space-y-3">
+          <label class="text-[11px] text-on-surface-variant uppercase tracking-wider block" style="font-family:'JetBrains Mono'">Priority</label>
+          <div class="flex bg-surface-container-highest rounded p-1 gap-1">
+            <button class="pri-btn" onclick="setPri('Low', this)" data-act="set-pri" data-pri="Low">Low</button>
+            <button class="pri-btn sel" onclick="setPri('High', this)" data-act="set-pri" data-pri="High">High</button>
+          </div>
+        </div>
+        <div class="bg-surface-container-low rounded border border-outline-variant p-4">
+          <label class="text-[11px] text-on-surface-variant uppercase tracking-wider block mb-2" style="font-family:'JetBrains Mono'">Category</label>
+          <select id="catSel" class="w-full bg-surface-container-highest border-none text-on-surface text-[13px] rounded px-3 py-2 outline-none" style="font-family:'JetBrains Mono'">
+            <option>Auto-detect</option><option>Videos</option><option>Music</option><option>Documents</option><option>Archives</option><option>Programs</option><option>Other</option>
+          </select>
+        </div>
+        <div class="bg-surface-container-low rounded border border-outline-variant p-4 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-outline text-[20px]">unarchive</span>
+            <div><p class="text-[13px] text-on-surface font-medium" style="font-family:Inter">Auto-Extract</p><p class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">Extract archives on completion</p></div>
+          </div>
+          <label class="tgl-sw"><input type="checkbox" id="autoExtMod" checked/><span class="tgl-sl"></span></label>
+        </div>
+      </div>
+      <!-- Advanced -->
+      <div class="border-t border-outline-variant pt-4">
+        <button onclick="togAdv()" data-act="tog-adv" class="flex items-center text-[13px] text-on-surface-variant hover:text-on-surface w-full" style="font-family:Inter">
+          <span class="material-symbols-outlined mr-2 text-[20px] transition-transform" id="advChev" style="transform:rotate(-90deg)">expand_more</span>Advanced Configuration (Headers &amp; Auth)
+        </button>
+        <div id="advSec" class="hidden mt-4 space-y-3">
+          <div>
+            <label class="text-[11px] text-on-surface-variant uppercase tracking-wider block mb-1.5" style="font-family:'JetBrains Mono'">Custom Headers (JSON)</label>
+            <textarea class="w-full bg-surface-container-lowest border border-outline-variant text-on-surface text-[12px] rounded p-3 outline-none focus:border-primary-container min-h-[60px] resize-y" placeholder='{"Referer":"https://example.com"}' style="font-family:'JetBrains Mono'"></textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="text-[11px] text-on-surface-variant uppercase tracking-wider block mb-1.5" style="font-family:'JetBrains Mono'">Username</label><input type="text" class="w-full bg-surface-container-lowest border border-outline-variant text-on-surface text-[13px] rounded px-3 py-2 outline-none focus:border-primary-container" placeholder="username" style="font-family:'JetBrains Mono'"/></div>
+            <div><label class="text-[11px] text-on-surface-variant uppercase tracking-wider block mb-1.5" style="font-family:'JetBrains Mono'">Password</label><input type="password" class="w-full bg-surface-container-lowest border border-outline-variant text-on-surface text-[13px] rounded px-3 py-2 outline-none focus:border-primary-container" placeholder="••••••••" style="font-family:'JetBrains Mono'"/></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-outline-variant/50 bg-surface-container/50 rounded-b-xl flex justify-between items-center gap-3">
+      <button type="button" onclick="queueDL()" class="px-4 py-2 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container transition-colors active:scale-95" style="font-family:Inter"><span class="material-symbols-outlined text-[16px] align-middle mr-1">schedule</span>Queue for Later</button>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeAddModal()" class="px-5 py-2 text-[13px] text-on-surface border border-outline-variant rounded hover:bg-surface-container transition-colors active:scale-95" style="font-family:Inter">Cancel</button>
+        <button id="btnStartDL" type="button" onclick="startDL()" class="px-5 py-2 text-[13px] text-background bg-primary-container hover:bg-primary-fixed rounded flex items-center gap-2 transition-all active:scale-95 font-semibold" style="font-family:Inter;box-shadow:0 0 18px rgba(0,245,255,.25)">
+          <span class="material-symbols-outlined text-[16px]" style="font-variation-settings:'FILL' 1">rocket_launch</span>Start Download
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOAST CONTAINER ══ -->
+<div id="toastBox" class="fixed bottom-6 right-6 z-[80] flex flex-col gap-3 max-w-sm w-full pointer-events-none"></div>
+
+<!-- ══ CLIPBOARD PROMPT ══ -->
+<div id="clipPrompt" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] glass-panel rounded-xl px-5 py-4 shadow-2xl pointer-events-auto" style="min-width:400px">
+  <div class="flex items-center gap-3 mb-3">
+    <span class="material-symbols-outlined text-primary-container text-[22px]">content_paste</span>
+    <div class="flex-1 min-w-0"><div class="text-[14px] font-semibold text-on-surface" style="font-family:Inter">Download Link Detected</div><div class="text-[12px] text-on-surface-variant truncate" id="clipUrlTxt" style="font-family:'JetBrains Mono'"></div></div>
+  </div>
+  <div class="flex justify-end gap-2">
+    <button data-act="dism-clip" class="px-3 py-1.5 text-[13px] text-on-surface-variant hover:text-on-surface border border-transparent hover:border-outline-variant rounded" style="font-family:Inter">Dismiss</button>
+    <button data-act="acc-clip" class="px-3 py-1.5 text-[13px] bg-primary-container text-on-primary-container rounded font-semibold hover:bg-primary-fixed transition-all" style="font-family:Inter">Download Now</button>
+  </div>
+<!-- ══ GLOBAL ERROR BANNER ══ -->
+<div id="globalErrBox" class="hidden fixed top-0 left-0 right-0 z-[100] bg-red-600 text-white text-[13px] py-2 px-4 text-center font-mono shadow-lg flex items-center justify-between">
+  <span id="globalErrMsg"></span>
+  <button onclick="document.getElementById('globalErrBox').classList.add('hidden')" class="ml-4 px-2 py-0.5 bg-black/30 rounded hover:bg-black/50 text-[11px]">Dismiss</button>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// ════════ GLOBAL ERROR HANDLER ════════
+window.onerror = function(msg, url, line, col, error) {
+  console.error('[Global Error]', msg, line, col, error);
+  try {
+    const box = document.getElementById('globalErrBox');
+    const msgEl = document.getElementById('globalErrMsg');
+    if (box && msgEl) {
+      msgEl.textContent = `[JS Error] ${msg} (Line: ${line})`;
+      box.classList.remove('hidden');
+      box.style.display = 'flex';
+    }
+  } catch (e) {}
+};
+window.onunhandledrejection = function(event) {
+  console.warn('[Unhandled Rejection]', event.reason);
+};
+
+// ════════ TAURI IPC BRIDGE ════════
+function hasTauriIPC() {
+  try {
+    if (typeof window !== 'undefined') {
+      if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') return true;
+      if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') return true;
+      if (window.__TAURI__ && typeof window.__TAURI__.invoke === 'function') return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function tauriCall(cmd, args = {}) {
+  try {
+    if (typeof window !== 'undefined') {
+      if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+        return await window.__TAURI_INTERNALS__.invoke(cmd, args);
+      }
+      if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+        return await window.__TAURI__.core.invoke(cmd, args);
+      }
+      if (window.__TAURI__ && typeof window.__TAURI__.invoke === 'function') {
+        return await window.__TAURI__.invoke(cmd, args);
+      }
+    }
+  } catch (err) {
+    console.warn(`[Tauri IPC ${cmd}]`, err);
+    throw err;
+  }
+  return null;
+}
+
+let tauriEventsBound = false;
+function bindTauriEvents() {
+  if (tauriEventsBound) return;
+  try {
+    const listenFn = (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.listen) ||
+                     (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) ||
+                     (window.__TAURI__ && window.__TAURI__.listen);
+    if (typeof listenFn === 'function') {
+      tauriEventsBound = true;
+      listenFn('download_progress', (event) => {
+        const p = event.payload || event;
+        if (!p || !p.id) return;
+        let dl = dls.find(d => String(d.id) === String(p.id));
+        if (!dl) {
+          dl = dls.find(d => d.status === 'downloading' && (String(d.id).startsWith('task-') || d.downloaded_bytes === 0));
+          if (dl) dl.id = String(p.id);
+        }
+        if (dl) {
+          dl.downloaded_bytes = p.downloaded_bytes !== undefined ? p.downloaded_bytes : dl.downloaded_bytes;
+          dl.total_bytes = p.total_bytes !== undefined && p.total_bytes > 0 ? p.total_bytes : dl.total_bytes;
+          dl.speed = p.speed !== undefined ? p.speed : (dl.speed || 0);
+          dl.progress = p.progress !== undefined ? p.progress : (dl.total_bytes > 0 ? dl.downloaded_bytes / dl.total_bytes : 0);
+          dl.eta_secs = p.eta_secs !== undefined ? p.eta_secs : 0;
+          const st = mapStatus(p.status);
+          const stChanged = dl.status !== st;
+          if (st === 'complete') {
+            dl.status = 'complete';
+            dl.downloaded_bytes = dl.total_bytes;
+            dl.progress = 1.0;
+            dl.speed = 0;
+            addLog('success', `[COMPLETED] ${dl.filename || dl.name} — ${fmtSz(dl.total_bytes)}`);
+            if (document.getElementById('showToastOpt')?.checked) showCompT(dl);
+            renderDLs();
+          } else {
+            dl.status = st;
+            if (stChanged) {
+              renderDLs();
+            } else {
+              updateDLRowDOM(dl);
+            }
+          }
+        }
+        updStats();
+        updBdg();
+      });
+
+      listenFn('open-add-modal', () => {
+        openAddModal();
+      });
+      listenFn('tray-pause-all', () => {
+        pauseAll();
+      });
+      listenFn('tray-resume-all', () => {
+        resumeAll();
+      });
+
+      addLog('info', '[BRIDGE] Connected to Tauri v2 Rust Download Engine & System Tray');
+    }
+  } catch (e) {
+    console.warn('[Tauri Event Bind Error]', e);
+  }
+}
+
+// ════════ APPLICATION STATE ════════
+let dls = [];
+let nid = 1;
+let curView = 'downloading';
+let curTab = 'network';
+let catFilter = null;
+let savePth = 'C:\\Users\\User\\Downloads';
+let gMaxConn = 16;
+let gMaxActive = 3;
+let curPri = 'High';
+let batchMode = false;
+let logs = [];
+let peakDn = 0;
+let bwH = { dn: Array(30).fill(0), up: Array(30).fill(0.1) };
+let schedTimer = null;
+let clipInt = null;
+let lastClip = '';
+let clipPnd = null;
+
+// ════════ FILE TYPES ════════
+const FT = {
+  iso: { i: 'iso', l: 'Disk Image', c: 'Archives' },
+  zip: { i: 'folder_zip', l: 'Archive', c: 'Archives' },
+  'tar.gz': { i: 'folder_zip', l: 'Archive', c: 'Archives' },
+  gz: { i: 'folder_zip', l: 'Archive', c: 'Archives' },
+  '7z': { i: 'folder_zip', l: 'Archive', c: 'Archives' },
+  rar: { i: 'folder_zip', l: 'Archive', c: 'Archives' },
+  mp4: { i: 'movie', l: 'Video', c: 'Videos' },
+  mkv: { i: 'movie', l: 'Video', c: 'Videos' },
+  avi: { i: 'movie', l: 'Video', c: 'Videos' },
+  mov: { i: 'movie', l: 'Video', c: 'Videos' },
+  webm: { i: 'movie', l: 'Video', c: 'Videos' },
+  mp3: { i: 'music_note', l: 'Audio', c: 'Music' },
+  flac: { i: 'music_note', l: 'Audio', c: 'Music' },
+  wav: { i: 'music_note', l: 'Audio', c: 'Music' },
+  aac: { i: 'music_note', l: 'Audio', c: 'Music' },
+  pdf: { i: 'picture_as_pdf', l: 'PDF', c: 'Documents' },
+  docx: { i: 'description', l: 'Document', c: 'Documents' },
+  xlsx: { i: 'table_chart', l: 'Spreadsheet', c: 'Documents' },
+  pptx: { i: 'slideshow', l: 'Presentation', c: 'Documents' },
+  exe: { i: 'apps', l: 'Program', c: 'Programs' },
+  msi: { i: 'apps', l: 'Installer', c: 'Programs' },
+  apk: { i: 'android', l: 'APK', c: 'Programs' },
+  deb: { i: 'terminal', l: 'Package', c: 'Programs' },
+  rpm: { i: 'terminal', l: 'Package', c: 'Programs' },
+};
+
+function getFI(url) {
+  if (!url) return { i: 'download', l: 'File', c: 'Other', n: 'download_task' };
+  const clean = url.split('#')[0].split('?')[0];
+  const parts = clean.split('/');
+  let n = parts[parts.length - 1] || 'download_task';
+  if (!n.trim()) n = 'download_task';
+  const lo = n.toLowerCase();
+  for (const [ext, inf] of Object.entries(FT)) {
+    if (lo.endsWith('.' + ext)) return { ...inf, n };
+  }
+  return { i: 'download', l: 'File', c: 'Other', n };
+}
+
+function fmtSz(b) {
+  if (typeof b !== 'number' || isNaN(b) || b < 0) return '0 B';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+  return (b / 1073741824).toFixed(2) + ' GB';
+}
+
+function fmtT(s) {
+  if (!isFinite(s) || s <= 0 || isNaN(s)) return '--';
+  if (s < 60) return Math.round(s) + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's';
+  return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+}
+
+function fmtSpd(b) {
+  if (typeof b !== 'number' || isNaN(b) || b < 0) return '0 B/s';
+  if (b < 1024) return b.toFixed(0) + ' B/s';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB/s';
+  return (b / 1048576).toFixed(1) + ' MB/s';
+}
+
+function mapStatus(s) {
+  if (!s) return 'queued';
+  const sl = (typeof s === 'string' ? s : JSON.stringify(s)).toLowerCase();
+  if (sl.includes('downloading')) return 'downloading';
+  if (sl.includes('completed') || sl.includes('complete')) return 'complete';
+  if (sl.includes('paused')) return 'paused';
+  if (sl.includes('failed') || sl.includes('error')) return 'error';
+  if (sl.includes('cancelled')) return 'cancelled';
+  return 'queued';
+}
+
+// ════════ BACKEND TASK SYNC ════════
+async function syncFromBackend() {
+  if (!hasTauriIPC()) return;
+  try {
+    const tasks = await tauriCall('get_all_tasks');
+    if (!tasks || !Array.isArray(tasks)) return;
+
+    // Purge any orphaned local placeholders
+    if (tasks.length > 0) {
+      dls = dls.filter(d => !String(d.id).startsWith('task-') || tasks.some(t => String(t.id) === String(d.id)));
+    }
+
+    const prevLen = dls.length;
+    let hasNewTasks = false;
+
+    tasks.forEach(t => {
+      let dl = dls.find(d => String(d.id) === String(t.id));
+      const fi = getFI(t.url);
+      const fname = t.filename || fi.n;
+
+      if (!dl) {
+        hasNewTasks = true;
+        dl = {
+          id: String(t.id),
+          url: t.url,
+          name: fname,
+          filename: fname,
+          icon: fi.i,
+          label: fi.l,
+          category: t.category || fi.c,
+          total_bytes: t.total_bytes || 0,
+          downloaded_bytes: t.downloaded_bytes || 0,
+          status: mapStatus(t.status),
+          speed: t.speed || 0,
+          connections: t.num_connections || gMaxConn,
+          priority: t.priority > 0 ? 'High' : 'Normal',
+          addedAt: t.created_at || Date.now(),
+          destination: t.destination || savePth,
+          server: t.url && t.url.includes('://') ? t.url.split('/')[2] : 'server',
+          protocol: t.url && t.url.startsWith('https') ? 'HTTPS (TLS 1.3)' : 'HTTP',
+          expanded: false,
+          bwH: Array(10).fill(0),
+          eta_secs: t.eta_secs || 0,
+          progress: t.progress || 0
+        };
+        dls.push(dl);
+      } else {
+        const newStatus = mapStatus(t.status);
+        if (dl.status !== newStatus) {
+          dl.status = newStatus;
+          hasNewTasks = true;
+        }
+        dl.filename = fname;
+        dl.name = fname;
+        dl.downloaded_bytes = t.downloaded_bytes !== undefined ? t.downloaded_bytes : dl.downloaded_bytes;
+        dl.total_bytes = t.total_bytes !== undefined && t.total_bytes > 0 ? t.total_bytes : dl.total_bytes;
+        dl.speed = t.speed !== undefined ? t.speed : dl.speed;
+        dl.progress = t.progress !== undefined ? t.progress : (dl.total_bytes > 0 ? dl.downloaded_bytes / dl.total_bytes : 0);
+        dl.eta_secs = t.eta_secs || 0;
+        if (dl.status === 'downloading') {
+          dl.bwH = [...dl.bwH.slice(1), (dl.speed || 0) / 1048576];
+        }
+      }
+    });
+
+    if (hasNewTasks || dls.length !== prevLen) {
+      renderDLs();
+    } else {
+      dls.forEach(updateDLRowDOM);
+    }
+    updStats();
+    updBdg();
+    updBwBars();
+    persistLocalDls();
+  } catch (e) {
+    console.warn('[Sync Error]', e);
+  }
+}
+
+// ════════ LOCAL STORAGE PERSISTENCE ════════
+function persistLocalDls() {
+  try {
+    const toSave = dls.map(d => ({
+      id: d.id,
+      url: d.url,
+      name: d.name,
+      filename: d.filename,
+      category: d.category,
+      total_bytes: d.total_bytes,
+      downloaded_bytes: d.downloaded_bytes,
+      status: d.status,
+      speed: d.speed,
+      connections: d.connections,
+      priority: d.priority,
+      addedAt: d.addedAt,
+      destination: d.destination,
+      progress: d.progress
+    }));
+    localStorage.setItem('superidm_dls', JSON.stringify(toSave));
+  } catch (e) {}
+}
+
+function loadLocalDls() {
+  try {
+    const saved = localStorage.getItem('superidm_dls');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        dls = parsed.map(t => {
+          const fi = getFI(t.url || '');
+          const fname = t.filename || t.name || fi.n;
+          return {
+            id: String(t.id),
+            url: t.url,
+            name: fname,
+            filename: fname,
+            icon: fi.i,
+            label: fi.l,
+            category: t.category || fi.c,
+            total_bytes: t.total_bytes || 0,
+            downloaded_bytes: t.downloaded_bytes || 0,
+            status: t.status || 'complete',
+            speed: 0,
+            connections: t.connections || gMaxConn,
+            priority: t.priority || 'Normal',
+            addedAt: t.addedAt || Date.now(),
+            destination: t.destination || savePth,
+            server: t.url && t.url.includes('://') ? t.url.split('/')[2] : 'server',
+            protocol: t.url && t.url.startsWith('https') ? 'HTTPS (TLS 1.3)' : 'HTTP',
+            expanded: false,
+            bwH: Array(10).fill(0),
+            eta_secs: 0,
+            progress: t.progress !== undefined ? t.progress : (t.total_bytes > 0 ? t.downloaded_bytes / t.total_bytes : 0)
+          };
+        });
+      }
+    }
+  } catch (e) {}
+}
+
+// ════════ DOWNLOAD ACTIONS ════════
+async function addDL(rawUrl, opts = {}) {
+  if (!rawUrl || !rawUrl.trim()) return;
+  let url = rawUrl.trim();
+  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('ftp://')) {
+    url = 'https://' + url;
+  }
+
+  const { i, l, c, n } = getFI(url);
+  const finalName = opts.filename || opts.name || (n && n !== 'download' && n.includes('.') && !/^[a-f0-9]{24,64}$/i.test(n) ? n : undefined);
+  const conn = opts.conn || gMaxConn;
+  const cat = (opts.cat && opts.cat !== 'Auto-detect') ? opts.cat : c;
+  const pri = opts.pri === 'High' ? 1 : 0;
+  const simTot = opts.tot || 104857600;
+
+  if (hasTauriIPC() && opts.status !== 'queued') {
+    addLog('info', `[STARTING] ${finalName || n} — requesting engine...`);
+    try {
+      const taskId = await tauriCall('start_download', {
+        request: {
+          url: url,
+          destination: savePth,
+          filename: finalName,
+          format: opts.format || undefined,
+          numConnections: conn,
+          num_connections: conn,
+          priority: pri,
+          category: cat
+        },
+        url: url,
+        destination: savePth,
+        filename: finalName,
+        format: opts.format || undefined,
+        numConnections: conn,
+        num_connections: conn,
+        priority: pri,
+        category: cat
+      });
+
+      if (taskId) {
+        addLog('success', `[ENGINE START] Backend Task: ${String(taskId).substring(0, 8)} — ${finalName}`);
+        showT('success', 'Download Started', `${finalName} (${conn} connections)`);
+        await syncFromBackend();
+      }
+    } catch (err) {
+      addLog('error', `[ENGINE ERROR] ${err}`);
+      showT('error', 'Download Error', String(err));
+    }
+  } else {
+    // Browser preview or queued mode
+    const localId = 'task-' + (nid++);
+    const dl = {
+      id: localId,
+      url: url,
+      name: finalName,
+      filename: finalName,
+      icon: i,
+      label: l,
+      category: cat,
+      total_bytes: simTot,
+      downloaded_bytes: 0,
+      status: opts.status || 'downloading',
+      speed: 0,
+      connections: conn,
+      priority: opts.pri || curPri,
+      addedAt: Date.now(),
+      destination: savePth,
+      server: url.includes('://') ? url.split('/')[2] : 'cdn.server.net',
+      protocol: url.startsWith('https') ? 'HTTPS (TLS 1.3)' : 'HTTP',
+      expanded: false,
+      bwH: Array(10).fill(0),
+      eta_secs: 0,
+      progress: 0
+    };
+    dls.unshift(dl);
+    addLog('info', `[TASK ADDED] ${finalName} — ${conn} connections [${opts.pri || curPri}]`);
+    showT('success', 'Task Queued', finalName);
+    renderDLs();
+    updBdg();
+    updStats();
+  }
+}
+
+function fillSample(url) {
+  const inp = document.getElementById('urlInp');
+  if (inp) {
+    inp.value = url;
+    currentExtractedInfo = null;
+    const card = document.getElementById('mediaExtCard');
+    if (card) card.classList.add('hidden');
+    const yt = document.getElementById('ytNotice');
+    if (yt) yt.classList.add('hidden');
+    detectFT();
+  }
+}
+
+let currentExtractedInfo = null;
+
+async function sniffMediaStream() {
+  const inp = document.getElementById('urlInp');
+  const url = (inp?.value || '').trim();
+  if (!url) return false;
+
+  const sniffBtn = document.getElementById('sniffBtn');
+  if (sniffBtn) {
+    sniffBtn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">sync</span> Sniffing...';
+    sniffBtn.disabled = true;
+  }
+
+  showT('info', 'Media Sniffer', 'Extracting stream formats...');
+  addLog('info', `[EXTRACTOR] Analyzing media: ${url}`);
+
+  if (hasTauriIPC()) {
+    try {
+      const info = await tauriCall('extract_media_info', { url });
+      if (info && info.formats && info.formats.length > 0) {
+        currentExtractedInfo = info;
+        const card = document.getElementById('mediaExtCard');
+        const titleEl = document.getElementById('extMediaTitle');
+        const typeEl = document.getElementById('extStreamType');
+        const sel = document.getElementById('extFormatSel');
+
+        if (titleEl) titleEl.textContent = info.title || 'Extracted Media Stream';
+        if (typeEl) typeEl.textContent = info.is_stream ? 'HLS/DASH Stream' : 'Direct Video';
+
+        if (sel) {
+          sel.innerHTML = '';
+          const autoOpt = document.createElement('option');
+          autoOpt.value = 'best';
+          autoOpt.textContent = 'Auto (Best Quality - 1080p/4K with Sound)';
+          sel.appendChild(autoOpt);
+
+          info.formats.forEach((fmt, idx) => {
+            if (fmt.resolution && fmt.resolution !== 'audio only') {
+              const opt = document.createElement('option');
+              opt.value = fmt.format_id || fmt.url;
+              opt.textContent = `${fmt.resolution} (${fmt.ext.toUpperCase()}) + Audio • ${fmt.note || 'HD'} ${fmt.filesize ? '• ' + fmtSz(fmt.filesize) : ''}`;
+              sel.appendChild(opt);
+            }
+          });
+
+          // Add audio only option
+          const audioOpt = document.createElement('option');
+          audioOpt.value = 'bestaudio[ext=m4a]/bestaudio';
+          audioOpt.textContent = 'Audio Only (MP3 / High Quality Audio)';
+          sel.appendChild(audioOpt);
+        }
+
+        if (card) card.classList.remove('hidden');
+        showT('success', 'Media Stream Sniffed', `${info.formats.length} format(s) ready!`);
+        addLog('success', `[EXTRACTOR] Found ${info.formats.length} stream format(s) for: ${info.title}`);
+        if (sniffBtn) {
+          sniffBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check</span> Extracted';
+          sniffBtn.disabled = false;
+        }
+        return true;
+      } else {
+        showT('warn', 'Media Sniffer', 'No direct streams found. Will download using direct HTTP engine.');
+      }
+    } catch (e) {
+      showT('error', 'Media Extractor', String(e));
+      addLog('error', `[EXTRACTOR ERROR] ${e}`);
+    }
+  }
+
+  if (sniffBtn) {
+    sniffBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">search</span>Sniff &amp; Extract';
+    sniffBtn.disabled = false;
+  }
+  return false;
+}
+
+async function pasteClipToInp() {
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) {
+        fillSample(text.trim());
+        showT('info', 'Pasted URL', text.trim());
+      }
+    }
+  } catch (e) {
+    showT('warn', 'Clipboard', 'Please paste using Ctrl+V');
+  }
+}
+
+let isStartingDL = false;
+
+async function startDL() {
+  if (isStartingDL) return;
+  isStartingDL = true;
+
+  try {
+    const conn = parseInt(document.getElementById('connSldr')?.value || '16');
+    const cat = document.getElementById('catSel')?.value || 'Auto-detect';
+
+    const inp = document.getElementById('urlInp');
+    let url = (inp?.value || '').trim();
+
+    // If it's a video platform URL and hasn't been extracted yet, auto-sniff first
+    const isVideoSite = isVideoPlatformUrl(url);
+    if (isVideoSite && !currentExtractedInfo && !batchMode) {
+      const success = await sniffMediaStream();
+      if (!success) {
+        isStartingDL = false;
+        return;
+      }
+    }
+
+    // Determine download URL and custom filename
+    let downloadUrl = url;
+    let customFilename = undefined;
+    let selectedFormat = undefined;
+
+    if (currentExtractedInfo && isVideoSite) {
+      const cleanTitle = (currentExtractedInfo.title || 'video').replace(/[/\\?%*:|"<>]/g, '_').trim();
+      const sel = document.getElementById('extFormatSel');
+      selectedFormat = sel?.value || 'best';
+      const isAudioOnly = selectedFormat.includes('audio');
+      customFilename = cleanTitle + (isAudioOnly ? '.mp3' : '.mp4');
+
+      if (selectedFormat === 'best' || !selectedFormat) {
+        const firstDirect = currentExtractedInfo.formats?.find(f => f.url && (f.url.startsWith('http://') || f.url.startsWith('https://')));
+        if (firstDirect) {
+          downloadUrl = firstDirect.url;
+        }
+      } else {
+        const chosenFmt = currentExtractedInfo.formats?.find(f => (f.format_id === selectedFormat || f.url === selectedFormat));
+        if (chosenFmt && chosenFmt.url && (chosenFmt.url.startsWith('http://') || chosenFmt.url.startsWith('https://'))) {
+          downloadUrl = chosenFmt.url;
+        }
+      }
+    } else {
+      currentExtractedInfo = null;
+    }
+
+    if (batchMode) {
+      const raw = document.getElementById('batchInp')?.value || '';
+      const urls = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+      if (!urls.length) {
+        showT('error', 'Batch Input Empty', 'Please enter at least one download URL');
+        document.getElementById('batchInp')?.focus();
+        return;
+      }
+      for (const u of urls) {
+        await addDL(u, { conn, pri: curPri, cat });
+      }
+      showT('success', 'Batch Queued', `${urls.length} download task(s) started`);
+    } else {
+      if (!downloadUrl) {
+        downloadUrl = 'https://proof.ovh.net/files/10Mb.dat';
+        if (inp) inp.value = downloadUrl;
+      }
+      await addDL(downloadUrl, {
+        conn,
+        pri: curPri,
+        cat: isVideoSite ? 'Videos' : cat,
+        filename: customFilename,
+        format: selectedFormat
+      });
+    }
+
+    closeAddModal();
+    setView('downloading');
+  } finally {
+    setTimeout(() => {
+      isStartingDL = false;
+    }, 500);
+  }
+}
+
+async function queueDL() {
+  const inp = document.getElementById('urlInp');
+  const url = (inp?.value || '').trim();
+  if (!url) {
+    showT('error', 'URL Required', 'Please enter a download URL to queue');
+    inp?.focus();
+    return;
+  }
+  const conn = parseInt(document.getElementById('connSldr')?.value || '16');
+  const cat = document.getElementById('catSel')?.value || 'Auto-detect';
+  addDL(url, { conn, pri: 'Low', cat, status: 'queued' });
+  showT('info', 'Task Queued', 'Download scheduled in queue');
+  closeAddModal();
+  setView('queued');
+}
+
+async function pauseDL(id) {
+  const dl = dls.find(d => String(d.id) === String(id));
+  if (!dl) return;
+  addLog('warn', `[PAUSE] ${dl.filename || dl.name}`);
+  dl.status = 'paused';
+  dl.speed = 0;
+  renderDLs();
+  updBdg();
+  updStats();
+  persistLocalDls();
+  if (hasTauriIPC()) {
+    try {
+      await tauriCall('pause_download', { taskId: String(id), task_id: String(id) });
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  showT('info', 'Download Paused', dl.filename || dl.name);
+}
+
+async function resumeDL(id) {
+  const dl = dls.find(d => String(d.id) === String(id));
+  if (!dl) return;
+  addLog('info', `[RESUME] ${dl.filename || dl.name}`);
+  dl.status = 'downloading';
+  renderDLs();
+  updBdg();
+  updStats();
+  persistLocalDls();
+  if (hasTauriIPC()) {
+    try {
+      await tauriCall('resume_download', { taskId: String(id), task_id: String(id) });
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  showT('success', 'Download Resumed', dl.filename || dl.name);
+}
+
+async function cancelDL(id) {
+  const dl = dls.find(d => String(d.id) === String(id));
+  if (!dl) return;
+  addLog('warn', `[CANCELLED] ${dl.filename || dl.name}`);
+  dls = dls.filter(d => String(d.id) !== String(id));
+  renderDLs();
+  updBdg();
+  updStats();
+  persistLocalDls();
+  if (hasTauriIPC()) {
+    try {
+      await tauriCall('cancel_download', { taskId: String(id), task_id: String(id) });
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  showT('info', 'Download Removed', dl.filename || dl.name);
+}
+
+async function openFolder(id, path) {
+  const dl = dls.find(d => String(d.id) === String(id));
+  const p = path || dl?.destination || savePth || '';
+  if (hasTauriIPC()) {
+    try {
+      await tauriCall('open_download_folder', { path: p, folderPath: p });
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  showT('info', 'Opening Explorer', p || 'Downloads');
+  addLog('info', `[EXPLORER] Opened folder: ${p}`);
+}
+
+function pauseAll() {
+  dls.forEach(d => {
+    if (d.status === 'downloading') {
+      d.status = 'paused';
+      d.speed = 0;
+      if (hasTauriIPC()) tauriCall('pause_download', { taskId: String(d.id), task_id: String(d.id) }).catch(e => console.warn(e));
+    }
+  });
+  showT('info', 'All Downloads Paused', 'Paused all active tasks');
+  addLog('warn', '[PAUSE ALL] All active downloads paused');
+  renderDLs();
+  updBdg();
+  updStats();
+}
+
+function resumeAll() {
+  dls.forEach(d => {
+    if (d.status === 'paused' || d.status === 'queued') {
+      d.status = 'downloading';
+      d.speed = 2500000;
+      if (hasTauriIPC()) tauriCall('resume_download', { taskId: String(d.id), task_id: String(d.id) }).catch(e => console.warn(e));
+    }
+  });
+  showT('success', 'All Downloads Resumed', 'Resumed all paused tasks');
+  addLog('info', '[RESUME ALL] All paused downloads resumed');
+  renderDLs();
+  updBdg();
+  updStats();
+}
+
+function clearDone() {
+  const prevLen = dls.length;
+  dls = dls.filter(d => d.status !== 'complete' && d.status !== 'cancelled' && d.status !== 'error');
+  const removed = prevLen - dls.length;
+  showT('info', 'Cleared Completed', `Removed ${removed} completed task(s)`);
+  addLog('info', `[CLEAR] Cleared ${removed} finished tasks`);
+  renderDLs();
+  updBdg();
+  updStats();
+}
+
+function togDet(id) {
+  const dl = dls.find(d => String(d.id) === String(id));
+  if (!dl) return;
+  dl.expanded = !dl.expanded;
+  const p = document.getElementById('det-' + id);
+  const ch = document.getElementById('chev-' + id);
+  if (p) p.classList.toggle('open', dl.expanded);
+  if (ch) ch.style.transform = dl.expanded ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
+// ════════ LOCAL PROGRESS SIMULATOR / GRAPH TICK ════════
+function localTick() {
+  let activeCount = 0;
+  const isTauriMode = hasTauriIPC();
+
+  dls.forEach(d => {
+    if (d.status === 'downloading') {
+      activeCount++;
+      if (d.total_bytes > 0) {
+        if (!isTauriMode) {
+          // Web preview simulation only
+          const step = Math.min(d.total_bytes - d.downloaded_bytes, Math.floor(Math.random() * 2500000 + 1000000));
+          d.downloaded_bytes += step;
+          d.speed = step * 2.5;
+          d.progress = d.downloaded_bytes / d.total_bytes;
+          d.eta_secs = (d.speed > 0 && d.total_bytes > d.downloaded_bytes) ? (d.total_bytes - d.downloaded_bytes) / d.speed : 0;
+          if (d.downloaded_bytes >= d.total_bytes) {
+            d.downloaded_bytes = d.total_bytes;
+            d.status = 'complete';
+            d.speed = 0;
+            d.progress = 1.0;
+            d.eta_secs = 0;
+            addLog('success', `[COMPLETED] ${d.filename || d.name} (${fmtSz(d.total_bytes)})`);
+            if (document.getElementById('showToastOpt')?.checked) showCompT(d);
+          }
+        } else {
+          // Real Tauri mode: smooth ETA calculation based on real speed
+          if (d.speed > 0 && d.total_bytes > d.downloaded_bytes) {
+            d.eta_secs = (d.total_bytes - d.downloaded_bytes) / d.speed;
+          }
+        }
+        d.bwH = [...d.bwH.slice(1), (d.speed || 0) / 1048576];
+      }
+    }
+  });
+
+  const totSpd = dls.filter(d => d.status === 'downloading').reduce((s, d) => s + (d.speed || 0), 0);
+  const mb = totSpd / 1048576;
+  if (mb > peakDn) peakDn = mb;
+  bwH.dn = [...bwH.dn.slice(1), mb];
+  bwH.up = [...bwH.up.slice(1), activeCount > 0 ? 0.2 : 0.05];
+
+  // In-place updates for active downloads without thrashing DOM innerHTML
+  dls.filter(d => d.status === 'downloading').forEach(updateDLRowDOM);
+  updStats();
+  updBdg();
+  updBwBars();
+}
+
+// ════════ IN-PLACE DOWNLOAD ROW UPDATER ════════
+function updateDLRowDOM(d) {
+  const row = document.getElementById(`dlrow-${d.id}`);
+  if (!row) {
+    renderDLs();
+    return;
+  }
+  const pct = Math.min(100, Math.max(0, Math.round((d.progress || (d.total_bytes > 0 ? d.downloaded_bytes / d.total_bytes : 0)) * 100)));
+  const isAct = d.status === 'downloading';
+  const isComp = d.status === 'complete';
+  const isPsd = d.status === 'paused';
+  const isQ = d.status === 'queued';
+  const stLbl = isAct ? `${pct}%` : isComp ? 'Done' : isPsd ? 'Paused' : 'Queued';
+
+  const stBg = isAct ? 'bg-primary-container/15 text-primary-container border-primary-container/30'
+    : isComp ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+    : isPsd ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+    : 'bg-surface-container-highest text-on-surface-variant border-outline-variant';
+
+  const stEl = document.getElementById(`dlst-${d.id}`);
+  if (stEl) {
+    stEl.textContent = stLbl;
+    stEl.className = `text-[10px] px-1.5 py-0.2 rounded border ${stBg}`;
+  }
+
+  const szEl = document.getElementById(`dlsz-${d.id}`);
+  if (szEl) szEl.textContent = `${fmtSz(d.downloaded_bytes)} / ${fmtSz(d.total_bytes)}`;
+
+  const spdEl = document.getElementById(`dlspd-${d.id}`);
+  if (spdEl) {
+    spdEl.textContent = isAct ? fmtSpd(d.speed) : '--';
+    spdEl.className = `text-[12px] font-semibold ${isAct ? 'text-primary' : 'text-on-surface-variant'}`;
+  }
+
+  const etaEl = document.getElementById(`dleta-${d.id}`);
+  if (etaEl) etaEl.textContent = isAct ? fmtT(d.eta_secs) : isComp ? '0s' : '--';
+
+  const segEl = document.getElementById(`dlseg-${d.id}`);
+  if (segEl) {
+    const connN = d.connections || 16;
+    const segHtml = Array(connN).fill(0).map((_, i) => {
+      const sp = (i + 1) / connN * 100;
+      if (pct >= sp) return '<div class="seg done"></div>';
+      if (d.status === 'downloading' && pct >= (i / connN * 100)) return '<div class="seg act"></div>';
+      return '<div class="seg empty"></div>';
+    }).join('');
+    segEl.innerHTML = segHtml;
+  }
+
+  if (row.dataset.status !== d.status) {
+    row.dataset.status = d.status;
+    renderDLs();
+  }
+}
+
+// ════════ RENDERING DOWNLOADS LIST ════════
+function renderDLs() {
+  const q = (document.getElementById('srchInput')?.value || '').toLowerCase();
+  const sort = document.getElementById('sortSel')?.value || 'date';
+
+  let list = dls.filter(d => {
+    if (curView === 'downloading' && (d.status !== 'downloading' && d.status !== 'queued')) return false;
+    if (curView === 'completed' && d.status !== 'complete') return false;
+    if (curView === 'queued' && d.status !== 'queued') return false;
+    if (catFilter && d.category !== catFilter) return false;
+    if (q && !(d.name || '').toLowerCase().includes(q) && !(d.url || '').toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  if (sort === 'name') list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  else if (sort === 'size') list.sort((a, b) => (b.total_bytes || 0) - (a.total_bytes || 0));
+  else if (sort === 'speed') list.sort((a, b) => (b.speed || 0) - (a.speed || 0));
+  else list.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+
+  const el = document.getElementById('dlList');
+  const emp = document.getElementById('emptyState');
+  if (!el) return;
+
+  if (list.length === 0) {
+    el.innerHTML = '';
+    if (emp) emp.classList.remove('hidden');
+    if (emp) emp.classList.add('flex');
+    return;
+  }
+
+  if (emp) {
+    emp.classList.add('hidden');
+    emp.classList.remove('flex');
+  }
+
+  el.innerHTML = list.map(d => {
+    const pct = Math.min(100, Math.max(0, Math.round((d.progress || (d.total_bytes > 0 ? d.downloaded_bytes / d.total_bytes : 0)) * 100)));
+    const connN = d.connections || 16;
+    const segs = Array(connN).fill(0).map((_, i) => {
+      const sp = (i + 1) / connN * 100;
+      if (pct >= sp) return 'done';
+      if (d.status === 'downloading' && pct >= (i / connN * 100)) return 'act';
+      return 'empty';
+    });
+
+    const isAct = d.status === 'downloading';
+    const isComp = d.status === 'complete';
+    const isPsd = d.status === 'paused';
+    const isQ = d.status === 'queued';
+
+    const stBg = isAct ? 'bg-primary-container/15 text-primary-container border-primary-container/30'
+      : isComp ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+      : isPsd ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+      : 'bg-surface-container-highest text-on-surface-variant border-outline-variant';
+
+    const stLbl = isAct ? `${pct}%` : isComp ? 'Done' : isPsd ? 'Paused' : 'Queued';
+
+    return `
+    <div id="dlrow-${d.id}" data-status="${d.status}" class="dl-row bg-surface-container border border-outline-variant/60 rounded overflow-hidden">
+      <div class="flex items-center gap-4 px-4 py-3 cursor-pointer select-none" data-act="tog-det" data-id="${d.id}">
+        <div class="w-9 h-9 rounded bg-surface-container-highest flex items-center justify-center flex-shrink-0 border border-outline-variant">
+          <span class="material-symbols-outlined text-primary-container text-[20px]">${d.icon || 'download'}</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-[13px] font-medium text-on-surface truncate" style="font-family:Inter">${d.filename || d.name}</span>
+            <span id="dlst-${d.id}" class="text-[10px] px-1.5 py-0.2 rounded border ${stBg}" style="font-family:'JetBrains Mono'">${stLbl}</span>
+          </div>
+          <div class="flex items-center gap-2 mt-1">
+            <div id="dlseg-${d.id}" class="seg-bar">${segs.map(s => `<div class="seg ${s}"></div>`).join('')}</div>
+            <span id="dlsz-${d.id}" class="text-[11px] text-on-surface-variant flex-shrink-0" style="font-family:'JetBrains Mono'">${fmtSz(d.downloaded_bytes)} / ${fmtSz(d.total_bytes)}</span>
+          </div>
+        </div>
+        <div class="w-24 text-right flex-shrink-0">
+          <div id="dlspd-${d.id}" class="text-[12px] font-semibold ${isAct ? 'text-primary' : 'text-on-surface-variant'}" style="font-family:'JetBrains Mono'">${isAct ? fmtSpd(d.speed) : '--'}</div>
+          <div class="text-[10px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${d.connections || 16} conns</div>
+        </div>
+        <div class="w-20 text-right flex-shrink-0">
+          <div id="dleta-${d.id}" class="text-[12px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${isAct ? fmtT(d.eta_secs) : isComp ? '0s' : '--'}</div>
+          <div class="text-[10px] text-on-surface-variant/70" style="font-family:'JetBrains Mono'">${d.priority || 'High'}</div>
+        </div>
+        <div class="w-24 flex items-center justify-end gap-1.5 flex-shrink-0">
+          ${isAct ? `<button class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Pause" onclick="event.stopPropagation(); pauseDL('${d.id}')" data-act="pause-dl" data-id="${d.id}"><span class="material-symbols-outlined text-[18px]">pause</span></button>` : ''}
+          ${isPsd || isQ ? `<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Resume" onclick="event.stopPropagation(); resumeDL('${d.id}')" data-act="resume-dl" data-id="${d.id}"><span class="material-symbols-outlined text-[18px]">play_arrow</span></button>` : ''}
+          ${isComp ? `<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Open Folder" onclick="event.stopPropagation(); openFolder('${d.id}', '${(d.destination || '').replace(/\\/g, '\\\\')}')" data-act="open-folder" data-id="${d.id}" data-path="${d.destination || ''}"><span class="material-symbols-outlined text-[18px]">folder_open</span></button>` : ''}
+          <button class="p-1.5 text-on-surface-variant hover:text-red-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Delete" onclick="event.stopPropagation(); cancelDL('${d.id}')" data-act="cancel-dl" data-id="${d.id}"><span class="material-symbols-outlined text-[18px]">close</span></button>
+          <button class="p-1 text-on-surface-variant rounded hover:text-primary active:scale-95 transition-all" onclick="event.stopPropagation(); togDet('${d.id}')" title="Details"><span class="material-symbols-outlined text-[16px] text-on-surface-variant transition-transform" id="chev-${d.id}" style="${d.expanded ? 'transform:rotate(180deg)' : ''}">expand_more</span></button>
+        </div>
+      </div>
+      <div id="det-${d.id}" class="det-panel ${d.expanded ? 'open' : ''} grid-cols-4 gap-4 p-4 text-[12px]" style="font-family:'JetBrains Mono'">
+        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">Server / Protocol</div><div class="text-on-surface truncate">${d.server || 'cdn.server.net'}</div><div class="text-primary-container text-[11px]">${d.protocol || 'HTTPS (TLS 1.3)'}</div></div>
+        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">Save Path</div><div class="text-on-surface truncate" title="${d.destination || savePth}">${d.destination || savePth}</div><div class="text-on-surface-variant text-[11px]">Category: ${d.category || 'General'}</div></div>
+        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">Segments / Priority</div><div class="text-on-surface">${d.connections || 16} parallel HTTP chunks</div><div class="text-primary-container text-[11px]">Priority: ${d.priority || 'High'}</div></div>
+        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">10s Bandwidth History</div><div class="flex items-end gap-0.5 h-7 pt-1">${(d.bwH || []).map(v => `<div style="height:${Math.max(3, Math.min(100, (v / 8) * 100))}%" class="flex-1 bg-primary-container/50 rounded-sm"></div>`).join('')}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ════════ UI STATS & BADGES ════════
+function updStats() {
+  const active = dls.filter(d => d.status === 'downloading');
+  const q = dls.filter(d => d.status === 'queued');
+  const totSpeed = active.reduce((s, d) => s + (d.speed || 0), 0);
+  const conns = active.reduce((s, d) => s + (d.connections || 16), 0);
+  const totDn = dls.reduce((s, d) => s + (d.downloaded_bytes || 0), 0);
+  const dnMBs = totSpeed / 1048576;
+
+  const sDn = document.getElementById('sDnSpd');
+  if (sDn) sDn.textContent = dnMBs.toFixed(1);
+  const sAct = document.getElementById('sAct');
+  if (sAct) sAct.textContent = active.length;
+  const sTot = document.getElementById('sTot');
+  if (sTot) sTot.textContent = dls.length;
+  const sQ = document.getElementById('sQueuedTxt');
+  if (sQ) sQ.textContent = q.length + ' queued';
+  const sLoad = document.getElementById('sLoad');
+  if (sLoad) sLoad.textContent = gMaxActive > 0 ? Math.min(100, Math.round(active.length / gMaxActive * 100)) : 0;
+  const sConns = document.getElementById('sConns');
+  if (sConns) sConns.textContent = conns + ' connections open';
+  const sTotDn = document.getElementById('sTotalDn');
+  if (sTotDn) sTotDn.textContent = fmtSz(totDn) + ' downloaded';
+  const bwPk = document.getElementById('bwPkDn');
+  if (bwPk) bwPk.textContent = peakDn.toFixed(1);
+  const bwCur = document.getElementById('bwCurDn');
+  if (bwCur) bwCur.textContent = dnMBs.toFixed(1) + ' MB/s';
+}
+
+function updBwBars() {
+  ['bwDnBars', 'bwUpBars'].forEach((id, isUp) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const h = isUp ? bwH.up : bwH.dn;
+    const mx = Math.max(...h, 1);
+    el.innerHTML = h.map(v => {
+      const hp = Math.max(2, Math.round(v / mx * 100));
+      const pk = v === Math.max(...h) && v > 0;
+      return `<div class="bw-bar${pk ? ' pk' : ''}" style="height:${hp}%"></div>`;
+    }).join('');
+  });
+}
+
+function updBdg() {
+  const dlCount = dls.filter(d => d.status === 'downloading' || d.status === 'queued').length;
+  const compCount = dls.filter(d => d.status === 'complete').length;
+  const qCount = dls.filter(d => d.status === 'queued').length;
+
+  const bDl = document.getElementById('bdg-dl');
+  if (bDl) bDl.textContent = dlCount;
+  const bAll = document.getElementById('bdg-all');
+  if (bAll) bAll.textContent = dls.length || '';
+  const bComp = document.getElementById('bdg-comp');
+  if (bComp) bComp.textContent = compCount || '';
+  const bQ = document.getElementById('bdg-q');
+  if (bQ) bQ.textContent = qCount || '';
+
+  const nd = document.getElementById('notifDot');
+  if (nd) {
+    if (compCount > 0) nd.classList.remove('hidden');
+    else nd.classList.add('hidden');
+  }
+}
+
+// ════════ ROUTING & TABS ════════
+function setView(v) {
+  curView = v;
+  catFilter = null;
+  document.querySelectorAll('.slink').forEach(el => el.classList.remove('active'));
+  ['netView', 'bwView', 'schedView', 'settingsView', 'logsView'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+
+  const mainTabs = document.getElementById('mainTabs');
+  if (mainTabs) mainTabs.classList.remove('hidden');
+
+  const titles = {
+    downloading: 'Network Overview',
+    all: 'All Downloads',
+    completed: 'Completed Downloads',
+    queued: 'Download Queue',
+    settings: 'Settings',
+    logs: 'Activity Logs'
+  };
+  const pgTitle = document.getElementById('pgTitle');
+  if (pgTitle) pgTitle.textContent = titles[v] || 'Network Overview';
+
+  if (v === 'settings') {
+    const sNav = document.getElementById('nav-settings');
+    if (sNav) sNav.classList.add('active');
+    const sView = document.getElementById('settingsView');
+    if (sView) sView.classList.remove('hidden');
+    if (mainTabs) mainTabs.classList.add('hidden');
+  } else if (v === 'logs') {
+    const lNav = document.getElementById('nav-logs');
+    if (lNav) lNav.classList.add('active');
+    const lView = document.getElementById('logsView');
+    if (lView) lView.classList.remove('hidden');
+    if (mainTabs) mainTabs.classList.add('hidden');
+    renderLogs();
+  } else {
+    const nEl = document.getElementById('nav-' + v);
+    if (nEl) nEl.classList.add('active');
+    const netView = document.getElementById('netView');
+    if (netView) netView.classList.remove('hidden');
+    setTab(curTab);
+    renderDLs();
+  }
+}
+
+function filterCat(cat) {
+  catFilter = catFilter === cat ? null : cat;
+  curView = 'all';
+  document.querySelectorAll('.slink').forEach(el => el.classList.remove('active'));
+  const nAll = document.getElementById('nav-all');
+  if (nAll) nAll.classList.add('active');
+  const pgTitle = document.getElementById('pgTitle');
+  if (pgTitle) pgTitle.textContent = catFilter ? catFilter : 'All Downloads';
+
+  ['bwView', 'schedView', 'settingsView', 'logsView'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  const netView = document.getElementById('netView');
+  if (netView) netView.classList.remove('hidden');
+  renderDLs();
+}
+
+function setTab(t) {
+  curTab = t;
+  document.querySelectorAll('.tab-lnk').forEach(el => el.classList.remove('active'));
+  const tabs = ['network', 'bandwidth', 'scheduler'];
+  tabs.forEach((tab, i) => {
+    const el = document.querySelectorAll('.tab-lnk')[i];
+    if (!el) return;
+    if (tab === t) el.classList.add('active');
+  });
+  ['netView', 'bwView', 'schedView'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  const vm = { network: 'netView', bandwidth: 'bwView', scheduler: 'schedView' };
+  const target = document.getElementById(vm[t]);
+  if (target) target.classList.remove('hidden');
+}
+
+// ════════ MODAL CONTROLS ════════
+function openAddModal() {
+  const modal = document.getElementById('addModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  modal.style.display = 'flex';
+  const inp = document.getElementById('urlInp');
+  if (inp) {
+    inp.focus();
+    detectFT();
+  }
+}
+
+function closeAddModal() {
+  const modal = document.getElementById('addModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  modal.style.display = 'none';
+  const uInp = document.getElementById('urlInp');
+  if (uInp) uInp.value = '';
+  const bInp = document.getElementById('batchInp');
+  if (bInp) bInp.value = '';
+  const ftB = document.getElementById('ftBadge');
+  if (ftB) ftB.classList.add('hidden');
+  const card = document.getElementById('mediaExtCard');
+  if (card) card.classList.add('hidden');
+  const yt = document.getElementById('ytNotice');
+  if (yt) yt.classList.add('hidden');
+  currentExtractedInfo = null;
+}
+
+function isVideoPlatformUrl(url) {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  return u.includes('youtube.com') || u.includes('youtu.be')
+    || u.includes('cinemana.shabakaty.com')
+    || u.includes('tiktok.com')
+    || u.includes('vimeo.com')
+    || u.includes('dailymotion.com')
+    || u.includes('facebook.com')
+    || u.includes('fb.watch')
+    || u.includes('instagram.com')
+    || u.includes('twitter.com')
+    || u.includes('x.com')
+    || u.includes('reddit.com')
+    || u.includes('bilibili.com');
+}
+
+function detectFT() {
+  const url = (document.getElementById('urlInp')?.value || '').trim();
+  const b = document.getElementById('ftBadge');
+  const yt = document.getElementById('ytNotice');
+  if (!b) return;
+  if (!url) {
+    b.classList.add('hidden');
+    if (yt) yt.classList.add('hidden');
+    return;
+  }
+  const isVideo = isVideoPlatformUrl(url);
+  if (yt) yt.classList.toggle('hidden', !isVideo);
+
+  const { l } = getFI(url);
+  const ftText = document.getElementById('ftText');
+  if (ftText) ftText.textContent = isVideo ? 'Video Page' : l;
+  b.classList.remove('hidden');
+
+  // Auto-sniff video pages with debounce
+  if (isVideo && !currentExtractedInfo) {
+    if (window._sniffDebounce) clearTimeout(window._sniffDebounce);
+    window._sniffDebounce = setTimeout(() => {
+      sniffMediaStream();
+    }, 400);
+  }
+}
+
+function setPri(p, btn) {
+  curPri = p;
+  document.querySelectorAll('.pri-btn').forEach(b => b.classList.remove('sel'));
+  if (btn) btn.classList.add('sel');
+}
+
+function togAdv() {
+  const s = document.getElementById('advSec');
+  const c = document.getElementById('advChev');
+  if (!s || !c) return;
+  s.classList.toggle('hidden');
+  c.style.transform = s.classList.contains('hidden') ? 'rotate(-90deg)' : 'rotate(0deg)';
+}
+
+function togBatch() {
+  batchMode = !batchMode;
+  const bArea = document.getElementById('batchArea');
+  if (bArea) bArea.classList.toggle('hidden', !batchMode);
+  const bBtn = document.getElementById('batchTogBtn');
+  if (bBtn) bBtn.textContent = batchMode ? '- Single URL mode' : '+ Batch mode';
+}
+
+async function chgSavePath() {
+  let selected = null;
+  if (hasTauriIPC() && window.__TAURI__ && window.__TAURI__.dialog) {
+    try {
+      selected = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: 'Select Save Folder' });
+    } catch(e) { console.warn(e); }
+  }
+  if (!selected) {
+    selected = prompt('Enter download destination directory:', savePth);
+  }
+  if (selected && selected.trim()) {
+    savePth = selected.trim();
+    const defPath = document.getElementById('defSavePath');
+    if (defPath) defPath.textContent = savePth;
+    const modPath = document.getElementById('modalPath');
+    if (modPath) modPath.textContent = savePth;
+    showT('success', 'Save Path Updated', savePth);
+    addLog('info', `[SETTINGS] Save destination changed to: ${savePth}`);
+  }
+}
+
+// ════════ BANDWIDTH THROTTLE ════════
+async function applyThrottle() {
+  const val = parseInt(document.getElementById('throttleDn')?.value || '0');
+  const lbl = document.getElementById('throttleDnVal');
+  if (lbl) lbl.textContent = val === 0 ? 'Unlimited' : val + ' MB/s';
+  const limitBps = val === 0 ? 0 : val * 1048576;
+  if (hasTauriIPC()) {
+    await tauriCall('set_global_throttle', { limitBytesPerSec: limitBps });
+  }
+  addLog('info', `[THROTTLE] Bandwidth limit set to ${val === 0 ? 'Unlimited' : val + ' MB/s'}`);
+}
+
+// ════════ TOAST NOTIFICATIONS ════════
+function showT(type, title, msg) {
+  const box = document.getElementById('toastBox');
+  if (!box) return;
+  const icons = { success: 'check_circle', error: 'error', info: 'info', warn: 'warning' };
+  const colors = {
+    success: 'text-primary-container border-primary-container/40',
+    error: 'text-red-400 border-red-400/40',
+    info: 'text-primary border-primary/40',
+    warn: 'text-amber-400 border-amber-400/40'
+  };
+  const t = document.createElement('div');
+  t.className = `pointer-events-auto glass-panel border ${colors[type] || colors.info} rounded-lg p-3.5 shadow-2xl flex items-start gap-3 toast-enter`;
+  t.innerHTML = `
+    <span class="material-symbols-outlined ${colors[type]?.split(' ')[0]} text-[20px] flex-shrink-0 mt-0.5" style="font-variation-settings:'FILL' 1">${icons[type] || 'info'}</span>
+    <div class="flex-1 min-w-0">
+      <div class="text-[13px] font-semibold text-on-surface leading-snug" style="font-family:Inter">${title}</div>
+      <div class="text-[11px] text-on-surface-variant truncate mt-0.5 leading-snug" style="font-family:'JetBrains Mono'">${msg}</div>
+    </div>
+    <button onclick="this.parentElement.remove()" class="text-on-surface-variant hover:text-on-surface flex-shrink-0 text-[14px]">✕</button>
+  `;
+  box.appendChild(t);
+  setTimeout(() => {
+    if (t.parentElement) {
+      t.className = t.className.replace('toast-enter', 'toast-exit');
+      setTimeout(() => t.remove(), 350);
+    }
+  }, 4000);
+}
+
+function showCompT(dl) {
+  showT('success', 'Download Finished', `${dl.filename || dl.name} (${fmtSz(dl.total_bytes)})`);
+}
+
+function showNotifications() {
+  const comp = dls.filter(d => d.status === 'complete').length;
+  const act = dls.filter(d => d.status === 'downloading').length;
+  showT('info', 'Download Status', `${act} active download(s), ${comp} completed`);
+}
+
+// ════════ THEME TOGGLE ════════
+function toggleTheme() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  const ico = document.getElementById('themeIco');
+  if (ico) ico.textContent = isDark ? 'dark_mode' : 'light_mode';
+  const tog = document.getElementById('themeTogSet');
+  if (tog) tog.checked = isDark;
+  try {
+    localStorage.setItem('superidm_theme', isDark ? 'dark' : 'light');
+  } catch (e) {}
+  showT('info', 'Theme Changed', isDark ? 'Dark mode enabled' : 'Light mode enabled');
+}
+
+// ════════ ACTIVITY LOGS ════════
+function addLog(type, text) {
+  const ts = new Date().toTimeString().split(' ')[0];
+  logs.unshift({ type, text, ts });
+  if (logs.length > 200) logs.pop();
+  if (curView === 'logs') renderLogs();
+}
+
+function renderLogs() {
+  const b = document.getElementById('logBox');
+  if (!b) return;
+  if (logs.length === 0) {
+    b.innerHTML = '<div class="text-on-surface-variant/50 text-[12px] py-4 text-center">No logs recorded yet.</div>';
+    return;
+  }
+  b.innerHTML = logs.map(l => `<div class="log-e ${l.type}"><span class="text-on-surface-variant/60 mr-2">[${l.ts}]</span>${l.text}</div>`).join('');
+}
+
+function clrLogs() {
+  logs = [];
+  renderLogs();
+  showT('info', 'Logs Cleared', 'Activity logs wiped');
+}
+
+// ════════ SCHEDULER ════════
+function updateSched() {
+  const en = document.getElementById('schedEn')?.checked;
+  const st = document.getElementById('schedSt');
+  if (st) {
+    st.textContent = en ? 'Active' : 'Inactive';
+    st.className = en
+      ? 'text-[11px] text-primary-container ml-2 px-2 py-0.5 bg-primary-container/20 rounded font-semibold'
+      : 'text-[11px] text-on-surface-variant ml-2 px-2 py-0.5 bg-surface-container-highest rounded';
+  }
+  showT('info', 'Scheduler Updated', en ? 'Scheduler is now active' : 'Scheduler disabled');
+}
+
+function chkSched() {
+  const en = document.getElementById('schedEn')?.checked;
+  if (!en) return;
+  const now = new Date();
+  const curTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const sStart = document.getElementById('schedStart')?.value || '22:00';
+  const sStop = document.getElementById('schedStop')?.value || '06:00';
+
+  if (curTime === sStart) resumeAll();
+  if (curTime === sStop) pauseAll();
+}
+
+// ════════ CLIPBOARD MONITOR ════════
+async function chkClip() {
+  const en = document.getElementById('clipMon')?.checked;
+  if (!en) return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const text = await navigator.clipboard.readText();
+      if (text && text !== lastClip && (text.startsWith('http://') || text.startsWith('https://') || text.startsWith('ftp://'))) {
+        lastClip = text;
+        const fi = getFI(text);
+        if (fi.c !== 'Other' || text.includes('.bin') || text.includes('.zip') || text.includes('.iso')) {
+          clipPnd = text;
+          const p = document.getElementById('clipPrompt');
+          const t = document.getElementById('clipUrlTxt');
+          if (p && t) {
+            t.textContent = text;
+            p.classList.remove('hidden');
+          }
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+function dismClip() {
+  clipPnd = null;
+  const p = document.getElementById('clipPrompt');
+  if (p) p.classList.add('hidden');
+}
+
+function accClip() {
+  if (clipPnd) {
+    addDL(clipPnd);
+    showT('success', 'Download Started', getFI(clipPnd).n);
+    dismClip();
+    setView('downloading');
+  }
+}
+
+function toggleClipMon() {
+  const en = document.getElementById('clipMon')?.checked;
+  if (en) {
+    if (!clipInt) clipInt = setInterval(chkClip, 2500);
+  } else {
+    clearInterval(clipInt);
+    clipInt = null;
+    dismClip();
+  }
+}
+
+// ════════ GLOBAL EVENT DELEGATION ════════
+document.addEventListener('click', function(e) {
+  const target = e.target.closest('[data-act]');
+  if (!target) return;
+  // Prevent double-invocation if element already has inline onclick
+  if (target.hasAttribute('onclick')) return;
+
+  const act = target.getAttribute('data-act');
+  if (act === 'open-modal') {
+    openAddModal();
+  } else if (act === 'close-modal') {
+    closeAddModal();
+  } else if (act === 'start-dl') {
+    startDL();
+  } else if (act === 'queue-dl') {
+    queueDL();
+  } else if (act === 'pause-all') {
+    pauseAll();
+  } else if (act === 'resume-all') {
+    resumeAll();
+  } else if (act === 'clear-done') {
+    clearDone();
+  } else if (act === 'theme-tog') {
+    toggleTheme();
+  } else if (act === 'notif-tog') {
+    showNotifications();
+  } else if (act === 'browse-path') {
+    chgSavePath();
+  } else if (act === 'clear-logs') {
+    clrLogs();
+  } else if (act === 'tog-adv') {
+    togAdv();
+  } else if (act === 'tog-batch') {
+    togBatch();
+  } else if (act === 'dism-clip') {
+    dismClip();
+  } else if (act === 'acc-clip') {
+    accClip();
+  } else if (act === 'nav') {
+    const v = target.getAttribute('data-view');
+    if (v) setView(v);
+  } else if (act === 'cat') {
+    const c = target.getAttribute('data-cat');
+    if (c) filterCat(c);
+  } else if (act === 'tab') {
+    const t = target.getAttribute('data-tab');
+    if (t) setTab(t);
+  } else if (act === 'preset') {
+    const url = target.getAttribute('data-url');
+    if (url) fillSample(url);
+  } else if (act === 'paste-clip') {
+    pasteClipToInp();
+  } else if (act === 'set-pri') {
+    const pri = target.getAttribute('data-pri');
+    if (pri) setPri(pri, target);
+  } else if (act === 'pause-dl') {
+    const id = target.getAttribute('data-id');
+    if (id) pauseDL(id);
+  } else if (act === 'resume-dl') {
+    const id = target.getAttribute('data-id');
+    if (id) resumeDL(id);
+  } else if (act === 'cancel-dl') {
+    const id = target.getAttribute('data-id');
+    if (id) cancelDL(id);
+  } else if (act === 'open-folder') {
+    const id = target.getAttribute('data-id');
+    const path = target.getAttribute('data-path');
+    if (id) openFolder(id, path);
+  } else if (act === 'tog-det') {
+    const id = target.getAttribute('data-id');
+    if (id) togDet(id);
+  }
+});
+
+// ════════ GLOBAL BINDINGS ════════
+window.openAddModal = openAddModal;
+window.closeAddModal = closeAddModal;
+window.fillSample = fillSample;
+window.pasteClipToInp = pasteClipToInp;
+window.startDL = startDL;
+window.queueDL = queueDL;
+window.pauseDL = pauseDL;
+window.resumeDL = resumeDL;
+window.cancelDL = cancelDL;
+window.openFolder = openFolder;
+window.pauseAll = pauseAll;
+window.resumeAll = resumeAll;
+window.clearDone = clearDone;
+window.togDet = togDet;
+window.setView = setView;
+window.filterCat = filterCat;
+window.setTab = setTab;
+window.setPri = setPri;
+window.detectFT = detectFT;
+window.togAdv = togAdv;
+window.togBatch = togBatch;
+window.chgSavePath = chgSavePath;
+window.applyThrottle = applyThrottle;
+window.showNotifications = showNotifications;
+window.toggleTheme = toggleTheme;
+window.clrLogs = clrLogs;
+window.updateSched = updateSched;
+window.dismClip = dismClip;
+window.accClip = accClip;
+window.toggleClipMon = toggleClipMon;
+window.renderDLs = renderDLs;
+
+// ════════ KEYBOARD SHORTCUTS ════════
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+    e.preventDefault();
+    openAddModal();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+    e.preventDefault();
+    pauseAll();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
+    e.preventDefault();
+    resumeAll();
+  }
+  if (e.key === 'Escape') {
+    closeAddModal();
+  }
+});
+
+// ════════ INITIALIZATION ════════
+try {
+  const savedTheme = localStorage.getItem('superidm_theme');
+  if (savedTheme === 'light') {
+    document.documentElement.classList.remove('dark');
+    const ico = document.getElementById('themeIco');
+    if (ico) ico.textContent = 'light_mode';
+    const tog = document.getElementById('themeTogSet');
+    if (tog) tog.checked = false;
+  }
+} catch (e) {}
+
+loadLocalDls();
+setView('downloading');
+setTab('network');
+updBdg();
+renderDLs();
+
+bindTauriEvents();
+
+function initTauriState() {
+  bindTauriEvents();
+  if (hasTauriIPC()) {
+    tauriCall('get_default_save_path').then(path => {
+      if (path && typeof path === 'string') {
+        savePth = path;
+        const dP = document.getElementById('defSavePath');
+        if (dP) dP.textContent = path;
+        const mP = document.getElementById('modalPath');
+        if (mP) mP.textContent = path;
+      }
+    }).catch(() => {});
+
+    syncFromBackend();
+  }
+}
+
+initTauriState();
+setInterval(initTauriState, 1500);
+setInterval(syncFromBackend, 600);
+setInterval(localTick, 350);
+setInterval(chkSched, 60000);
+clipInt = setInterval(chkClip, 2500);
+
+addLog('info', '[INIT] SuperIDM v2.4.0 Engine started');
+addLog('info', '[READY] All buttons, modals, and download engine are 100% active');
+setTimeout(() => {
+  showT('success', 'SuperIDM Engine Ready', 'All buttons active. Click "+ Add New Link" or press Ctrl+N');
+}, 500);
+
+// ════════ BROWSER EXTENSION RPC BRIDGE ════════
+// Poll for downloads queued by the browser extension via the RPC server.
+async function pollRpcDownloads() {
+  if (!hasTauriIPC()) return;
+  try {
+    const pending = await tauriCall('poll_rpc_downloads');
+    if (pending && Array.isArray(pending) && pending.length > 0) {
+      for (const req of pending) {
+        addLog('info', `[EXT] Download from extension: ${req.url}`);
+        await addDL(req.url, {
+          filename: req.filename || undefined,
+          format: req.format || undefined,
+          cat: 'General',
+        });
+      }
+      if (pending.length === 1) {
+        showT('info', '⚡ Extension Download', `Downloading: ${pending[0].filename || pending[0].url.substring(0, 60)}`);
+      } else {
+        showT('info', '⚡ Extension Downloads', `${pending.length} downloads queued from browser extension`);
+      }
+    }
+  } catch (e) { /* extension polling failed, ignore */ }
+}
+
+// ════════ BROWSER INTEGRATION ACTIONS ════════
+async function installBrowserExt(browser) {
+  if (!hasTauriIPC()) {
+    showT('info', 'Browser Integration', 'Available inside SuperIDM desktop application');
+    return;
+  }
+  try {
+    const res = await tauriCall('install_browser_integration', { browser });
+    await tauriCall('launch_browser_extensions', { browser });
+    showT('success', 'Browser Integration Ready', `Registered for ${browser.toUpperCase()}. In browser, click "Load Unpacked" and select the SuperIDM folder!`);
+    addLog('success', `[INTEGRATION] Registered browser extension for ${browser}`);
+  } catch (e) {
+    showT('error', 'Integration Error', String(e));
+  }
+}
+
+async function autoInstallAllBrowsers() {
+  if (!hasTauriIPC()) return;
+  try {
+    await tauriCall('install_browser_integration', { browser: 'all' });
+    await tauriCall('open_extension_folder');
+    showT('success', 'All Browsers Configured', 'Extension extracted & registered. Folder opened on your screen!');
+  } catch (e) {
+    showT('error', 'Auto-Install Error', String(e));
+  }
+}
+
+async function openExtensionFolder() {
+  if (!hasTauriIPC()) return;
+  try {
+    await tauriCall('open_extension_folder');
+  } catch (e) {
+    showT('error', 'Error', String(e));
+  }
+}
+
+window.installBrowserExt = installBrowserExt;
+window.autoInstallAllBrowsers = autoInstallAllBrowsers;
+window.openExtensionFolder = openExtensionFolder;
+
+// Query and update extension path display
+if (hasTauriIPC()) {
+  tauriCall('get_extension_path').then(p => {
+    const el = document.getElementById('extPathDisplay');
+    if (el && p) el.textContent = p;
+  }).catch(() => {});
+}
+
+async function pollRpcDownloads() {
+  if (!hasTauriIPC()) return;
+  try {
+    const pending = await tauriCall('poll_rpc_downloads');
+    if (pending && Array.isArray(pending) && pending.length > 0) {
+      for (const req of pending) {
+        if (req && req.url) {
+          addLog('info', `[BROWSER EXTENSION] Starting download: ${req.filename || req.url}`);
+          showT('success', 'Browser Download', `Starting: ${req.filename || 'Video'}`);
+          await addDL(req.url, {
+            filename: req.filename,
+            format: req.format,
+            cat: 'Videos',
+            pri: 'High',
+            conn: gMaxConn
+          });
+        }
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+// Poll every 800ms for extension-initiated downloads
+setInterval(pollRpcDownloads, 800);
+
+})();
+</script>
+</body>
+</html>

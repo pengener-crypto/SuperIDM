@@ -1,0 +1,40 @@
+[package]
+name = "super-idm"
+version = "2.4.0"
+description = "SuperIDM — High-Performance Download Manager"
+authors = ["SuperIDM Team"]
+edition = "2021"
+rust-version = "1.70"
+
+[lib]
+name = "super_idm_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "devtools"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-single-instance = "2"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["stream", "json", "rustls-tls"] }
+tokio-util = { version = "0.7", features = ["io", "codec"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio-tungstenite = "0.26"
+uuid = { version = "1", features = ["v4"] }
+futures-util = "0.3"
+parking_lot = "0.12"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+dirs = "6"
+tempfile = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

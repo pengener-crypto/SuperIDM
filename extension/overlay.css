@@ -1,0 +1,192 @@
+/* ═══════════════════════════════════════════════════════════════
+   SuperIDM Browser Extension — Clean Cyan Pill Floating Button
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ───── Floating Clean Pill Badge ───── */
+.superidm-video-badge {
+  position: absolute !important;
+  top: 14px !important;
+  right: 14px !important;
+  z-index: 2147483647 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  padding: 6px 14px !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  letter-spacing: 0.3px !important;
+  background: #090e17 !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1.5px solid #00f5ff !important;
+  border-radius: 20px !important;
+  cursor: pointer !important;
+  box-shadow: 
+    0 0 8px rgba(0, 245, 255, 0.4),
+    0 4px 14px rgba(0, 0, 0, 0.6) !important;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  user-select: none !important;
+  line-height: 1 !important;
+}
+
+.superidm-video-badge:hover {
+  transform: scale(1.03) !important;
+  border-color: #5cf7ff !important;
+  box-shadow: 
+    0 0 12px rgba(0, 245, 255, 0.6),
+    0 6px 18px rgba(0, 0, 0, 0.7) !important;
+}
+
+.superidm-video-badge:active {
+  transform: scale(0.97) !important;
+}
+
+/* ───── YouTube Positioning ───── */
+.superidm-yt-badge {
+  top: 14px !important;
+  right: 14px !important;
+}
+
+/* ───── Clean Cyan Download Arrow Icon ───── */
+.superidm-icon-svg {
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0 !important;
+  filter: drop-shadow(0 0 4px rgba(0, 245, 255, 0.7)) !important;
+}
+
+/* ───── Text Label ───── */
+.superidm-btn-text {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 13.5px !important;
+  letter-spacing: 0.3px !important;
+}
+
+/* ───── Dropdown Chevron ───── */
+.superidm-chevron-svg {
+  width: 12px !important;
+  height: 12px !important;
+  flex-shrink: 0 !important;
+  stroke: #00f5ff !important;
+  transition: transform 0.2s ease !important;
+}
+
+.superidm-menu-open .superidm-chevron-svg {
+  transform: rotate(180deg) !important;
+}
+
+/* ───── Quality Dropdown Menu ───── */
+.superidm-quality-menu {
+  position: absolute !important;
+  top: calc(100% + 8px) !important;
+  right: 0 !important;
+  width: 250px !important;
+  background: rgba(9, 14, 23, 0.98) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1.5px solid rgba(0, 245, 255, 0.45) !important;
+  border-radius: 12px !important;
+  padding: 6px !important;
+  box-shadow: 
+    0 0 14px rgba(0, 245, 255, 0.25),
+    0 16px 40px rgba(0, 0, 0, 0.9) !important;
+  display: none !important;
+  z-index: 2147483647 !important;
+  overflow: hidden !important;
+  transform-origin: top right !important;
+}
+
+.superidm-quality-menu.superidm-menu-visible {
+  display: block !important;
+  animation: superidm-popIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* ───── Menu Header ───── */
+.superidm-menu-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 6px 8px 8px 8px !important;
+  border-bottom: 1px solid rgba(0, 245, 255, 0.15) !important;
+  margin-bottom: 4px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #00f5ff !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.8px !important;
+}
+
+/* ───── Menu Items ───── */
+.superidm-menu-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 8px 10px !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: #d1d8e6 !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  user-select: none !important;
+  line-height: 1.2 !important;
+  margin-bottom: 2px !important;
+}
+
+.superidm-menu-item:hover {
+  background: rgba(0, 245, 255, 0.15) !important;
+  color: #ffffff !important;
+  border-left: 3px solid #00f5ff !important;
+  padding-left: 12px !important;
+}
+
+.superidm-item-tag {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  background: rgba(0, 245, 255, 0.15) !important;
+  color: #00f5ff !important;
+  border: 1px solid rgba(0, 245, 255, 0.3) !important;
+}
+
+/* ───── Toast Notification ───── */
+#superidm-toast {
+  position: fixed !important;
+  bottom: 30px !important;
+  left: 50% !important;
+  transform: translateX(-50%) translateY(80px) !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 20px !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  background: #090e17 !important;
+  border: 1.5px solid #00f5ff !important;
+  border-radius: 20px !important;
+  box-shadow: 
+    0 0 12px rgba(0, 245, 255, 0.45),
+    0 8px 28px rgba(0, 0, 0, 0.8) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+#superidm-toast.superidm-toast-show {
+  opacity: 1 !important;
+  transform: translateX(-50%) translateY(0) !important;
+}
+
+@keyframes superidm-popIn {
+  from { opacity: 0; transform: scale(0.94) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}

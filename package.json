@@ -1,0 +1,18 @@
+{
+  "name": "super-idm",
+  "version": "2.4.0",
+  "description": "SuperIDM — High-Performance Download Manager",
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "tailwindcss": "^3.4.19"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2"
+  }
+}

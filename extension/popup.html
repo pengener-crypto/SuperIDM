@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SuperIDM</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="popup-header">
+    <div class="brand">
+      <img src="icons/icon32.png" alt="SuperIDM" class="brand-icon">
+      <span class="brand-name">Super<span class="brand-accent">IDM</span></span>
+    </div>
+    <div id="statusBadge" class="status-badge disconnected">
+      <span class="status-dot"></span>
+      <span id="statusText">Connecting...</span>
+    </div>
+  </header>
+
+  <!-- Quick Download -->
+  <section class="section">
+    <label class="section-label">Quick Download</label>
+    <div class="input-row">
+      <input type="text" id="urlInput" placeholder="Paste URL here..." class="url-input">
+      <button id="dlBtn" class="dl-btn" title="Send to SuperIDM">⚡</button>
+    </div>
+  </section>
+
+  <!-- Detected Media -->
+  <section class="section">
+    <label class="section-label">
+      Detected Media
+      <span id="mediaCount" class="media-count">0</span>
+    </label>
+    <div id="mediaList" class="media-list">
+      <div class="media-empty">No media detected on this tab</div>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section class="section">
+    <label class="section-label">Settings</label>
+
+    <div class="toggle-row">
+      <span class="toggle-label">Intercept Browser Downloads</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="togIntercept" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <span class="toggle-label">Show Video Grabber</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="togGrabber" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <span class="toggle-label">Sniff Media Streams</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="togSniff" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <span class="toggle-label">Min File Size (MB)</span>
+      <input type="number" id="minSize" value="1" min="0" max="1000" class="size-input">
+    </div>
+
+    <div class="token-row">
+      <span class="toggle-label" title="Shared secret token with SuperIDM desktop app">Security Token</span>
+      <input type="password" id="tokenInput" placeholder="Auto-synced token..." class="token-input">
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="popup-footer">
+    <span>SuperIDM v2.4.0</span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

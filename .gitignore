@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+target/
+src-tauri/target/
+dist/
+
+# Rust / Cargo
+**/*.rs.bk
+Cargo.lock
+
+# Python cache & secrets
+__pycache__/
+*.pyc
+.env
+.token
+github_manage.py
+push_and_release.py
+upload_installer.py
+
+# Operating System Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo

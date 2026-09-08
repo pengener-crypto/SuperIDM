@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CoreDL - Network Overview</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-secondary-container": "#b7b8c2",
+                      "inverse-primary": "#00696e",
+                      "on-secondary": "#2e3039",
+                      "secondary-container": "#474952",
+                      "on-secondary-fixed": "#191b23",
+                      "error": "#ffb4ab",
+                      "on-surface-variant": "#b9caca",
+                      "surface-container-high": "#282a2e",
+                      "tertiary-fixed-dim": "#ffb59c",
+                      "surface": "#111317",
+                      "surface-container-low": "#1a1c20",
+                      "background": "#111317",
+                      "on-primary-fixed": "#002021",
+                      "tertiary-container": "#ffd4c7",
+                      "primary-fixed": "#63f7ff",
+                      "surface-dim": "#111317",
+                      "on-secondary-fixed-variant": "#45464f",
+                      "outline-variant": "#3a494a",
+                      "primary": "#e9feff",
+                      "on-tertiary-container": "#b03700",
+                      "on-tertiary": "#5c1900",
+                      "on-primary-container": "#006c71",
+                      "surface-tint": "#00dce5",
+                      "on-primary": "#003739",
+                      "on-error": "#690005",
+                      "on-tertiary-fixed-variant": "#832700",
+                      "on-error-container": "#ffdad6",
+                      "primary-container": "#00f5ff",
+                      "on-tertiary-fixed": "#390c00",
+                      "tertiary": "#fff8f7",
+                      "surface-container-lowest": "#0c0e12",
+                      "surface-container-highest": "#333539",
+                      "on-primary-fixed-variant": "#004f53",
+                      "secondary-fixed-dim": "#c5c6d1",
+                      "surface-bright": "#37393e",
+                      "tertiary-fixed": "#ffdbcf",
+                      "on-background": "#e2e2e8",
+                      "surface-container": "#1e2024",
+                      "outline": "#849495",
+                      "on-surface": "#e2e2e8",
+                      "error-container": "#93000a",
+                      "secondary": "#c5c6d1",
+                      "primary-fixed-dim": "#00dce5",
+                      "inverse-on-surface": "#2f3035",
+                      "secondary-fixed": "#e1e1ed",
+                      "surface-variant": "#333539",
+                      "inverse-surface": "#e2e2e8"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "margin-page": "24px",
+                      "panel-width": "280px",
+                      "stack-sm": "8px",
+                      "stack-md": "16px",
+                      "stack-xs": "4px",
+                      "gutter": "12px"
+              },
+              "fontFamily": {
+                      "data-lg": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "data-mono": [
+                              "JetBrains Mono"
+                      ],
+                      "title-sm": [
+                              "Inter"
+                      ],
+                      "label-xs": [
+                              "JetBrains Mono"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "data-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "data-mono": [
+                              "13px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "title-sm": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-xs": [
+                              "11px",
+                              {
+                                      "lineHeight": "14px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+        
+        .progress-pulse {
+            animation: pulse-op 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-op {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        .mini-graph {
+            background: linear-gradient(to top, rgba(0,245,255,0.1) 0%, transparent 100%);
+            border-bottom: 1px solid theme('colors.primary-container');
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: theme('colors.surface-container-low'); 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: theme('colors.surface-variant'); 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.outline'); 
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex selection:bg-primary-container selection:text-on-primary-container">
+<!-- {{DATA:COMPONENTS:COMPONENTS_2}}: SideNavBar -->
+<aside class="bg-surface-container dark:bg-surface-container w-[280px] h-screen fixed left-0 top-0 border-r border-outline-variant dark:border-outline-variant flex flex-col h-full overflow-y-auto z-50">
+<!-- Brand/Header -->
+<div class="p-6 border-b border-outline-variant dark:border-outline-variant">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-primary/10 flex items-center justify-center border border-primary/20">
+<span class="material-symbols-outlined text-primary dark:text-primary">terminal</span>
+</div>
+<div>
+<h1 class="text-title-sm font-title-sm font-bold text-primary dark:text-primary tracking-tight">CoreDL</h1>
+<p class="text-label-xs font-label-xs text-on-surface-variant">v2.4.0 Engine</p>
+</div>
+</div>
+<button class="mt-6 w-full py-2 px-4 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-title-sm text-title-sm rounded transition-colors flex items-center justify-center gap-2 cursor-pointer active:opacity-80 transition-all border border-primary-container">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add</span>
+                Add New Link
+            </button>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 py-4">
+<div class="px-3 mb-2">
+<h2 class="text-label-xs font-label-xs text-on-surface-variant uppercase tracking-wider px-3">Downloads</h2>
+</div>
+<ul class="space-y-1 px-3">
+<!-- Downloading (Active) -->
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-primary dark:text-primary bg-primary/10 border-r-2 border-primary cursor-pointer active:opacity-80 transition-all" href="#">
+<span class="material-symbols-outlined">downloading</span>
+<span class="text-body-md font-body-md">Downloading</span>
+<span class="ml-auto bg-primary-container text-on-primary-container text-label-xs font-label-xs px-2 py-0.5 rounded-full">3</span>
+</a>
+</li>
+<!-- All Downloads (Inactive) -->
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors cursor-pointer active:opacity-80 transition-all" href="#">
+<span class="material-symbols-outlined">list</span>
+<span class="text-body-md font-body-md">All Downloads</span>
+</a>
+</li>
+<!-- Completed (Inactive) -->
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors cursor-pointer active:opacity-80 transition-all" href="#">
+<span class="material-symbols-outlined">check_circle</span>
+<span class="text-body-md font-body-md">Completed</span>
+</a>
+</li>
+<!-- Queued (Inactive) -->
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors cursor-pointer active:opacity-80 transition-all" href="#">
+<span class="material-symbols-outlined">schedule</span>
+<span class="text-body-md font-body-md">Queued</span>
+</a>
+</li>
+</ul>
+</nav>
+<!-- Footer -->
+<div class="p-4 border-t border-outline-variant dark:border-outline-variant">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors cursor-pointer active:opacity-80 transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-body-md font-body-md">Settings</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors cursor-pointer active:opacity-80 transition-all" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span class="text-body-md font-body-md">Logs</span>
+</a>
+</li>
+</ul>
+<div class="mt-4 px-3 flex items-center gap-3">
+<img alt="System User" class="w-8 h-8 rounded-full object-cover border border-outline" data-alt="A macro shot of a sleek, dark metallic cyberpunk cyber-implant with a glowing cyan optical sensor, extremely detailed, harsh dramatic studio lighting, deep shadows, 8k resolution, photorealistic, cinematic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuClxj4J98QjbPN-yg2FRgEs7K7D2vsYZR2cofLNV98MoLVmUzLjonLd0F8UZZ6ldgT26dkckekE2_Yq_-SxkgdUZJ2R0v_irUONI_lwY4_Gm2ymT_rhtD_LU_Uveg6nd3olD0U7wcpowH5WUNV9bTDIvT260NJ3aCPezketlhGP66EC3UpCYsXmWALKNO4FnZHfHJThJfEIw0p_wiLj9JLqy6Eamf2qbfOJupK8XUnEsqpWCwCwU98b"/>
+<div class="text-label-xs font-label-xs text-on-surface-variant truncate">
+                     SysAdmin_01
+                 </div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-[280px] flex-1 flex flex-col min-h-screen">
+<!-- {{DATA:COMPONENTS:COMPONENTS_2}}: TopAppBar -->
+<header class="bg-surface dark:bg-surface docked full-width top ml-[280px] border-b border-outline-variant dark:border-outline-variant flex justify-between items-center h-16 px-6 sticky top-0 z-40 bg-surface/80 backdrop-blur-md !ml-0 w-full">
+<div class="flex items-center gap-8">
+<h2 class="text-headline-md font-headline-md text-primary dark:text-primary">Network Overview</h2>
+<nav class="hidden lg:flex gap-6 h-full items-center">
+<a class="h-16 flex items-center text-primary dark:text-primary font-bold border-b-2 border-primary cursor-pointer active:scale-95 transition-transform text-body-md font-body-md px-1" href="#">Network</a>
+<a class="h-16 flex items-center text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary transition-colors cursor-pointer active:scale-95 transition-transform text-body-md font-body-md px-1" href="#">Bandwidth</a>
+<a class="h-16 flex items-center text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary transition-colors cursor-pointer active:scale-95 transition-transform text-body-md font-body-md px-1" href="#">Scheduler</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<!-- Search (on_right) -->
+<div class="relative hidden md:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="bg-surface-container-high border-outline-variant text-on-surface text-body-md font-body-md rounded pl-9 pr-4 py-1.5 focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none transition-all w-64 placeholder:text-on-surface-variant/50" placeholder="Search tasks..." type="text"/>
+</div>
+<div class="flex items-center gap-2 border-l border-outline-variant pl-4 ml-2">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded hover:bg-surface-container-high cursor-pointer active:scale-95 transition-transform" title="monitoring">
+<span class="material-symbols-outlined">monitoring</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded hover:bg-surface-container-high cursor-pointer active:scale-95 transition-transform" title="speed">
+<span class="material-symbols-outlined">speed</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded hover:bg-surface-container-high cursor-pointer active:scale-95 transition-transform relative" title="notifications">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 bg-primary-container rounded-full animate-pulse"></span>
+</button>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<div class="p-margin-page flex-1 overflow-x-hidden">
+<!-- Global Stats Ribbon -->
+<div class="grid grid-cols-4 gap-gutter mb-stack-md">
+<div class="bg-surface-container-low border border-outline-variant rounded p-4">
+<div class="text-label-xs font-label-xs text-on-surface-variant uppercase tracking-wider mb-1">Total Down</div>
+<div class="text-data-lg font-data-lg text-primary flex items-baseline gap-2">
+                        124.5 <span class="text-data-mono font-data-mono text-on-surface-variant">MB/s</span>
+</div>
+</div>
+<div class="bg-surface-container-low border border-outline-variant rounded p-4">
+<div class="text-label-xs font-label-xs text-on-surface-variant uppercase tracking-wider mb-1">Total Up</div>
+<div class="text-data-lg font-data-lg text-on-surface flex items-baseline gap-2">
+                        2.1 <span class="text-data-mono font-data-mono text-on-surface-variant">MB/s</span>
+</div>
+</div>
+<div class="bg-surface-container-low border border-outline-variant rounded p-4">
+<div class="text-label-xs font-label-xs text-on-surface-variant uppercase tracking-wider mb-1">Active Tasks</div>
+<div class="text-data-lg font-data-lg text-on-surface flex items-baseline gap-2">
+                        3 <span class="text-data-mono font-data-mono text-on-surface-variant">/ 12</span>
+</div>
+</div>
+<div class="bg-surface-container-low border border-outline-variant rounded p-4 relative overflow-hidden">
+<div class="relative z-10">
+<div class="text-label-xs font-label-xs text-on-surface-variant uppercase tracking-wider mb-1">System Load</div>
+<div class="text-data-lg font-data-lg text-on-surface">42%</div>
+</div>
+<!-- decorative graph bg -->
+<div class="absolute bottom-0 left-0 w-full h-1/2 mini-graph opacity-50"></div>
+</div>
+</div>
+<!-- Download List -->
+<div class="flex flex-col gap-stack-sm group/list">
+<!-- Active Download Item 1 -->
+<div class="bg-surface-container border border-primary/30 rounded flex flex-col transition-colors relative overflow-hidden group/item">
+<!-- Progress Background -->
+<div class="absolute top-0 left-0 h-full bg-primary/5 w-[85%] border-r border-primary/20"></div>
+<div class="p-4 relative z-10 flex items-center justify-between gap-6">
+<!-- Icon & Name -->
+<div class="flex items-center gap-4 flex-1 min-w-0">
+<div class="w-10 h-10 rounded bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary">iso</span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="text-title-sm font-title-sm text-on-surface truncate mb-1">ubuntu-22.04.3-desktop-amd64.iso</div>
+<!-- Segmented Progress Bar -->
+<div class="flex gap-0.5 h-1.5 w-full max-w-md">
+<div class="flex-1 bg-primary-container rounded-l-sm"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container opacity-50 progress-pulse"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest rounded-r-sm"></div>
+</div>
+</div>
+</div>
+<!-- Data Columns -->
+<div class="flex items-center gap-8 text-right shrink-0">
+<div class="w-32">
+<div class="text-data-mono font-data-mono text-on-surface">7.2 GB <span class="text-on-surface-variant">/ 8.5 GB</span></div>
+<div class="text-label-xs font-label-xs text-on-surface-variant">85.3%</div>
+</div>
+<div class="w-24">
+<div class="text-data-mono font-data-mono text-primary">42.5 MB/s</div>
+<div class="text-label-xs font-label-xs text-on-surface-variant">Network</div>
+</div>
+<div class="w-28">
+<div class="text-data-mono font-data-mono text-on-surface">3m 12s</div>
+<div class="text-label-xs font-label-xs text-on-surface-variant">Remaining</div>
+</div>
+</div>
+<!-- Actions & Expand -->
+<div class="flex items-center gap-2 shrink-0 w-24 justify-end">
+<!-- Hover Actions -->
+<div class="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded transition-colors" title="Pause">
+<span class="material-symbols-outlined text-sm">pause</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded transition-colors" title="Cancel">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</div>
+<!-- Expand Chevron -->
+<button class="p-1.5 text-on-surface-variant hover:text-primary rounded transition-colors">
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Active Download Item 2 (Expanded State Example) -->
+<div class="bg-surface-container border border-primary/30 rounded flex flex-col transition-colors relative overflow-hidden group/item">
+<div class="absolute top-0 left-0 h-full bg-primary/5 w-[45%] border-r border-primary/20"></div>
+<div class="p-4 relative z-10 flex items-center justify-between gap-6 border-b border-outline-variant/50">
+<div class="flex items-center gap-4 flex-1 min-w-0">
+<div class="w-10 h-10 rounded bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary">folder_zip</span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="text-title-sm font-title-sm text-on-surface truncate mb-1">dataset_v4_complete.zip</div>
+<div class="flex gap-0.5 h-1.5 w-full max-w-md">
+<div class="flex-1 bg-primary-container rounded-l-sm"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container"></div>
+<div class="flex-1 bg-primary-container opacity-50 progress-pulse"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest rounded-r-sm"></div>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-8 text-right shrink-0">
+<div class="w-32">
+<div class="text-data-mono font-data-mono text-on-surface">1.2 TB <span class="text-on-surface-variant">/ 2.5 TB</span></div>
+<div class="text-label-xs font-label-xs text-on-surface-variant">45.0%</div>
+</div>
+<div class="w-24">
+<div class="text-data-mono font-data-mono text-primary">82.1 MB/s</div>
+<div class="text-label-xs font-label-xs text-on-surface-variant">Network</div>
+</div>
+<div class="w-28">
+<div class="text-data-mono font-data-mono text-on-surface">4h 15m</div>
+<div class="text-label-xs font-label-xs text-on-surface-variant">Remaining</div>
+</div>
+</div>
+<div class="flex items-center gap-2 shrink-0 w-24 justify-end">
+<div class="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded transition-colors" title="Pause">
+<span class="material-symbols-outlined text-sm">pause</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded transition-colors" title="Cancel">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</div>
+<button class="p-1.5 text-primary bg-primary/10 rounded transition-colors">
+<span class="material-symbols-outlined text-sm">expand_less</span>
+</button>
+</div>
+</div>
+<!-- Expanded Details Area -->
+<div class="bg-surface-container-low p-4 relative z-10 grid grid-cols-3 gap-6">
+<!-- Technical Specs -->
+<div class="space-y-3">
+<div class="flex justify-between items-center border-b border-outline-variant/30 pb-1">
+<span class="text-label-xs font-label-xs text-on-surface-variant">Connections</span>
+<span class="text-data-mono font-data-mono text-on-surface">32 / 64</span>
+</div>
+<div class="flex justify-between items-center border-b border-outline-variant/30 pb-1">
+<span class="text-label-xs font-label-xs text-on-surface-variant">Protocol</span>
+<span class="text-data-mono font-data-mono text-on-surface">HTTPS (TLS 1.3)</span>
+</div>
+<div class="flex justify-between items-center border-b border-outline-variant/30 pb-1">
+<span class="text-label-xs font-label-xs text-on-surface-variant">Server</span>
+<span class="text-data-mono font-data-mono text-on-surface">fra-01.cdn.net</span>
+</div>
+</div>
+<!-- Mini Graph Area -->
+<div class="col-span-2 bg-surface rounded border border-outline-variant p-2 flex flex-col h-full min-h-[80px] relative overflow-hidden">
+<div class="flex justify-between items-center mb-1 z-10 relative">
+<span class="text-label-xs font-label-xs text-on-surface-variant">Bandwidth (60s)</span>
+<span class="text-label-xs font-label-xs text-primary">Peak: 95 MB/s</span>
+</div>
+<!-- Fake graph implementation using CSS/SVG placeholder -->
+<div class="flex-1 mt-2 flex items-end gap-0.5 z-10 relative">
+<div class="w-full bg-primary/20 h-[30%]"></div>
+<div class="w-full bg-primary/30 h-[40%]"></div>
+<div class="w-full bg-primary/40 h-[60%]"></div>
+<div class="w-full bg-primary/50 h-[80%]"></div>
+<div class="w-full bg-primary-container h-[95%]"></div>
+<div class="w-full bg-primary/50 h-[70%]"></div>
+<div class="w-full bg-primary/40 h-[65%]"></div>
+<div class="w-full bg-primary/30 h-[50%]"></div>
+<div class="w-full bg-primary/40 h-[60%]"></div>
+<div class="w-full bg-primary-container h-[85%]"></div>
+</div>
+<div class="absolute bottom-0 left-0 w-full h-[60%] mini-graph"></div>
+</div>
+</div>
+</div>
+<!-- Paused Item -->
+<div class="bg-surface-container border border-outline-variant rounded flex flex-col transition-colors relative overflow-hidden group/item opacity-70 hover:opacity-100">
+<div class="absolute top-0 left-0 h-full bg-outline-variant/10 w-[20%] border-r border-outline-variant/30"></div>
+<div class="p-4 relative z-10 flex items-center justify-between gap-6">
+<div class="flex items-center gap-4 flex-1 min-w-0">
+<div class="w-10 h-10 rounded bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant">movie</span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="text-title-sm font-title-sm text-on-surface truncate mb-1">project_render_final_v2.mp4</div>
+<div class="flex gap-0.5 h-1.5 w-full max-w-md">
+<div class="flex-1 bg-outline rounded-l-sm"></div>
+<div class="flex-1 bg-outline"></div>
+<div class="flex-1 bg-outline"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest"></div>
+<div class="flex-1 bg-surface-container-highest rounded-r-sm"></div>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-8 text-right shrink-0">
+<div class="w-32">
+<div class="text-data-mono font-data-mono text-on-surface">1.8 GB <span class="text-on-surface-variant">/ 9.0 GB</span></div>
+<div class="text-label-xs font-label-xs text-on-surface-variant">20.0%</div>
+</div>
+<div class="w-24">
+<div class="text-data-mono font-data-mono text-on-surface-variant">Paused</div>
+<div class="text-label-xs font-label-xs text-on-surface-variant">-- MB/s</div>
+</div>
+<div class="w-28">
+<div class="text-data-mono font-data-mono text-on-surface-variant">--</div>
+<div class="text-label-xs font-label-xs text-on-surface-variant">Remaining</div>
+</div>
+</div>
+<div class="flex items-center gap-2 shrink-0 w-24 justify-end">
+<div class="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded transition-colors" title="Resume">
+<span class="material-symbols-outlined text-sm">play_arrow</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded transition-colors" title="Cancel">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</div>
+<button class="p-1.5 text-on-surface-variant hover:text-primary rounded transition-colors">
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Global Drop Target Overlay (Hidden by default, shown on drag) -->
+<div class="fixed inset-0 bg-primary/5 border-2 border-dashed border-primary z-[100] hidden flex flex-col items-center justify-center backdrop-blur-sm pointer-events-none transition-opacity" id="dropZone">
+<span class="material-symbols-outlined text-primary text-6xl mb-4">upload_file</span>
+<h2 class="text-headline-md font-headline-md text-primary">Drop files or links here</h2>
+</div>
+<script>
+        // Simple drag and drop visual logic
+        const dropZone = document.getElementById('dropZone');
+        
+        window.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('hidden');
+        });
+        
+        window.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            if (e.clientX === 0 && e.clientY === 0) {
+                dropZone.classList.add('hidden');
+            }
+        });
+        
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault(); // Required to allow dropping
+        });
+        
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('hidden');
+            // Handle drop logic here
+        });
+    </script>
+</body></html>
