@@ -207,6 +207,11 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
                 let _ = window.hide();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("Error running SuperIDM");
+        .build(tauri::generate_context!())
+        .expect("Error building SuperIDM")
+        .run(|_app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = &event {
+                api.prevent_exit();
+            }
+        });
 }
