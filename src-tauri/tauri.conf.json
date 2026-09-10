@@ -13,6 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "SuperIDM",
         "width": 1200,
         "height": 780,
@@ -21,7 +22,8 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
-        "transparent": false
+        "transparent": false,
+        "visible": true
       }
     ],
     "security": {

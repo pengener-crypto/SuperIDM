@@ -74,6 +74,13 @@ pub fn run() {
             let rpc_token = engine::rpc::get_or_create_rpc_token();
             let _ = engine::browser_integration::extract_and_sync_extension(&rpc_token);
 
+            // Ensure main window is displayed and focused on launch
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+
             // Configure System Tray
             let show_i = MenuItem::with_id(app, "show", "Show SuperIDM", true, None::<&str>)?;
             let add_i = MenuItem::with_id(app, "add", "Add New Download...", true, None::<&str>)?;
