@@ -35,12 +35,18 @@ pub fn run() {
         manager: manager.clone(),
     };
 
+fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_focus();
+    let _ = window.set_always_on_top(false);
+}
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
+                bring_window_to_front(&window);
             }
         }))
         .plugin(tauri_plugin_dialog::init())
@@ -76,10 +82,15 @@ pub fn run() {
 
             // Ensure main window is displayed and focused on launch
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
+                bring_window_to_front(&window);
             }
+            let app_h = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                if let Some(window) = app_h.get_webview_window("main") {
+                    bring_window_to_front(&window);
+                }
+            });
 
             // Configure System Tray
             let show_i = MenuItem::with_id(app, "show", "Show SuperIDM", true, None::<&str>)?;
@@ -99,16 +110,12 @@ pub fn run() {
                     match event.id.as_ref() {
                         "show" => {
                             if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.unminimize();
-                                let _ = window.set_focus();
+                                bring_window_to_front(&window);
                             }
                         }
                         "add" => {
                             if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.unminimize();
-                                let _ = window.set_focus();
+                                bring_window_to_front(&window);
                                 let _ = window.emit("open-add-modal", ());
                             }
                         }
@@ -136,9 +143,7 @@ pub fn run() {
                             if window.is_visible().unwrap_or(false) {
                                 let _ = window.hide();
                             } else {
-                                let _ = window.show();
-                                let _ = window.unminimize();
-                                let _ = window.set_focus();
+                                bring_window_to_front(&window);
                             }
                         }
                     }
