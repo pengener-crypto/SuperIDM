@@ -22,8 +22,67 @@ impl MediaExtractor {
         u.contains(".m3u8") || u.contains(".mpd")
     }
 
+    /// Return path to AppData/Local/SuperIDM/bin/yt-dlp.exe
+    pub fn get_local_ytdlp_path() -> Option<PathBuf> {
+        dirs::data_local_dir().map(|d| d.join("SuperIDM").join("bin").join("yt-dlp.exe"))
+    }
+
+    /// Locate or auto-download standalone yt-dlp binary so that any clean Windows machine works out-of-the-box.
+    pub async fn ensure_ytdlp_binary(client: &Client) -> Result<PathBuf, String> {
+        // 1. Check system and standard paths first
+        if let Some(p) = Self::find_ytdlp_binary() {
+            return Ok(p);
+        }
+
+        // 2. Check LocalAppData SuperIDM bin
+        if let Some(local_bin) = Self::get_local_ytdlp_path() {
+            if local_bin.exists() {
+                if let Ok(meta) = tokio::fs::metadata(&local_bin).await {
+                    if meta.len() > 1_000_000 {
+                        return Ok(local_bin);
+                    }
+                }
+            }
+
+            // 3. Auto-download official standalone yt-dlp.exe (runs on clean Windows without Python)
+            if let Some(parent) = local_bin.parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
+            }
+
+            eprintln!("[SuperIDM] Clean machine detected. Downloading standalone media extractor core to: {:?}", local_bin);
+            let resp = client
+                .get("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
+                .header("User-Agent", "SuperIDM-Core/2.4.0")
+                .send()
+                .await
+                .map_err(|e| format!("Failed to download video extractor core: {}", e))?;
+
+            if !resp.status().is_success() {
+                return Err(format!("Server returned HTTP {} downloading extractor core", resp.status()));
+            }
+
+            let bytes = resp.bytes().await.map_err(|e| format!("Failed reading extractor bytes: {}", e))?;
+            tokio::fs::write(&local_bin, &bytes).await.map_err(|e| format!("Failed writing extractor: {}", e))?;
+
+            return Ok(local_bin);
+        }
+
+        Err("Unable to locate or bootstrap media extractor".to_string())
+    }
+
     /// Locate the yt-dlp binary across PATH, Python Scripts, and WinGet directories.
     fn find_ytdlp_binary() -> Option<PathBuf> {
+        // Check AppData/Local/SuperIDM/bin first
+        if let Some(local_bin) = Self::get_local_ytdlp_path() {
+            if local_bin.exists() {
+                if let Ok(meta) = std::fs::metadata(&local_bin) {
+                    if meta.len() > 1_000_000 {
+                        return Some(local_bin);
+                    }
+                }
+            }
+        }
+
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
@@ -48,6 +107,7 @@ impl MediaExtractor {
 
         if let Some(home) = dirs::home_dir() {
             let candidates = vec![
+                home.join(r"AppData\Local\SuperIDM\bin\yt-dlp.exe"),
                 home.join(r"AppData\Local\Programs\Python\Python314\Scripts\yt-dlp.exe"),
                 home.join(r"AppData\Local\Programs\Python\Python313\Scripts\yt-dlp.exe"),
                 home.join(r"AppData\Local\Programs\Python\Python312\Scripts\yt-dlp.exe"),
@@ -129,6 +189,7 @@ impl MediaExtractor {
 
     /// Download video/audio via the extraction engine with real-time progress callbacks.
     pub async fn download_media_stream(
+        client: &Client,
         url: &str,
         dest_dir: &std::path::Path,
         format_id: Option<&str>,
@@ -137,17 +198,29 @@ impl MediaExtractor {
     ) -> Result<std::path::PathBuf, String> {
         use tokio::io::AsyncBufReadExt;
 
-        let bin = Self::find_ytdlp_binary().ok_or_else(|| "yt-dlp binary not found".to_string())?;
+        let bin = match Self::ensure_ytdlp_binary(client).await {
+            Ok(b) => b,
+            Err(_) => Self::find_ytdlp_binary().ok_or_else(|| "Media extractor core not available".to_string())?,
+        };
 
+        let has_ffmpeg = Self::find_ffmpeg_binary().is_some();
         let format_arg_str = match format_id {
             Some(fid) if !fid.is_empty() && fid != "best" && fid != "auto" => {
                 if fid.contains('+') || fid.to_lowercase().contains("audio") {
                     fid.to_string()
-                } else {
+                } else if has_ffmpeg {
                     format!("{}+bestaudio[ext=m4a]/{}+bestaudio/best", fid, fid)
+                } else {
+                    format!("{}/best[ext=mp4]/best", fid)
                 }
             }
-            _ => "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best".to_string(),
+            _ => {
+                if has_ffmpeg {
+                    "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best".to_string()
+                } else {
+                    "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best".to_string()
+                }
+            }
         };
         let output_template = dest_dir.join("%(title)s.%(ext)s").to_string_lossy().to_string();
 
@@ -158,11 +231,13 @@ impl MediaExtractor {
             .arg(&output_template)
             .arg("--no-playlist")
             .arg("--newline")
-            .arg("--force-overwrites")
-            .arg("--merge-output-format")
-            .arg("mp4")
-            .arg("--js-runtimes")
-            .arg("node");
+            .arg("--force-overwrites");
+
+        if has_ffmpeg {
+            cmd.arg("--merge-output-format").arg("mp4");
+        }
+
+        cmd.arg("--js-runtimes").arg("node");
 
         if let Some(ffmpeg_bin) = Self::find_ffmpeg_binary() {
             cmd.arg("--ffmpeg-location").arg(ffmpeg_bin.to_string_lossy().to_string());
@@ -422,7 +497,10 @@ impl MediaExtractor {
             }
         }
 
-        // 2. Try yt-dlp if available (supports 1000+ complex platforms including YouTube, TikTok, Vimeo)
+        // 2. Ensure yt-dlp binary is available on machine (auto-bootstrapping for clean Windows)
+        let _ = Self::ensure_ytdlp_binary(client).await;
+
+        // 3. Try yt-dlp if available (supports 1000+ complex platforms including YouTube, TikTok, Vimeo)
         match Self::extract_with_ytdlp(clean_url) {
             Ok(info) => return Ok(info),
             Err(e) => {

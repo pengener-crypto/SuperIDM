@@ -171,6 +171,7 @@ pub async fn start_download(
             );
         }
 
+        let client_c = state.manager.read().http_client.clone();
         let url_c = url.clone();
         let dest_dir_ext = dest_dir.clone();
         let dest_dir_watch = dest_dir.clone();
@@ -179,13 +180,17 @@ pub async fn start_download(
 
         // Spawn platform stream extractor
         tokio::spawn(async move {
-            let _ = crate::engine::extractor::MediaExtractor::download_media_stream(
+            let res = crate::engine::extractor::MediaExtractor::download_media_stream(
+                &client_c,
                 &url_c,
                 &dest_dir_ext,
                 format_id_c.as_deref(),
                 prog_tx,
                 cancel_c,
             ).await;
+            if let Err(e) = res {
+                eprintln!("[MediaExtractor Error] {}", e);
+            }
         });
 
         // Watch progress
@@ -194,6 +199,7 @@ pub async fn start_download(
         let mgr_arc = state.manager.clone();
 
         tokio::spawn(async move {
+            let mut completed = false;
             while let Some((progress, speed, downloaded, total, eta_secs, is_comp, final_name_opt)) = prog_rx.recv().await {
                 {
                     let mut mgr = mgr_arc.write();
@@ -220,6 +226,7 @@ pub async fn start_download(
                         }
                         if is_comp {
                             h.metadata.status = TaskStatus::Completed;
+                            completed = true;
                         }
                     }
                 }
@@ -239,6 +246,26 @@ pub async fn start_download(
 
                 if is_comp {
                     break;
+                }
+            }
+
+            if !completed {
+                let mut mgr = mgr_arc.write();
+                if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
+                    if h.metadata.status != TaskStatus::Completed && h.metadata.status != TaskStatus::Paused {
+                        h.metadata.status = TaskStatus::Failed;
+                        let payload = ProgressPayload {
+                            id: task_id_c.clone(),
+                            status: TaskStatus::Failed,
+                            downloaded_bytes: 0,
+                            total_bytes: 0,
+                            progress: 0.0,
+                            speed: 0.0,
+                            chunks: vec![],
+                            eta_secs: 0.0,
+                        };
+                        let _ = app_handle.emit("download_progress", &payload);
+                    }
                 }
             }
         });
@@ -631,8 +658,10 @@ pub async fn resume_download(
         let dest_dir_watch = dest_dir.clone();
         let cancel_c = cancel_rx.clone();
 
+        let client_c = state.manager.read().http_client.clone();
         tokio::spawn(async move {
             let _ = crate::engine::extractor::MediaExtractor::download_media_stream(
+                &client_c,
                 &url_c,
                 &dest_dir_ext,
                 None,

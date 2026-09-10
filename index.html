@@ -605,9 +605,9 @@ html:not(.dark) .custom-scrollbar {
         </div>
         <div class="flex items-center gap-2 pt-1 flex-wrap">
           <span class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">Quick presets:</span>
-          <button type="button" onclick="fillSample('https://proof.ovh.net/files/10Mb.dat')" data-act="preset" data-url="https://proof.ovh.net/files/10Mb.dat" class="text-[11px] bg-primary-container/15 hover:bg-primary-container/25 text-primary-container border border-primary-container/30 px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">⚡ 10MB Test File</button>
-          <button type="button" onclick="fillSample('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')" data-act="preset" data-url="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">🎬 158MB HD Video</button>
-          <button type="button" onclick="fillSample('https://proof.ovh.net/files/100Mb.dat')" data-act="preset" data-url="https://proof.ovh.net/files/100Mb.dat" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">⚡ 100MB Benchmark</button>
+          <button type="button" onclick="fillSample('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')" data-act="preset" data-url="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" class="text-[11px] bg-primary-container/20 hover:bg-primary-container/30 text-primary-container border border-primary-container/40 px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">🎬 Sample Video (.mp4)</button>
+          <button type="button" onclick="fillSample('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3')" data-act="preset" data-url="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" class="text-[11px] bg-primary-container/20 hover:bg-primary-container/30 text-primary-container border border-primary-container/40 px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">🎵 Sample Music (.mp3)</button>
+          <button type="button" onclick="fillSample('https://proof.ovh.net/files/10Mb.dat')" data-act="preset" data-url="https://proof.ovh.net/files/10Mb.dat" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">⚡ 10MB Benchmark</button>
           <button type="button" onclick="pasteClipToInp()" data-act="paste-clip" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">📋 Paste</button>
           <button id="batchTogBtn" onclick="togBatch()" class="text-[11px] text-primary hover:text-primary-container ml-auto" style="font-family:'JetBrains Mono'" data-act="tog-batch">+ Batch mode</button>
         </div>
@@ -1244,14 +1244,10 @@ async function startDL() {
     const inp = document.getElementById('urlInp');
     let url = (inp?.value || '').trim();
 
-    // If it's a video platform URL and hasn't been extracted yet, auto-sniff first
+    // If it's a video platform URL and hasn't been extracted yet, attempt auto-sniff
     const isVideoSite = isVideoPlatformUrl(url);
     if (isVideoSite && !currentExtractedInfo && !batchMode) {
-      const success = await sniffMediaStream();
-      if (!success) {
-        isStartingDL = false;
-        return;
-      }
+      await sniffMediaStream();
     }
 
     // Determine download URL and custom filename
