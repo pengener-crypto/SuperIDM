@@ -101,17 +101,24 @@
 
   // ═══════ Extract the best Instagram permalink for the current video ═══════
   function getInstagramPermalink(videoEl) {
-    // 1. Walk up to the nearest <article> and look for a canonical permalink
-    const article = videoEl ? videoEl.closest('article') : null;
+    if (!videoEl) return location.href;
+    // 1. Check parent hierarchy for any link to reel or post
+    let el = videoEl.parentElement;
+    for (let i = 0; i < 15 && el && el !== document.body; i++) {
+      const link = el.querySelector('a[href*="/reel/"], a[href*="/reels/"], a[href*="/p/"]');
+      if (link && link.href) return link.href;
+      el = el.parentElement;
+    }
+    // 2. Check nearest article
+    const article = videoEl.closest('article');
     if (article) {
       const timeLink = article.querySelector('a[href*="/reel/"], a[href*="/p/"], a[href*="/tv/"]');
       if (timeLink) return new URL(timeLink.href, location.origin).href;
     }
-    // 2. If we're already on a reel / post page, the page URL itself is fine
-    if (/\/(reel|p|tv)\/[A-Za-z0-9_-]+/.test(location.pathname)) {
+    // 3. Check current page pathname
+    if (/\/(reel|reels|p|tv)\/[A-Za-z0-9_-]+/.test(location.pathname)) {
       return location.href;
     }
-    // 3. Fallback: page URL (feed) — yt-dlp can still attempt it
     return location.href;
   }
 
@@ -122,37 +129,14 @@
     const filename = `${title}.${qualityLabel === 'MP3' ? 'mp3' : 'mp4'}`;
     let targetUrl = location.href;
 
-    // --- Platform-native extraction (yt-dlp handles the page URL directly) ---
-    if (YTDLP_PAGE_PLATFORMS.includes(platform)) {
-      if (platform === 'instagram') {
-        targetUrl = getInstagramPermalink(videoEl);
-      }
-      // For youtube/tiktok/twitter/etc. the page URL is already correct
-      showToast(`⚡ Starting download in SuperIDM...`);
-      chrome.runtime.sendMessage({
-        type: 'download_video',
-        url: targetUrl,
-        filename: filename,
-        format: format || 'bestvideo+bestaudio/best'
-      }, (resp) => {
-        if (resp && resp.ok) {
-          showToast(`⚡ Downloading ${qualityLabel || 'Video'}: "${title.substring(0, 25)}..."`);
-        } else {
-          showToast(`❌ ${resp?.error || 'SuperIDM is not running'}`);
-        }
-      });
-      return;
-    }
-
-    // --- Generic / direct-URL path ---
-    // Check direct video src on element
+    // Direct video src on element
     let directSrc = videoEl ? (videoEl.currentSrc || videoEl.src) : null;
     if (!directSrc || directSrc.startsWith('blob:')) {
       const sourceEl = videoEl?.querySelector('source[src]');
       if (sourceEl && sourceEl.src) directSrc = sourceEl.src;
     }
 
-    // Check background sniffed media streams for this tab
+    // Background sniffed media streams for this tab
     let sniffedUrl = null;
     try {
       const tabMediaResp = await new Promise(res => {
@@ -164,8 +148,23 @@
       }
     } catch (e) {}
 
-    if (sniffedUrl || (directSrc && !directSrc.startsWith('blob:'))) {
-      targetUrl = sniffedUrl || directSrc;
+    // Special handling for Instagram: prefer direct MP4 CDN url or sniffed stream to avoid login barriers
+    if (platform === 'instagram') {
+      if (directSrc && !directSrc.startsWith('blob:')) {
+        targetUrl = directSrc;
+      } else if (sniffedUrl) {
+        targetUrl = sniffedUrl;
+      } else {
+        targetUrl = getInstagramPermalink(videoEl);
+      }
+    } else if (YTDLP_PAGE_PLATFORMS.includes(platform)) {
+      // For YouTube, TikTok, Twitter, etc., yt-dlp natively handles page URL
+      targetUrl = location.href;
+    } else {
+      // Generic direct URL
+      if (sniffedUrl || (directSrc && !directSrc.startsWith('blob:'))) {
+        targetUrl = sniffedUrl || directSrc;
+      }
     }
 
     showToast(`⚡ Starting download in SuperIDM...`);
@@ -278,19 +277,30 @@
     // Create badge
     const badge = document.createElement('div');
     badge.className = BADGE_CLASS;
-    badge.innerHTML = `${ARROW_SVG}<span class="superidm-btn-text">Download</span>${CHEVRON_SVG}`;
+    badge.innerHTML = `<div class="superidm-btn-main">${ARROW_SVG}<span class="superidm-btn-text">Download</span></div><div class="superidm-btn-chevron">${CHEVRON_SVG}</div>`;
     badge.style.display = showGrabber ? '' : 'none';
 
     const menu = createQualityMenu(videoEl);
     badge.appendChild(menu);
 
-    // Use capturing phase so Instagram's React event delegation
-    // cannot stopPropagation before us
-    badge.addEventListener('click', (e) => {
+    const mainBtn = badge.querySelector('.superidm-btn-main');
+    const chevronBtn = badge.querySelector('.superidm-btn-chevron');
+
+    // Direct Download Click (Immediate download)
+    mainBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.stopImmediatePropagation();
       e.preventDefault();
-      // Toggle quality selection dropdown menu
+      menu.classList.remove('superidm-menu-visible');
+      badge.classList.remove('superidm-menu-open');
+      sendDownload(null, 'Video', videoEl);
+    }, true);
+
+    // Chevron Click (Toggle Quality Menu)
+    chevronBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      e.preventDefault();
       const isOpen = menu.classList.toggle('superidm-menu-visible');
       badge.classList.toggle('superidm-menu-open', isOpen);
     }, true);
@@ -329,14 +339,25 @@
 
         const badge = document.createElement('div');
         badge.className = BADGE_CLASS + ' superidm-yt-badge';
-        badge.innerHTML = `${ARROW_SVG}<span class="superidm-btn-text">Download</span>${CHEVRON_SVG}`;
+        badge.innerHTML = `<div class="superidm-btn-main">${ARROW_SVG}<span class="superidm-btn-text">Download</span></div><div class="superidm-btn-chevron">${CHEVRON_SVG}</div>`;
         badge.style.display = showGrabber ? '' : 'none';
 
         const videoEl = player.querySelector('video');
         const menu = createQualityMenu(videoEl);
         badge.appendChild(menu);
 
-        badge.addEventListener('click', (e) => {
+        const mainBtn = badge.querySelector('.superidm-btn-main');
+        const chevronBtn = badge.querySelector('.superidm-btn-chevron');
+
+        mainBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          menu.classList.remove('superidm-menu-visible');
+          badge.classList.remove('superidm-menu-open');
+          sendDownload(null, 'Video', videoEl);
+        });
+
+        chevronBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           e.preventDefault();
           const isOpen = menu.classList.toggle('superidm-menu-visible');

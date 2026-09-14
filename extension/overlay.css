@@ -30,16 +30,19 @@
   transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
   user-select: none !important;
   line-height: 1 !important;
-  opacity: 0.55 !important;
+  opacity: 0.28 !important;
+  border: 1px solid rgba(0, 245, 255, 0.4) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
 }
 
-.superidm-video-badge:hover {
+.superidm-video-badge:hover,
+.superidm-video-badge.superidm-menu-open {
   opacity: 1 !important;
-  transform: scale(1.03) !important;
-  border-color: #5cf7ff !important;
+  border: 1.5px solid #00f5ff !important;
+  transform: scale(1.04) !important;
   box-shadow: 
-    0 0 12px rgba(0, 245, 255, 0.6),
-    0 6px 18px rgba(0, 0, 0, 0.7) !important;
+    0 0 14px rgba(0, 245, 255, 0.6),
+    0 6px 20px rgba(0, 0, 0, 0.8) !important;
 }
 
 .superidm-video-badge:active {
@@ -66,6 +69,30 @@
   font-weight: 700 !important;
   font-size: 13.5px !important;
   letter-spacing: 0.3px !important;
+}
+
+/* ───── Main Download Clickable Area ───── */
+.superidm-btn-main {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+}
+
+/* ───── Chevron Separator & Button ───── */
+.superidm-btn-chevron {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 2px 2px 2px 5px !important;
+  border-left: 1px solid rgba(0, 245, 255, 0.35) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.superidm-btn-chevron:hover {
+  filter: brightness(1.4) !important;
 }
 
 /* ───── Dropdown Chevron ───── */
