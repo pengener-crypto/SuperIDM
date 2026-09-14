@@ -46,8 +46,29 @@ function saveSettings() {
 }
 
 // ═══════ WebSocket Connection ═══════
-function connectWS() {
+async function isServerOnline() {
+  try {
+    const res = await fetch(RPC_HTTP_URL + '/api/ping', {
+      method: 'GET',
+      cache: 'no-store'
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function connectWS() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+  // Silent pre-check to prevent Chrome from logging ERR_CONNECTION_REFUSED when desktop app is closed
+  const online = await isServerOnline();
+  if (!online) {
+    wsConnected = false;
+    broadcastStatus();
+    setTimeout(connectWS, RECONNECT_INTERVAL);
+    return;
+  }
 
   try {
     ws = new WebSocket(RPC_WS_URL);
