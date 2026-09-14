@@ -2,6 +2,7 @@ mod commands;
 mod engine;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use commands::AppState;
@@ -13,6 +14,9 @@ use parking_lot::RwLock;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager, WindowEvent};
+
+/// Shared flag: when `true`, the app is allowed to fully exit.
+static SHOULD_EXIT: AtomicBool = AtomicBool::new(false);
 
 /// Run the SuperIDM Tauri application.
 ///
@@ -126,6 +130,8 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
                             let _ = app.emit("tray-resume-all", ());
                         }
                         "quit" => {
+                            // Signal that this is an intentional user-initiated exit
+                            SHOULD_EXIT.store(true, Ordering::SeqCst);
                             app.exit(0);
                         }
                         _ => {}
@@ -211,7 +217,12 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
         .expect("Error building SuperIDM")
         .run(|_app_handle, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = &event {
-                api.prevent_exit();
+                // Only prevent exit when SHOULD_EXIT is false (window-close).
+                // When the user picks "Exit SuperIDM" from the tray, SHOULD_EXIT
+                // is set to true and we let the process terminate.
+                if !SHOULD_EXIT.load(Ordering::SeqCst) {
+                    api.prevent_exit();
+                }
             }
         });
 }
