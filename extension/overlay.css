@@ -27,12 +27,14 @@
   box-shadow: 
     0 0 8px rgba(0, 245, 255, 0.4),
     0 4px 14px rgba(0, 0, 0, 0.6) !important;
-  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
   user-select: none !important;
   line-height: 1 !important;
+  opacity: 0.55 !important;
 }
 
 .superidm-video-badge:hover {
+  opacity: 1 !important;
   transform: scale(1.03) !important;
   border-color: #5cf7ff !important;
   box-shadow: 

@@ -96,12 +96,55 @@
     </svg>
   `;
 
+  // ═══════ Platforms that yt-dlp handles natively via page URL ═══════
+  const YTDLP_PAGE_PLATFORMS = ['youtube', 'instagram', 'tiktok', 'twitter', 'facebook', 'reddit', 'vimeo', 'dailymotion', 'twitch'];
+
+  // ═══════ Extract the best Instagram permalink for the current video ═══════
+  function getInstagramPermalink(videoEl) {
+    // 1. Walk up to the nearest <article> and look for a canonical permalink
+    const article = videoEl ? videoEl.closest('article') : null;
+    if (article) {
+      const timeLink = article.querySelector('a[href*="/reel/"], a[href*="/p/"], a[href*="/tv/"]');
+      if (timeLink) return new URL(timeLink.href, location.origin).href;
+    }
+    // 2. If we're already on a reel / post page, the page URL itself is fine
+    if (/\/(reel|p|tv)\/[A-Za-z0-9_-]+/.test(location.pathname)) {
+      return location.href;
+    }
+    // 3. Fallback: page URL (feed) — yt-dlp can still attempt it
+    return location.href;
+  }
+
   // ═══════ Send Download Helper ═══════
   async function sendDownload(format, qualityLabel, videoEl) {
     const title = getVideoTitle();
-    const filename = `${title}.mp4`;
+    const platform = detectPlatform();
+    const filename = `${title}.${qualityLabel === 'MP3' ? 'mp3' : 'mp4'}`;
     let targetUrl = location.href;
 
+    // --- Platform-native extraction (yt-dlp handles the page URL directly) ---
+    if (YTDLP_PAGE_PLATFORMS.includes(platform)) {
+      if (platform === 'instagram') {
+        targetUrl = getInstagramPermalink(videoEl);
+      }
+      // For youtube/tiktok/twitter/etc. the page URL is already correct
+      showToast(`⚡ Starting download in SuperIDM...`);
+      chrome.runtime.sendMessage({
+        type: 'download_video',
+        url: targetUrl,
+        filename: filename,
+        format: format || 'bestvideo+bestaudio/best'
+      }, (resp) => {
+        if (resp && resp.ok) {
+          showToast(`⚡ Downloading ${qualityLabel || 'Video'}: "${title.substring(0, 25)}..."`);
+        } else {
+          showToast(`❌ ${resp?.error || 'SuperIDM is not running'}`);
+        }
+      });
+      return;
+    }
+
+    // --- Generic / direct-URL path ---
     // Check direct video src on element
     let directSrc = videoEl ? (videoEl.currentSrc || videoEl.src) : null;
     if (!directSrc || directSrc.startsWith('blob:')) {
@@ -116,14 +159,12 @@
         chrome.runtime.sendMessage({ type: 'get_tab_media' }, res);
       });
       if (tabMediaResp && tabMediaResp.media && tabMediaResp.media.length > 0) {
-        // Take the latest valid media URL
         const latest = tabMediaResp.media[tabMediaResp.media.length - 1];
         if (latest && latest.url) sniffedUrl = latest.url;
       }
     } catch (e) {}
 
-    const platform = detectPlatform();
-    if (platform !== 'youtube' && (sniffedUrl || (directSrc && !directSrc.startsWith('blob:')))) {
+    if (sniffedUrl || (directSrc && !directSrc.startsWith('blob:'))) {
       targetUrl = sniffedUrl || directSrc;
     }
 
@@ -167,6 +208,7 @@
       item.innerHTML = `<span>${name}</span><span class="superidm-item-tag">${tag}</span>`;
       item.addEventListener('click', (e) => {
         e.stopPropagation();
+        e.stopImmediatePropagation();
         e.preventDefault();
         sendDownload(format, tag, videoEl);
         menu.classList.remove('superidm-menu-visible');
@@ -197,9 +239,34 @@
     if (videoEl.dataset.superidmBadge) return;
     videoEl.dataset.superidmBadge = 'true';
 
+    const platform = detectPlatform();
+
     // Find or create a positioned container
-    let container = videoEl.closest('.html5-video-container, .video-player, .media-container, [class*="player"], [class*="video"]');
-    if (!container) container = videoEl.parentElement;
+    let container;
+    if (platform === 'instagram') {
+      // Instagram wraps videos in deeply nested divs with overflow:hidden.
+      // Walk up to the nearest <article> or a large enough ancestor that is
+      // not clipping its children, so our badge stays visible and clickable.
+      container = videoEl.closest('article');
+      if (!container) {
+        // Reels page may not use <article>; pick the first ancestor whose
+        // bounding rect fully covers the video.
+        let el = videoEl.parentElement;
+        const vRect = videoEl.getBoundingClientRect();
+        while (el && el !== document.body) {
+          const r = el.getBoundingClientRect();
+          if (r.width >= vRect.width && r.height >= vRect.height * 0.9) {
+            container = el;
+            break;
+          }
+          el = el.parentElement;
+        }
+      }
+      if (!container) container = videoEl.parentElement;
+    } else {
+      container = videoEl.closest('.html5-video-container, .video-player, .media-container, [class*="player"], [class*="video"]');
+      if (!container) container = videoEl.parentElement;
+    }
     if (!container) return;
 
     // Ensure container is positioned
@@ -217,13 +284,16 @@
     const menu = createQualityMenu(videoEl);
     badge.appendChild(menu);
 
+    // Use capturing phase so Instagram's React event delegation
+    // cannot stopPropagation before us
     badge.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.stopImmediatePropagation();
       e.preventDefault();
       // Toggle quality selection dropdown menu
       const isOpen = menu.classList.toggle('superidm-menu-visible');
       badge.classList.toggle('superidm-menu-open', isOpen);
-    });
+    }, true);
 
     // Close menu when clicking elsewhere
     document.addEventListener('click', () => {
