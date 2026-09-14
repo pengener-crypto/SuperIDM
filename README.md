@@ -3,6 +3,7 @@
 > **Next-Generation High-Performance Download Accelerator & Stream Interceptor**  
 > Developed by **Kutha SoftWorks**
 
+[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20it%20on%20Windows-0078D4?logo=microsoft&logoColor=white)](https://apps.microsoft.com/detail/XP8M52XFHFS9Z2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-cyan.svg)](https://github.com/pengener-crypto/SuperIDM)
 [![Built With](https://img.shields.io/badge/Built%20With-Rust%202024%20%7C%20Tauri%20v2-orange.svg)](https://tauri.app/)
@@ -24,8 +25,13 @@ SuperIDM is a lightweight, blazing-fast download manager engineered from the gro
 
 ## 📥 Download & Installation
 
-### Windows Installer (Recommended)
-Grab the latest release from the [Releases](https://github.com/pengener-crypto/SuperIDM/releases) section:
+### 🛍️ Microsoft Store (Recommended & Certified)
+[![Download from Microsoft Store](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/XP8M52XFHFS9Z2?ocid=badge)
+
+SuperIDM is officially published and certified on the [Microsoft Store (Product ID: XP8M52XFHFS9Z2)](https://apps.microsoft.com/detail/XP8M52XFHFS9Z2).
+
+### 🪟 Windows Direct Setup
+Grab the latest release from the [Releases](https://github.com/pengener-crypto/SuperIDM/releases) section or direct setup:
 * **Installer:** `SuperIDM_Setup.exe` (silent install supported via `/S`)
 * **Portable:** `SuperIDM.exe` (run directly without installation)
 
