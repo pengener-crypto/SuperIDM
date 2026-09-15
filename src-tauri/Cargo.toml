@@ -1,6 +1,6 @@
 [package]
 name = "super-idm"
-version = "2.4.0"
+version = "2.5.0"
 description = "SuperIDM — High-Performance Download Manager"
 authors = ["SuperIDM Team"]
 edition = "2021"

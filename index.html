@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SuperIDM &mdash; Download Engine v2.4.0</title>
+<title>SuperIDM &mdash; Download Engine v2.5.0</title>
 <meta name="description" content="SuperIDM is a high-performance download manager with multi-connection segmented downloading, queue management, and real-time bandwidth monitoring."/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -231,7 +231,7 @@ html:not(.dark) .custom-scrollbar {
       </div>
       <div>
         <h1 class="text-[16px] font-bold text-primary tracking-tight" style="font-family:Inter">SuperIDM</h1>
-        <p class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.4.0 Engine</p>
+        <p class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.5.0 Engine</p>
       </div>
     </div>
     <button id="btnAddModal" onclick="openAddModal()" data-act="open-modal" class="w-full py-2 px-4 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded transition-all flex items-center justify-center gap-2 active:scale-95 glow-btn text-[14px]" style="font-family:Inter">
@@ -532,7 +532,7 @@ html:not(.dark) .custom-scrollbar {
       <div class="col-span-2 bg-surface-container border border-outline-variant rounded p-5">
         <div class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-3" style="font-family:'JetBrains Mono'">About SuperIDM</div>
         <div class="grid grid-cols-4 gap-4 text-[13px]" style="font-family:'JetBrains Mono'">
-          <div class="bg-surface-container-low rounded p-3"><div class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary">2.4.0</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary">2.5.0</div></div>
           <div class="bg-surface-container-low rounded p-3"><div class="text-[11px] text-on-surface-variant mb-1">Engine</div><div class="text-on-surface">SuperIDM/Rust+Tokio</div></div>
           <div class="bg-surface-container-low rounded p-3"><div class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface">HTTP/HTTPS/FTP</div></div>
           <div class="bg-surface-container-low rounded p-3"><div class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant">2026.08.19</div></div>
@@ -767,22 +767,30 @@ function bindTauriEvents() {
           if (dl) dl.id = String(p.id);
         }
         if (dl) {
-          dl.downloaded_bytes = p.downloaded_bytes !== undefined ? p.downloaded_bytes : dl.downloaded_bytes;
-          dl.total_bytes = p.total_bytes !== undefined && p.total_bytes > 0 ? p.total_bytes : dl.total_bytes;
-          dl.speed = p.speed !== undefined ? p.speed : (dl.speed || 0);
-          dl.progress = p.progress !== undefined ? p.progress : (dl.total_bytes > 0 ? dl.downloaded_bytes / dl.total_bytes : 0);
-          dl.eta_secs = p.eta_secs !== undefined ? p.eta_secs : 0;
           const st = mapStatus(p.status);
-          const stChanged = dl.status !== st;
-          if (st === 'complete') {
+          const isComp = st === 'complete';
+          if (p.total_bytes !== undefined && p.total_bytes > 0) {
+            dl.total_bytes = p.total_bytes;
+          }
+          if (p.downloaded_bytes !== undefined) {
+            dl.downloaded_bytes = Math.max(dl.downloaded_bytes || 0, p.downloaded_bytes);
+          }
+          dl.speed = p.speed !== undefined ? p.speed : (dl.speed || 0);
+          dl.eta_secs = p.eta_secs !== undefined ? p.eta_secs : 0;
+
+          const rawProg = p.progress !== undefined ? p.progress : (dl.total_bytes > 0 ? dl.downloaded_bytes / dl.total_bytes : 0);
+          if (isComp) {
             dl.status = 'complete';
-            dl.downloaded_bytes = dl.total_bytes;
             dl.progress = 1.0;
+            dl.downloaded_bytes = dl.total_bytes;
             dl.speed = 0;
             addLog('success', `[COMPLETED] ${dl.filename || dl.name} — ${fmtSz(dl.total_bytes)}`);
             if (document.getElementById('showToastOpt')?.checked) showCompT(dl);
             renderDLs();
           } else {
+            // Strictly monotonic: progress never retreats
+            dl.progress = Math.min(0.99, Math.max(dl.progress || 0, rawProg));
+            const stChanged = dl.status !== st;
             dl.status = st;
             if (stChanged) {
               renderDLs();
@@ -959,11 +967,20 @@ async function syncFromBackend() {
         }
         dl.filename = fname;
         dl.name = fname;
-        dl.downloaded_bytes = t.downloaded_bytes !== undefined ? t.downloaded_bytes : dl.downloaded_bytes;
-        dl.total_bytes = t.total_bytes !== undefined && t.total_bytes > 0 ? t.total_bytes : dl.total_bytes;
+        if (t.total_bytes !== undefined && t.total_bytes > 0) {
+          dl.total_bytes = t.total_bytes;
+        }
+        if (t.downloaded_bytes !== undefined) {
+          dl.downloaded_bytes = Math.max(dl.downloaded_bytes || 0, t.downloaded_bytes);
+        }
         dl.speed = t.speed !== undefined ? t.speed : dl.speed;
-        dl.progress = t.progress !== undefined ? t.progress : (dl.total_bytes > 0 ? dl.downloaded_bytes / dl.total_bytes : 0);
         dl.eta_secs = t.eta_secs || 0;
+        const rawProg = t.progress !== undefined && t.progress > 0 ? t.progress : (dl.total_bytes > 0 ? dl.downloaded_bytes / dl.total_bytes : 0);
+        if (dl.status === 'complete') {
+          dl.progress = 1.0;
+        } else {
+          dl.progress = Math.min(0.99, Math.max(dl.progress || 0, rawProg));
+        }
         if (dl.status === 'downloading') {
           dl.bwH = [...dl.bwH.slice(1), (dl.speed || 0) / 1048576];
         }
@@ -1432,13 +1449,22 @@ function resumeAll() {
 
 function clearDone() {
   const prevLen = dls.length;
+  const toRemove = dls.filter(d => d.status === 'complete' || d.status === 'cancelled' || d.status === 'error');
   dls = dls.filter(d => d.status !== 'complete' && d.status !== 'cancelled' && d.status !== 'error');
   const removed = prevLen - dls.length;
+
+  if (hasTauriIPC() && toRemove.length > 0) {
+    toRemove.forEach(d => {
+      tauriCall('cancel_download', { taskId: String(d.id), task_id: String(d.id) }).catch(() => {});
+    });
+  }
+
   showT('info', 'Cleared Completed', `Removed ${removed} completed task(s)`);
   addLog('info', `[CLEAR] Cleared ${removed} finished tasks`);
   renderDLs();
   updBdg();
   updStats();
+  persistLocalDls();
 }
 
 function togDet(id) {
@@ -1454,33 +1480,13 @@ function togDet(id) {
 // ════════ LOCAL PROGRESS SIMULATOR / GRAPH TICK ════════
 function localTick() {
   let activeCount = 0;
-  const isTauriMode = hasTauriIPC();
 
   dls.forEach(d => {
     if (d.status === 'downloading') {
       activeCount++;
       if (d.total_bytes > 0) {
-        if (!isTauriMode) {
-          // Web preview simulation only
-          const step = Math.min(d.total_bytes - d.downloaded_bytes, Math.floor(Math.random() * 2500000 + 1000000));
-          d.downloaded_bytes += step;
-          d.speed = step * 2.5;
-          d.progress = d.downloaded_bytes / d.total_bytes;
-          d.eta_secs = (d.speed > 0 && d.total_bytes > d.downloaded_bytes) ? (d.total_bytes - d.downloaded_bytes) / d.speed : 0;
-          if (d.downloaded_bytes >= d.total_bytes) {
-            d.downloaded_bytes = d.total_bytes;
-            d.status = 'complete';
-            d.speed = 0;
-            d.progress = 1.0;
-            d.eta_secs = 0;
-            addLog('success', `[COMPLETED] ${d.filename || d.name} (${fmtSz(d.total_bytes)})`);
-            if (document.getElementById('showToastOpt')?.checked) showCompT(d);
-          }
-        } else {
-          // Real Tauri mode: smooth ETA calculation based on real speed
-          if (d.speed > 0 && d.total_bytes > d.downloaded_bytes) {
-            d.eta_secs = (d.total_bytes - d.downloaded_bytes) / d.speed;
-          }
+        if (d.speed > 0 && d.total_bytes > d.downloaded_bytes) {
+          d.eta_secs = (d.total_bytes - d.downloaded_bytes) / d.speed;
         }
         d.bwH = [...d.bwH.slice(1), (d.speed || 0) / 1048576];
       }
@@ -1555,6 +1561,17 @@ function updateDLRowDOM(d) {
   }
 }
 
+// ════════ HTML SANITIZER ════════
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // ════════ RENDERING DOWNLOADS LIST ════════
 function renderDLs() {
   const q = (document.getElementById('srchInput')?.value || '').toLowerCase();
@@ -1612,42 +1629,51 @@ function renderDLs() {
 
     const stLbl = isAct ? `${pct}%` : isComp ? 'Done' : isPsd ? 'Paused' : 'Queued';
 
+    const safeId = escapeHtml(d.id);
+    const safeName = escapeHtml(d.filename || d.name);
+    const safeIcon = escapeHtml(d.icon || 'download');
+    const safeServer = escapeHtml(d.server || 'cdn.server.net');
+    const safeProto = escapeHtml(d.protocol || 'HTTPS (TLS 1.3)');
+    const safeDest = escapeHtml(d.destination || savePth);
+    const safeCat = escapeHtml(d.category || 'General');
+    const safePri = escapeHtml(d.priority || 'High');
+
     return `
-    <div id="dlrow-${d.id}" data-status="${d.status}" class="dl-row bg-surface-container border border-outline-variant/60 rounded overflow-hidden">
-      <div class="flex items-center gap-4 px-4 py-3 cursor-pointer select-none" data-act="tog-det" data-id="${d.id}">
+    <div id="dlrow-${safeId}" data-status="${d.status}" class="dl-row bg-surface-container border border-outline-variant/60 rounded overflow-hidden">
+      <div class="flex items-center gap-4 px-4 py-3 cursor-pointer select-none" data-act="tog-det" data-id="${safeId}">
         <div class="w-9 h-9 rounded bg-surface-container-highest flex items-center justify-center flex-shrink-0 border border-outline-variant">
-          <span class="material-symbols-outlined text-primary-container text-[20px]">${d.icon || 'download'}</span>
+          <span class="material-symbols-outlined text-primary-container text-[20px]">${safeIcon}</span>
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
-            <span class="text-[13px] font-medium text-on-surface truncate" style="font-family:Inter">${d.filename || d.name}</span>
-            <span id="dlst-${d.id}" class="text-[10px] px-1.5 py-0.2 rounded border ${stBg}" style="font-family:'JetBrains Mono'">${stLbl}</span>
+            <span class="text-[13px] font-medium text-on-surface truncate" style="font-family:Inter">${safeName}</span>
+            <span id="dlst-${safeId}" class="text-[10px] px-1.5 py-0.2 rounded border ${stBg}" style="font-family:'JetBrains Mono'">${stLbl}</span>
           </div>
           <div class="flex items-center gap-2 mt-1">
-            <div id="dlseg-${d.id}" class="seg-bar">${segs.map(s => `<div class="seg ${s}"></div>`).join('')}</div>
-            <span id="dlsz-${d.id}" class="text-[11px] text-on-surface-variant flex-shrink-0" style="font-family:'JetBrains Mono'">${fmtSz(d.downloaded_bytes)} / ${fmtSz(d.total_bytes)}</span>
+            <div id="dlseg-${safeId}" class="seg-bar">${segs.map(s => `<div class="seg ${s}"></div>`).join('')}</div>
+            <span id="dlsz-${safeId}" class="text-[11px] text-on-surface-variant flex-shrink-0" style="font-family:'JetBrains Mono'">${fmtSz(d.downloaded_bytes)} / ${fmtSz(d.total_bytes)}</span>
           </div>
         </div>
         <div class="w-24 text-right flex-shrink-0">
-          <div id="dlspd-${d.id}" class="text-[12px] font-semibold ${isAct ? 'text-primary' : 'text-on-surface-variant'}" style="font-family:'JetBrains Mono'">${isAct ? fmtSpd(d.speed) : '--'}</div>
+          <div id="dlspd-${safeId}" class="text-[12px] font-semibold ${isAct ? 'text-primary' : 'text-on-surface-variant'}" style="font-family:'JetBrains Mono'">${isAct ? fmtSpd(d.speed) : '--'}</div>
           <div class="text-[10px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${d.connections || 16} conns</div>
         </div>
         <div class="w-20 text-right flex-shrink-0">
-          <div id="dleta-${d.id}" class="text-[12px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${isAct ? fmtT(d.eta_secs) : isComp ? '0s' : '--'}</div>
-          <div class="text-[10px] text-on-surface-variant/70" style="font-family:'JetBrains Mono'">${d.priority || 'High'}</div>
+          <div id="dleta-${safeId}" class="text-[12px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${isAct ? fmtT(d.eta_secs) : isComp ? '0s' : '--'}</div>
+          <div class="text-[10px] text-on-surface-variant/70" style="font-family:'JetBrains Mono'">${safePri}</div>
         </div>
         <div class="w-24 flex items-center justify-end gap-1.5 flex-shrink-0">
-          ${isAct ? `<button class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Pause" onclick="event.stopPropagation(); pauseDL('${d.id}')" data-act="pause-dl" data-id="${d.id}"><span class="material-symbols-outlined text-[18px]">pause</span></button>` : ''}
-          ${isPsd || isQ ? `<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Resume" onclick="event.stopPropagation(); resumeDL('${d.id}')" data-act="resume-dl" data-id="${d.id}"><span class="material-symbols-outlined text-[18px]">play_arrow</span></button>` : ''}
-          ${isComp ? `<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Open Folder" onclick="event.stopPropagation(); openFolder('${d.id}', '${(d.destination || '').replace(/\\/g, '\\\\')}')" data-act="open-folder" data-id="${d.id}" data-path="${d.destination || ''}"><span class="material-symbols-outlined text-[18px]">folder_open</span></button>` : ''}
-          <button class="p-1.5 text-on-surface-variant hover:text-red-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Delete" onclick="event.stopPropagation(); cancelDL('${d.id}')" data-act="cancel-dl" data-id="${d.id}"><span class="material-symbols-outlined text-[18px]">close</span></button>
-          <button class="p-1 text-on-surface-variant rounded hover:text-primary active:scale-95 transition-all" onclick="event.stopPropagation(); togDet('${d.id}')" title="Details"><span class="material-symbols-outlined text-[16px] text-on-surface-variant transition-transform" id="chev-${d.id}" style="${d.expanded ? 'transform:rotate(180deg)' : ''}">expand_more</span></button>
+          ${isAct ? `<button class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Pause" onclick="event.stopPropagation(); pauseDL('${safeId}')" data-act="pause-dl" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">pause</span></button>` : ''}
+          ${isPsd || isQ ? `<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Resume" onclick="event.stopPropagation(); resumeDL('${safeId}')" data-act="resume-dl" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">play_arrow</span></button>` : ''}
+          ${isComp ? `<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Open Folder" onclick="event.stopPropagation(); openFolder('${safeId}')" data-act="open-folder" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">folder_open</span></button>` : ''}
+          <button class="p-1.5 text-on-surface-variant hover:text-red-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="Delete" onclick="event.stopPropagation(); cancelDL('${safeId}')" data-act="cancel-dl" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">close</span></button>
+          <button class="p-1 text-on-surface-variant rounded hover:text-primary active:scale-95 transition-all" onclick="event.stopPropagation(); togDet('${safeId}')" title="Details"><span class="material-symbols-outlined text-[16px] text-on-surface-variant transition-transform" id="chev-${safeId}" style="${d.expanded ? 'transform:rotate(180deg)' : ''}">expand_more</span></button>
         </div>
       </div>
-      <div id="det-${d.id}" class="det-panel ${d.expanded ? 'open' : ''} grid-cols-4 gap-4 p-4 text-[12px]" style="font-family:'JetBrains Mono'">
-        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">Server / Protocol</div><div class="text-on-surface truncate">${d.server || 'cdn.server.net'}</div><div class="text-primary-container text-[11px]">${d.protocol || 'HTTPS (TLS 1.3)'}</div></div>
-        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">Save Path</div><div class="text-on-surface truncate" title="${d.destination || savePth}">${d.destination || savePth}</div><div class="text-on-surface-variant text-[11px]">Category: ${d.category || 'General'}</div></div>
-        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">Segments / Priority</div><div class="text-on-surface">${d.connections || 16} parallel HTTP chunks</div><div class="text-primary-container text-[11px]">Priority: ${d.priority || 'High'}</div></div>
+      <div id="det-${safeId}" class="det-panel ${d.expanded ? 'open' : ''} grid-cols-4 gap-4 p-4 text-[12px]" style="font-family:'JetBrains Mono'">
+        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">Server / Protocol</div><div class="text-on-surface truncate">${safeServer}</div><div class="text-primary-container text-[11px]">${safeProto}</div></div>
+        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">Save Path</div><div class="text-on-surface truncate" title="${safeDest}">${safeDest}</div><div class="text-on-surface-variant text-[11px]">Category: ${safeCat}</div></div>
+        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">Segments / Priority</div><div class="text-on-surface">${d.connections || 16} parallel HTTP chunks</div><div class="text-primary-container text-[11px]">Priority: ${safePri}</div></div>
         <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">10s Bandwidth History</div><div class="flex items-end gap-0.5 h-7 pt-1">${(d.bwH || []).map(v => `<div style="height:${Math.max(3, Math.min(100, (v / 8) * 100))}%" class="flex-1 bg-primary-container/50 rounded-sm"></div>`).join('')}</div></div>
       </div>
     </div>`;
@@ -1949,8 +1975,8 @@ function showT(type, title, msg) {
   t.innerHTML = `
     <span class="material-symbols-outlined ${colors[type]?.split(' ')[0]} text-[20px] flex-shrink-0 mt-0.5" style="font-variation-settings:'FILL' 1">${icons[type] || 'info'}</span>
     <div class="flex-1 min-w-0">
-      <div class="text-[13px] font-semibold text-on-surface leading-snug" style="font-family:Inter">${title}</div>
-      <div class="text-[11px] text-on-surface-variant truncate mt-0.5 leading-snug" style="font-family:'JetBrains Mono'">${msg}</div>
+      <div class="text-[13px] font-semibold text-on-surface leading-snug" style="font-family:Inter">${escapeHtml(title)}</div>
+      <div class="text-[11px] text-on-surface-variant truncate mt-0.5 leading-snug" style="font-family:'JetBrains Mono'">${escapeHtml(msg)}</div>
     </div>
     <button onclick="this.parentElement.remove()" class="text-on-surface-variant hover:text-on-surface flex-shrink-0 text-[14px]">✕</button>
   `;
@@ -2001,7 +2027,7 @@ function renderLogs() {
     b.innerHTML = '<div class="text-on-surface-variant/50 text-[12px] py-4 text-center">No logs recorded yet.</div>';
     return;
   }
-  b.innerHTML = logs.map(l => `<div class="log-e ${l.type}"><span class="text-on-surface-variant/60 mr-2">[${l.ts}]</span>${l.text}</div>`).join('');
+  b.innerHTML = logs.map(l => `<div class="log-e ${l.type}"><span class="text-on-surface-variant/60 mr-2">[${escapeHtml(l.ts)}]</span>${escapeHtml(l.text)}</div>`).join('');
 }
 
 function clrLogs() {
@@ -2255,35 +2281,12 @@ setInterval(localTick, 350);
 setInterval(chkSched, 60000);
 clipInt = setInterval(chkClip, 2500);
 
-addLog('info', '[INIT] SuperIDM v2.4.0 Engine started');
+addLog('info', '[INIT] SuperIDM v2.5.0 Engine started');
 addLog('info', '[READY] All buttons, modals, and download engine are 100% active');
 setTimeout(() => {
   showT('success', 'SuperIDM Engine Ready', 'All buttons active. Click "+ Add New Link" or press Ctrl+N');
 }, 500);
 
-// ════════ BROWSER EXTENSION RPC BRIDGE ════════
-// Poll for downloads queued by the browser extension via the RPC server.
-async function pollRpcDownloads() {
-  if (!hasTauriIPC()) return;
-  try {
-    const pending = await tauriCall('poll_rpc_downloads');
-    if (pending && Array.isArray(pending) && pending.length > 0) {
-      for (const req of pending) {
-        addLog('info', `[EXT] Download from extension: ${req.url}`);
-        await addDL(req.url, {
-          filename: req.filename || undefined,
-          format: req.format || undefined,
-          cat: 'General',
-        });
-      }
-      if (pending.length === 1) {
-        showT('info', '⚡ Extension Download', `Downloading: ${pending[0].filename || pending[0].url.substring(0, 60)}`);
-      } else {
-        showT('info', '⚡ Extension Downloads', `${pending.length} downloads queued from browser extension`);
-      }
-    }
-  } catch (e) { /* extension polling failed, ignore */ }
-}
 
 // ════════ BROWSER INTEGRATION ACTIONS ════════
 async function installBrowserExt(browser) {

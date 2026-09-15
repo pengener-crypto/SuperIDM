@@ -210,18 +210,21 @@ pub async fn start_download(
                             let new_dest = dest_dir_watch.join(fname);
                             h.metadata.destination = new_dest.to_string_lossy().to_string();
                         }
+                        let eff_total = if total > 0 { total } else { 100_000 };
+                        let eff_downloaded = if total > 0 { downloaded } else { (progress * 100_000.0) as u64 };
                         if h.metadata.chunks.is_empty() {
                             h.metadata.chunks.push(ChunkInfo {
                                 index: 0,
                                 start_byte: 0,
-                                end_byte: total,
-                                current_byte: downloaded,
+                                end_byte: eff_total,
+                                current_byte: eff_downloaded,
                                 completed: is_comp,
                                 retry_count: 0,
                             });
                         } else {
-                            h.metadata.chunks[0].current_byte = downloaded;
-                            h.metadata.chunks[0].end_byte = total;
+                            h.metadata.chunks[0].start_byte = 0;
+                            h.metadata.chunks[0].current_byte = eff_downloaded;
+                            h.metadata.chunks[0].end_byte = eff_total;
                             h.metadata.chunks[0].completed = is_comp;
                         }
                         if is_comp {
@@ -462,22 +465,40 @@ async fn run_coordinator(
     mut event_rx: mpsc::Receiver<WorkerEvent>,
 ) {
     let mut last_emit = tokio::time::Instant::now();
+    let mut buffered_offsets: std::collections::HashMap<usize, u64> = std::collections::HashMap::new();
+    let mut buffered_bytes: u64 = 0;
 
     while let Some(event) = event_rx.recv().await {
+        let is_chunk_terminal = matches!(event, WorkerEvent::ChunkDone { .. } | WorkerEvent::ChunkError { .. });
+
+        if let WorkerEvent::Progress { chunk_index, bytes_written, new_offset } = &event {
+            buffered_offsets.insert(*chunk_index, *new_offset);
+            buffered_bytes += bytes_written;
+        }
+
+        // Throttle write-lock acquisition to once every 100ms, or immediately on chunk terminal events
+        if !is_chunk_terminal && last_emit.elapsed() < Duration::from_millis(100) {
+            continue;
+        }
+
+        let pending_offsets = std::mem::take(&mut buffered_offsets);
+        let pending_bytes = std::mem::replace(&mut buffered_bytes, 0);
+
         let (is_completed, payload) = {
             let mut mgr = manager.write();
             if let Some(handle) = mgr.tasks.get_mut(&task_id) {
-                match event {
-                    WorkerEvent::Progress {
-                        chunk_index,
-                        bytes_written,
-                        new_offset,
-                    } => {
-                        if chunk_index < handle.metadata.chunks.len() {
-                            handle.metadata.chunks[chunk_index].current_byte = new_offset;
-                        }
-                        handle.speed_meter.record(bytes_written);
+                // Apply buffered progress
+                for (idx, offset) in pending_offsets {
+                    if idx < handle.metadata.chunks.len() {
+                        handle.metadata.chunks[idx].current_byte = offset;
                     }
+                }
+                if pending_bytes > 0 {
+                    handle.speed_meter.record(pending_bytes);
+                }
+
+                // Apply terminal events
+                match event {
                     WorkerEvent::ChunkDone { chunk_index } => {
                         if chunk_index < handle.metadata.chunks.len() {
                             handle.metadata.chunks[chunk_index].completed = true;
@@ -488,6 +509,7 @@ async fn run_coordinator(
                     WorkerEvent::ChunkError { chunk_index, error, will_retry } => {
                         eprintln!("[SuperIDM] Chunk {} error: {} (retry: {})", chunk_index, error, will_retry);
                     }
+                    WorkerEvent::Progress { .. } => {}
                 }
 
                 let all_done = handle.metadata.chunks.iter().all(|c| c.completed);
@@ -553,7 +575,7 @@ async fn run_coordinator(
                 let all_tasks: Vec<_> = manager.read().tasks.values().map(|h| h.metadata.clone()).collect();
                 let _ = storage::save_tasks_db(&all_tasks).await;
                 break;
-            } else if last_emit.elapsed() >= Duration::from_millis(150) {
+            } else {
                 let _ = app.emit("download_progress", &pl);
                 last_emit = tokio::time::Instant::now();
             }
@@ -825,7 +847,13 @@ pub fn get_all_tasks(state: State<'_, AppState>) -> Vec<TaskSummary> {
                 destination: meta.destination.clone(),
                 total_bytes: tot,
                 downloaded_bytes: dld,
-                progress: meta.progress(),
+                progress: if tot > 0 {
+                    meta.progress()
+                } else if !meta.chunks.is_empty() && meta.chunks[0].end_byte > 0 {
+                    meta.chunks[0].downloaded() as f64 / meta.chunks[0].end_byte as f64
+                } else {
+                    0.0
+                },
                 speed: spd,
                 status: meta.status.clone(),
                 category: meta.category.clone(),
@@ -1040,7 +1068,7 @@ pub async fn start_stream_download(
                 progress,
                 speed: if is_comp { 0.0 } else { spd },
                 chunks: vec![],
-                eta_secs: if spd > 0.0 && progress < 1.0 { ((1.0 - progress) * total_bytes as f64 / progress) / spd } else { 0.0 },
+                eta_secs: if spd > 0.0 && progress > 0.001 && progress < 1.0 { ((1.0 - progress) * total_bytes as f64 / progress) / spd } else { 0.0 },
             };
 
             let _ = app_handle.emit("download_progress", &payload);

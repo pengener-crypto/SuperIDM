@@ -106,12 +106,63 @@ impl RpcServer {
                 let token_check = token_http.clone();
 
                 tokio::spawn(async move {
-                    let mut buf = vec![0u8; 65536];
-                    let n = match stream.read(&mut buf).await {
-                        Ok(n) if n > 0 => n,
-                        _ => return,
-                    };
-                    let raw = String::from_utf8_lossy(&buf[..n]).to_string();
+                    const MAX_PAYLOAD: usize = 2 * 1024 * 1024; // 2MB defense cap
+                    let mut buffer = Vec::with_capacity(4096);
+                    let mut temp = [0u8; 4096];
+                    let mut content_length: Option<usize> = None;
+                    let mut header_end: Option<usize> = None;
+
+                    loop {
+                        let n = match stream.read(&mut temp).await {
+                            Ok(n) if n > 0 => n,
+                            _ => break,
+                        };
+
+                        if buffer.len() + n > MAX_PAYLOAD {
+                            let resp_413 = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: application/json\r\nContent-Length: 41\r\nConnection: close\r\n\r\n{\"error\":\"Payload exceeds 2MB threshold\"}";
+                            let _ = stream.write_all(resp_413.as_bytes()).await;
+                            let _ = stream.shutdown().await;
+                            return;
+                        }
+
+                        buffer.extend_from_slice(&temp[..n]);
+
+                        if header_end.is_none() {
+                            if let Some(pos) = buffer.windows(4).position(|w| w == b"\r\n\r\n") {
+                                header_end = Some(pos + 4);
+                                let headers_str = String::from_utf8_lossy(&buffer[..pos]);
+                                for line in headers_str.lines() {
+                                    if line.to_lowercase().starts_with("content-length:") {
+                                        if let Some((_, v)) = line.split_once(':') {
+                                            if let Ok(cl) = v.trim().parse::<usize>() {
+                                                if cl > MAX_PAYLOAD {
+                                                    let resp_413 = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: application/json\r\nContent-Length: 41\r\nConnection: close\r\n\r\n{\"error\":\"Payload exceeds 2MB threshold\"}";
+                                                    let _ = stream.write_all(resp_413.as_bytes()).await;
+                                                    let _ = stream.shutdown().await;
+                                                    return;
+                                                }
+                                                content_length = Some(cl);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let (Some(h_end), Some(c_len)) = (header_end, content_length) {
+                            if buffer.len() >= h_end + c_len {
+                                break;
+                            }
+                        } else if header_end.is_some() && content_length.is_none() {
+                            break;
+                        }
+                    }
+
+                    if buffer.is_empty() {
+                        return;
+                    }
+
+                    let raw = String::from_utf8_lossy(&buffer).to_string();
                     let response = handle_http_request(&raw, &mgr, &token_check, peer).await;
                     let _ = stream.write_all(response.as_bytes()).await;
                     let _ = stream.shutdown().await;
@@ -336,7 +387,7 @@ async fn handle_http_request(
         let b = serde_json::json!({
             "status": "ok",
             "app": "SuperIDM",
-            "version": "2.4.0",
+            "version": "2.5.0",
             "auth_required": true
         }).to_string();
         return format!(
@@ -473,7 +524,7 @@ async fn dispatch_method(
         }
 
         "superidm.ping" => {
-            serde_json::json!({ "status": "ok", "app": "SuperIDM", "version": "2.4.0", "authenticated": true })
+            serde_json::json!({ "status": "ok", "app": "SuperIDM", "version": "2.5.0", "authenticated": true })
         }
 
         _ => {

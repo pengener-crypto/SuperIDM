@@ -52,7 +52,7 @@ impl MediaExtractor {
             eprintln!("[SuperIDM] Clean machine detected. Downloading standalone media extractor core to: {:?}", local_bin);
             let resp = client
                 .get("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
-                .header("User-Agent", "SuperIDM-Core/2.4.0")
+                .header("User-Agent", "SuperIDM-Core/2.5.0")
                 .send()
                 .await
                 .map_err(|e| format!("Failed to download video extractor core: {}", e))?;
@@ -267,6 +267,8 @@ impl MediaExtractor {
         let mut total_bytes = 0u64;
         let mut video_bytes = 0u64;
         let mut audio_bytes = 0u64;
+        let mut max_progress = 0.0f64;
+        let mut last_raw_percent = 0.0f64;
 
         while let Ok(Some(line)) = reader.next_line().await {
             if *cancel_rx.borrow() {
@@ -286,7 +288,8 @@ impl MediaExtractor {
                         }
                     }
                 }
-                let _ = progress_tx.send((0.98, 0.0, total_bytes, total_bytes, 1.0, false, None)).await;
+                max_progress = max_progress.max(0.98);
+                let _ = progress_tx.send((max_progress, 0.0, total_bytes, total_bytes, 1.0, false, None)).await;
                 continue;
             }
 
@@ -347,11 +350,24 @@ impl MediaExtractor {
                         }
                     }
 
-                    let normalized_progress = if is_audio_pass {
-                        0.75 + (raw_percent.min(1.0) * 0.20) // 75% -> 95%
+                    // Auto-detect pass switch if raw_percent dropped drastically (e.g. 99% -> 2%)
+                    if !is_audio_pass && last_raw_percent > 0.80 && raw_percent < 0.20 {
+                        is_audio_pass = true;
+                    }
+                    last_raw_percent = raw_percent;
+
+                    let mut normalized_progress = if is_audio_pass {
+                        0.75 + (raw_percent.min(1.0) * 0.23) // 75% -> 98%
                     } else {
                         raw_percent.min(1.0) * 0.75 // 0% -> 75%
                     };
+
+                    // Guarantee progress never retreats backwards
+                    if normalized_progress < max_progress {
+                        normalized_progress = max_progress;
+                    } else {
+                        max_progress = normalized_progress;
+                    }
 
                     let current_dld = if is_audio_pass {
                         video_bytes + (audio_bytes as f64 * raw_percent.min(1.0)) as u64

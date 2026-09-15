@@ -1,0 +1,2 @@
+[RPC Security] WebSocket listening on ws://127.0.0.1:6800 (Token Auth Enabled)
+[RPC Security] HTTP API listening on http://127.0.0.1:6801/api/ (Origin-Locked)

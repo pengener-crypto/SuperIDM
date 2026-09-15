@@ -132,7 +132,7 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
                         "quit" => {
                             // Signal that this is an intentional user-initiated exit
                             SHOULD_EXIT.store(true, Ordering::SeqCst);
-                            app.exit(0);
+                            std::process::exit(0);
                         }
                         _ => {}
                     }
@@ -208,9 +208,17 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Keep SuperIDM running in background system tray when window is closed (IDM behavior)
-                api.prevent_close();
-                let _ = window.hide();
+                // If there are active downloads, keep running in tray so downloads finish safely.
+                // If no downloads are active, exit immediately so the app & background daemon close cleanly.
+                let state = window.state::<AppState>();
+                let has_active = state.manager.read().tasks.values().any(|h| h.metadata.status == engine::types::TaskStatus::Downloading);
+                if has_active {
+                    api.prevent_close();
+                    let _ = window.hide();
+                } else {
+                    SHOULD_EXIT.store(true, Ordering::SeqCst);
+                    std::process::exit(0);
+                }
             }
         })
         .build(tauri::generate_context!())

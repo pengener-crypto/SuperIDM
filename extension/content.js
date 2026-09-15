@@ -20,6 +20,11 @@
     const show = shouldShowBadges();
     document.querySelectorAll('.' + BADGE_CLASS).forEach(b => {
       b.style.display = show ? '' : 'none';
+      if (!show) {
+        b.classList.remove('superidm-menu-open');
+        const m = b.querySelector('.' + MENU_CLASS);
+        if (m) m.classList.remove('superidm-menu-visible');
+      }
     });
   }
 
@@ -34,6 +39,31 @@
       updateAllBadgeVisibility();
     }
   });
+
+  // Active status poller: query background every 1500ms so badges vanish instantly if app is closed
+  setInterval(() => {
+    try {
+      chrome.runtime.sendMessage({ type: 'get_status' }, (resp) => {
+        if (chrome.runtime.lastError || !resp) {
+          if (appConnected) {
+            appConnected = false;
+            updateAllBadgeVisibility();
+          }
+        } else {
+          const isConn = !!resp.connected;
+          if (appConnected !== isConn) {
+            appConnected = isConn;
+            updateAllBadgeVisibility();
+          }
+        }
+      });
+    } catch (e) {
+      if (appConnected) {
+        appConnected = false;
+        updateAllBadgeVisibility();
+      }
+    }
+  }, 1500);
 
   // ═══════ Detect Platform ═══════
   function detectPlatform() {
@@ -321,12 +351,6 @@
       badge.classList.toggle('superidm-menu-open', isOpen);
     }, true);
 
-    // Close menu when clicking elsewhere
-    document.addEventListener('click', () => {
-      menu.classList.remove('superidm-menu-visible');
-      badge.classList.remove('superidm-menu-open');
-    });
-
     container.appendChild(badge);
   }
 
@@ -380,20 +404,32 @@
           badge.classList.toggle('superidm-menu-open', isOpen);
         });
 
-        document.addEventListener('click', () => {
-          menu.classList.remove('superidm-menu-visible');
-          badge.classList.remove('superidm-menu-open');
-        });
-
         container.appendChild(badge);
       }
     }
   }
 
-  // ═══════ MutationObserver for Dynamic Pages ═══════
+  // ═══════ Delegated Click Listener (Dismiss Active Menus) ═══════
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.' + BADGE_CLASS)) {
+      document.querySelectorAll('.' + MENU_CLASS + '.superidm-menu-visible').forEach(m => {
+        m.classList.remove('superidm-menu-visible');
+      });
+      document.querySelectorAll('.' + BADGE_CLASS + '.superidm-menu-open').forEach(b => {
+        b.classList.remove('superidm-menu-open');
+      });
+    }
+  });
+
+  // ═══════ MutationObserver for Dynamic Pages (Debounced with rAF) ═══════
+  let observerRaf = null;
   const observer = new MutationObserver(() => {
-    scanVideos();
-    attachPlatformBadge();
+    if (observerRaf) return;
+    observerRaf = requestAnimationFrame(() => {
+      scanVideos();
+      attachPlatformBadge();
+      observerRaf = null;
+    });
   });
 
   // ═══════ Init ═══════

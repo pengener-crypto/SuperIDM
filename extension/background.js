@@ -279,14 +279,33 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
     return;
   }
 
-  // Intercept: cancel browser download, send to SuperIDM
-  sendToSuperIDM(item.url, item.filename).then(result => {
-    if (result.ok) {
-      chrome.downloads.cancel(item.id);
+  let handled = false;
+  const safeSuggest = () => {
+    if (!handled) {
+      handled = true;
+      suggest();
     }
-  });
+  };
 
-  suggest();
+  // Wrap sendToSuperIDM with a 400ms timeout
+  const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ ok: false, timeout: true }), 400));
+
+  Promise.race([sendToSuperIDM(item.url, item.filename), timeoutPromise])
+    .then(result => {
+      if (result && result.ok) {
+        handled = true;
+        chrome.downloads.cancel(item.id, () => {
+          if (chrome.runtime.lastError) { /* ignore cancel race */ }
+        });
+      } else {
+        safeSuggest();
+      }
+    })
+    .catch(() => {
+      safeSuggest();
+    });
+
+  return true; // Keep suggest channel open asynchronously
 });
 
 // ═══════ Media Stream Sniffer ═══════
@@ -369,5 +388,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-// ═══════ Init ═══════
+// ═══════ Init & Active Health Poller ═══════
 connectWS();
+
+setInterval(async () => {
+  const online = await isServerOnline();
+  if (online !== wsConnected) {
+    wsConnected = online;
+    if (!online && ws) {
+      try { ws.close(); } catch(e) {}
+      ws = null;
+    }
+    broadcastStatus();
+    if (online && (!ws || ws.readyState !== WebSocket.OPEN)) {
+      connectWS();
+    }
+  }
+}, 1500);
+
