@@ -116,7 +116,32 @@ async function connectWS() {
 }
 
 function broadcastStatus() {
+  // 1. Notify popup (runtime message)
   chrome.runtime.sendMessage({ type: 'status', connected: wsConnected }).catch(() => {});
+
+  // 2. Notify ALL content scripts in every tab so badges show/hide with app state
+  chrome.tabs.query({}, (tabs) => {
+    if (!tabs) return;
+    tabs.forEach(tab => {
+      if (tab.id > 0) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'connection_status',
+          connected: wsConnected
+        }).catch(() => {});
+      }
+    });
+  });
+
+  // 3. Update extension icon badge to reflect connection state
+  try {
+    if (wsConnected) {
+      chrome.action.setBadgeText({ text: 'ON' });
+      chrome.action.setBadgeBackgroundColor({ color: '#00C853' });
+    } else {
+      chrome.action.setBadgeText({ text: 'OFF' });
+      chrome.action.setBadgeBackgroundColor({ color: '#FF1744' });
+    }
+  } catch (e) { /* ignore if action API unavailable */ }
 }
 
 // ═══════ Send Download to SuperIDM ═══════

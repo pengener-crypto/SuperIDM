@@ -8,14 +8,30 @@
   const BADGE_CLASS = 'superidm-video-badge';
   const MENU_CLASS = 'superidm-quality-menu';
   let showGrabber = true;
+  let appConnected = false;  // Track whether the desktop app is running
 
-  // Listen for settings updates from background
+  // Helper: should badges be visible?
+  function shouldShowBadges() {
+    return showGrabber && appConnected;
+  }
+
+  // Helper: update all badge visibility based on current state
+  function updateAllBadgeVisibility() {
+    const show = shouldShowBadges();
+    document.querySelectorAll('.' + BADGE_CLASS).forEach(b => {
+      b.style.display = show ? '' : 'none';
+    });
+  }
+
+  // Listen for messages from background script
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'settings_update') {
       showGrabber = msg.showVideoGrabber;
-      document.querySelectorAll('.' + BADGE_CLASS).forEach(b => {
-        b.style.display = showGrabber ? '' : 'none';
-      });
+      updateAllBadgeVisibility();
+    }
+    if (msg.type === 'connection_status') {
+      appConnected = msg.connected;
+      updateAllBadgeVisibility();
     }
   });
 
@@ -278,7 +294,7 @@
     const badge = document.createElement('div');
     badge.className = BADGE_CLASS;
     badge.innerHTML = `<div class="superidm-btn-main">${ARROW_SVG}<span class="superidm-btn-text">Download</span></div><div class="superidm-btn-chevron">${CHEVRON_SVG}</div>`;
-    badge.style.display = showGrabber ? '' : 'none';
+    badge.style.display = shouldShowBadges() ? '' : 'none';
 
     const menu = createQualityMenu(videoEl);
     badge.appendChild(menu);
@@ -340,7 +356,7 @@
         const badge = document.createElement('div');
         badge.className = BADGE_CLASS + ' superidm-yt-badge';
         badge.innerHTML = `<div class="superidm-btn-main">${ARROW_SVG}<span class="superidm-btn-text">Download</span></div><div class="superidm-btn-chevron">${CHEVRON_SVG}</div>`;
-        badge.style.display = showGrabber ? '' : 'none';
+        badge.style.display = shouldShowBadges() ? '' : 'none';
 
         const videoEl = player.querySelector('video');
         const menu = createQualityMenu(videoEl);
@@ -383,13 +399,17 @@
   // ═══════ Init ═══════
   function init() {
     chrome.runtime.sendMessage({ type: 'get_status' }, (resp) => {
-      if (resp && resp.settings) {
-        showGrabber = resp.settings.showVideoGrabber !== false;
+      if (resp) {
+        if (resp.settings) {
+          showGrabber = resp.settings.showVideoGrabber !== false;
+        }
+        appConnected = !!resp.connected;
       }
+      // Only scan/attach after we know the connection state
+      scanVideos();
+      attachPlatformBadge();
+      updateAllBadgeVisibility();
     });
-
-    scanVideos();
-    attachPlatformBadge();
 
     observer.observe(document.body || document.documentElement, {
       childList: true,
