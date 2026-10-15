@@ -1,4 +1,4 @@
-# SuperIDM ⚡
+# SuperIDM
 
 > **Next-Generation High-Performance Download Accelerator & Stream Interceptor**  
 > Developed by **Kutha SoftWorks**

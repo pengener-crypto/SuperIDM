@@ -24,6 +24,7 @@
   border: 1.5px solid #00f5ff !important;
   border-radius: 20px !important;
   cursor: pointer !important;
+  pointer-events: auto !important;
   box-shadow: 
     0 0 8px rgba(0, 245, 255, 0.4),
     0 4px 14px rgba(0, 0, 0, 0.6) !important;

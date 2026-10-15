@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::RwLock;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::{mpsc, watch};
 use uuid::Uuid;
 
@@ -11,6 +11,7 @@ use crate::engine::chunker;
 use crate::engine::downloader::{self, DownloadManager, TaskHandle, WorkerEvent};
 use crate::engine::speed::SpeedMeter;
 use crate::engine::storage;
+use crate::engine::throttler::BandwidthThrottler;
 use crate::engine::types::*;
 
 /// Shared application state managed by Tauri.
@@ -43,11 +44,11 @@ pub async fn start_download(
         &request
     };
 
-    let url = req_obj
+    let raw_url = req_obj
         .get("url")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "Missing 'url' parameter in download request".to_string())?
-        .to_string();
+        .ok_or_else(|| "Missing 'url' parameter in download request".to_string())?;
+    let url = crate::engine::extractor::MediaExtractor::clean_target_url(raw_url);
 
     let destination = req_obj
         .get("destination")
@@ -132,8 +133,20 @@ pub async fn start_download(
     };
     let _ = tokio::fs::create_dir_all(&dest_dir).await;
 
-    // Check if this is a video platform URL that requires signature/token extraction (YouTube, TikTok, Vimeo, etc.)
-    if crate::engine::extractor::MediaExtractor::is_platform_url(&url) {
+    // Route through yt-dlp media extraction engine if:
+    // 1. Neither the filename nor URL looks like a direct file download (.zip, .exe, .rar, etc.)
+    // AND
+    // 2. Either it's a known media platform URL, OR format_id was explicitly requested
+    let fn_is_direct = filename
+        .as_deref()
+        .map(crate::engine::extractor::MediaExtractor::is_likely_direct_file)
+        .unwrap_or(false);
+    let url_is_direct = crate::engine::extractor::MediaExtractor::is_likely_direct_file(&url);
+    let is_direct_file = fn_is_direct || url_is_direct;
+
+    let use_media_engine = !is_direct_file
+        && (crate::engine::extractor::MediaExtractor::is_platform_url(&url) || format_id.is_some());
+    if use_media_engine {
         let (cancel_tx, cancel_rx) = watch::channel(false);
         let (prog_tx, mut prog_rx) = mpsc::channel::<(f64, f64, u64, u64, f64, bool, Option<String>)>(128);
 
@@ -204,14 +217,14 @@ pub async fn start_download(
                 {
                     let mut mgr = mgr_arc.write();
                     if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
-                        h.metadata.total_bytes = total;
+                        let eff_total = if total > 0 { total } else { 100_000 };
+                        let eff_downloaded = if downloaded > 0 { downloaded } else { (progress * 100_000.0) as u64 };
+                        h.metadata.total_bytes = eff_total;
                         if let Some(ref fname) = final_name_opt {
                             h.metadata.filename = fname.clone();
                             let new_dest = dest_dir_watch.join(fname);
                             h.metadata.destination = new_dest.to_string_lossy().to_string();
                         }
-                        let eff_total = if total > 0 { total } else { 100_000 };
-                        let eff_downloaded = if total > 0 { downloaded } else { (progress * 100_000.0) as u64 };
                         if h.metadata.chunks.is_empty() {
                             h.metadata.chunks.push(ChunkInfo {
                                 index: 0,
@@ -234,11 +247,14 @@ pub async fn start_download(
                     }
                 }
 
+                let eff_total = if total > 0 { total } else { 100_000 };
+                let eff_downloaded = if downloaded > 0 { downloaded } else { (progress * 100_000.0) as u64 };
+
                 let payload = ProgressPayload {
                     id: task_id_c.clone(),
                     status: if is_comp { TaskStatus::Completed } else { TaskStatus::Downloading },
-                    downloaded_bytes: downloaded,
-                    total_bytes: total,
+                    downloaded_bytes: eff_downloaded,
+                    total_bytes: eff_total,
                     progress,
                     speed: if is_comp { 0.0 } else { speed },
                     chunks: vec![],
@@ -288,15 +304,22 @@ pub async fn start_download(
     // 1. If caller provided an explicit descriptive filename (e.g. from browser extension or user), prioritize it!
     let explicit_name = filename.as_ref().filter(|f| {
         let f_trim = f.trim();
-        !f_trim.is_empty() 
-            && f_trim != "download" 
-            && f_trim != "download.dat"
-            && f_trim != "video" 
-            && f_trim != "video.mp4"
-            && !f_trim.starts_with("download_")
+        let f_clean = crate::engine::downloader::clean_filename(f_trim);
+        let f_lower = f_clean.to_lowercase();
+        !f_clean.is_empty() 
+            && f_clean != "download" 
+            && f_clean != "download.dat"
+            && f_clean != "video" 
+            && f_clean != "video.mp4"
+            && f_lower != "instagram.mp4"
+            && f_lower != "youtube.mp4"
+            && f_lower != "facebook.mp4"
+            && f_lower != "tiktok.mp4"
+            && !f_lower.starts_with("download_")
+            && !f_lower.starts_with("instagram_video_")
     });
 
-    let filename = if let Some(exp) = explicit_name {
+    let raw_filename = if let Some(exp) = explicit_name {
         let safe_name = crate::engine::downloader::clean_filename(exp);
         if !safe_name.contains('.') {
             if let Some(ref ct) = probe.content_type {
@@ -322,6 +345,8 @@ pub async fn start_download(
         filename.unwrap_or_else(|| format!("download_{}.dat", &task_id[..8]))
     };
 
+    // Auto-resolve duplicate filenames (e.g. video (1).mp4) to prevent data overwrite
+    let filename = storage::resolve_unique_filename(&dest_dir, &raw_filename);
     let file_path = dest_dir.join(&filename);
 
     let total_bytes = if probe.content_length > 0 {
@@ -330,8 +355,29 @@ pub async fn start_download(
         50 * 1024 * 1024 // Fallback 50MB estimate if unknown
     };
 
+    // Pre-flight Disk Space Check (fail fast before pre-allocation or network usage)
+    if probe.content_length > 0 {
+        if let Ok(available_space) = storage::get_available_disk_space(&dest_dir) {
+            let safety_margin = 10 * 1024 * 1024; // 10MB safety buffer
+            if available_space < total_bytes.saturating_add(safety_margin) {
+                let req_mb = total_bytes / (1024 * 1024);
+                let avail_mb = available_space / (1024 * 1024);
+                return Err(format!(
+                    "Not enough disk space: {} MB required, but only {} MB available in {}",
+                    req_mb,
+                    avail_mb,
+                    dest_dir.display()
+                ));
+            }
+        }
+    }
+
     let effective_conns = if probe.supports_range && probe.content_length > 0 {
-        num_connections.clamp(1, 32)
+        if url.contains("fbcdn.net") || url.contains("cdninstagram.com") {
+            1 // Facebook CDN throttles or breaks on parallel range requests
+        } else {
+            num_connections.clamp(1, 32)
+        }
     } else {
         1
     };
@@ -380,9 +426,10 @@ pub async fn start_download(
         );
     }
 
-    // Spawn chunk workers with shared event channel
+    // Spawn chunk workers with shared event channel and dynamic limit tracking
     let throttler = state.manager.read().throttler.clone();
-    let (event_tx, event_rx) = mpsc::channel::<WorkerEvent>(512);
+    let (event_tx, event_rx) = mpsc::channel::<WorkerEvent>(4096);
+    let chunk_limits: downloader::ChunkLimitMap = Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()));
 
     for chunk in &chunks {
         if chunk.completed {
@@ -396,6 +443,7 @@ pub async fn start_download(
         let cancel_rx_c = cancel_rx.clone();
         let headers_c = headers.clone();
         let tx = event_tx.clone();
+        let limits_c = Some(chunk_limits.clone());
 
         tokio::spawn(async move {
             downloader::download_chunk_with_retry(
@@ -407,10 +455,20 @@ pub async fn start_download(
                 tx,
                 cancel_rx_c,
                 headers_c,
+                limits_c,
             )
             .await;
         });
     }
+
+    let coordinator_ctx = CoordinatorContext {
+        client: client.clone(),
+        throttler: throttler.clone(),
+        event_tx: event_tx.clone(),
+        cancel_rx: cancel_rx.clone(),
+        custom_headers: headers.clone(),
+        chunk_limits: chunk_limits.clone(),
+    };
 
     // Spawn Coordinator task
     let manager_arc = state.manager.clone();
@@ -425,6 +483,7 @@ pub async fn start_download(
             task_id_c,
             file_path_c,
             event_rx,
+            Some(coordinator_ctx),
         )
         .await;
     });
@@ -455,14 +514,26 @@ pub async fn start_download(
     Ok(task_id)
 }
 
+/// Context needed by the coordinator to dynamically spawn work-stealing workers.
+#[derive(Clone)]
+pub struct CoordinatorContext {
+    pub client: reqwest::Client,
+    pub throttler: BandwidthThrottler,
+    pub event_tx: mpsc::Sender<WorkerEvent>,
+    pub cancel_rx: watch::Receiver<bool>,
+    pub custom_headers: Option<Vec<(String, String)>>,
+    pub chunk_limits: downloader::ChunkLimitMap,
+}
+
 /// Download Coordinator Loop that processes worker events, updates metadata,
-/// smooths speed, and notifies the frontend.
+/// smooths speed, handles dynamic work stealing, and notifies the frontend.
 async fn run_coordinator(
     manager: Arc<RwLock<DownloadManager>>,
     app: AppHandle,
     task_id: String,
     file_path: PathBuf,
     mut event_rx: mpsc::Receiver<WorkerEvent>,
+    coordinator_ctx: Option<CoordinatorContext>,
 ) {
     let mut last_emit = tokio::time::Instant::now();
     let mut buffered_offsets: std::collections::HashMap<usize, u64> = std::collections::HashMap::new();
@@ -504,6 +575,53 @@ async fn run_coordinator(
                             handle.metadata.chunks[chunk_index].completed = true;
                             handle.metadata.chunks[chunk_index].current_byte =
                                 handle.metadata.chunks[chunk_index].end_byte + 1;
+                        }
+
+                        // Dynamic Work Stealing: An idle worker steals remaining work from longest active chunk
+                        let all_chunks_done = handle.metadata.chunks.iter().all(|c| c.completed);
+                        if !all_chunks_done && handle.metadata.supports_range && handle.metadata.chunks.len() < 32 {
+                            if let Some(ref ctx) = coordinator_ctx {
+                                if let Some((donor_idx, new_chunk)) = crate::engine::chunker::steal_work(&mut handle.metadata.chunks) {
+                                    // Update donor chunk's atomic limit
+                                    {
+                                        let limits = ctx.chunk_limits.read();
+                                        if let Some(donor_atomic) = limits.get(&donor_idx) {
+                                            donor_atomic.store(handle.metadata.chunks[donor_idx].end_byte, std::sync::atomic::Ordering::SeqCst);
+                                        }
+                                    }
+                                    // Register new chunk's atomic limit
+                                    {
+                                        let mut limits = ctx.chunk_limits.write();
+                                        limits.insert(new_chunk.index, Arc::new(std::sync::atomic::AtomicU64::new(new_chunk.end_byte)));
+                                    }
+
+                                    let c_client = ctx.client.clone();
+                                    let c_url = handle.metadata.url.clone();
+                                    let c_chunk = new_chunk.clone();
+                                    let c_path = file_path.clone();
+                                    let c_throttler = ctx.throttler.clone();
+                                    let c_tx = ctx.event_tx.clone();
+                                    let c_cancel = ctx.cancel_rx.clone();
+                                    let c_headers = ctx.custom_headers.clone();
+                                    let c_limits = Some(ctx.chunk_limits.clone());
+
+                                    handle.metadata.chunks.push(new_chunk);
+
+                                    tokio::spawn(async move {
+                                        downloader::download_chunk_with_retry(
+                                            c_client,
+                                            c_url,
+                                            c_chunk,
+                                            c_path,
+                                            c_throttler,
+                                            c_tx,
+                                            c_cancel,
+                                            c_headers,
+                                            c_limits,
+                                        ).await;
+                                    });
+                                }
+                            }
                         }
                     }
                     WorkerEvent::ChunkError { chunk_index, error, will_retry } => {
@@ -572,14 +690,70 @@ async fn run_coordinator(
                 }
                 let _ = app.emit("download_progress", &pl);
                 let _ = storage::delete_part_json(&file_path).await;
-                let all_tasks: Vec<_> = manager.read().tasks.values().map(|h| h.metadata.clone()).collect();
+                let (task_fname, all_tasks): (String, Vec<DownloadMetadata>) = {
+                    let mgr = manager.read();
+                    let fname = mgr.tasks.get(&task_id).map(|h| h.metadata.filename.clone()).unwrap_or_else(|| "الملف".to_string());
+                    let tasks: Vec<DownloadMetadata> = mgr.tasks.values().map(|h| h.metadata.clone()).collect();
+                    (fname, tasks)
+                };
                 let _ = storage::save_tasks_db(&all_tasks).await;
+
+                // Native Windows Toast Notification on download complete
+                use tauri_plugin_notification::NotificationExt;
+                let _ = app.notification()
+                    .builder()
+                    .title("SuperIDM — اكتمل التحميل")
+                    .body(format!("اكتمل تحميل الملف بنجاح: {}", task_fname))
+                    .show();
+
                 break;
             } else {
                 let _ = app.emit("download_progress", &pl);
                 last_emit = tokio::time::Instant::now();
             }
         }
+    }
+
+    // If the coordinator loop exits without is_completed (e.g. workers exhausted retries, server 403, or connection drop):
+    let failure_payload = {
+        let mut mgr = manager.write();
+        if let Some(handle) = mgr.tasks.get_mut(&task_id) {
+            if handle.metadata.status == TaskStatus::Downloading {
+                handle.metadata.status = TaskStatus::Failed;
+                handle.speed_meter = SpeedMeter::new();
+                Some(ProgressPayload {
+                    id: task_id.clone(),
+                    status: TaskStatus::Failed,
+                    downloaded_bytes: handle.metadata.downloaded_bytes(),
+                    total_bytes: handle.metadata.total_bytes,
+                    progress: handle.metadata.progress(),
+                    speed: 0.0,
+                    chunks: handle
+                        .metadata
+                        .chunks
+                        .iter()
+                        .map(|c| ChunkProgressSnapshot {
+                            index: c.index,
+                            downloaded: c.downloaded(),
+                            total: c.total_size(),
+                            speed: 0.0,
+                            completed: c.completed,
+                        })
+                        .collect(),
+                    eta_secs: 0.0,
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+
+    if let Some(pl) = failure_payload {
+        let _ = app.emit("download_progress", &pl);
+        let all_tasks: Vec<_> = manager.read().tasks.values().map(|h| h.metadata.clone()).collect();
+        let _ = storage::save_tasks_db(&all_tasks).await;
     }
 }
 
@@ -749,9 +923,10 @@ pub async fn resume_download(
         return Ok(());
     }
 
-    // Direct multi-chunk resume
+    // Direct multi-chunk resume with work stealing support
     let file_path = PathBuf::from(&metadata.destination);
-    let (event_tx, event_rx) = mpsc::channel::<WorkerEvent>(512);
+    let (event_tx, event_rx) = mpsc::channel::<WorkerEvent>(4096);
+    let chunk_limits: downloader::ChunkLimitMap = Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()));
 
     for chunk in &metadata.chunks {
         if chunk.completed {
@@ -764,6 +939,7 @@ pub async fn resume_download(
         let throttler_c = throttler.clone();
         let cancel_rx_c = cancel_rx.clone();
         let tx = event_tx.clone();
+        let limits_c = Some(chunk_limits.clone());
 
         tokio::spawn(async move {
             downloader::download_chunk_with_retry(
@@ -775,10 +951,20 @@ pub async fn resume_download(
                 tx,
                 cancel_rx_c,
                 None,
+                limits_c,
             )
             .await;
         });
     }
+
+    let coordinator_ctx = CoordinatorContext {
+        client: client.clone(),
+        throttler: throttler.clone(),
+        event_tx: event_tx.clone(),
+        cancel_rx: cancel_rx.clone(),
+        custom_headers: None,
+        chunk_limits: chunk_limits.clone(),
+    };
 
     let manager_arc = state.manager.clone();
     let app_handle = app.clone();
@@ -792,6 +978,7 @@ pub async fn resume_download(
             task_id_c,
             file_path_c,
             event_rx,
+            Some(coordinator_ctx),
         )
         .await;
     });
@@ -912,7 +1099,9 @@ pub async fn open_download_folder(
                 .arg(&target_path)
                 .spawn();
         } else if let Some(parent) = target_path.parent() {
-            if parent.exists() {
+            // Never fall back to a bare drive root like "C:" — use Downloads instead.
+            let parent_is_drive_root = parent.parent().is_none();
+            if parent.is_dir() && !parent_is_drive_root && target_path.is_absolute() {
                 let _ = std::process::Command::new("explorer.exe")
                     .arg(parent)
                     .spawn();
@@ -926,6 +1115,37 @@ pub async fn open_download_folder(
                 .arg(&default_downloads)
                 .spawn();
         }
+    }
+
+    Ok(())
+}
+
+/// Open a downloaded file with default Windows associated application.
+#[tauri::command]
+pub async fn open_file(
+    path: Option<String>,
+    #[allow(non_snake_case)]
+    filePath: Option<String>,
+) -> Result<(), String> {
+    let target = path.or(filePath).unwrap_or_else(|| "".to_string()).trim().to_string();
+    if target.is_empty() {
+        return Err("No file path provided".to_string());
+    }
+    let target_path = PathBuf::from(&target);
+    if !target_path.exists() {
+        return Err(format!("File does not exist: {}", target));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let path_str = target_path.to_string_lossy().to_string();
+        let _ = std::process::Command::new("cmd")
+            .args(&["/c", "start", "", &path_str])
+            .spawn();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = open::that(&target_path);
     }
 
     Ok(())
@@ -1082,72 +1302,117 @@ pub async fn start_stream_download(
     Ok(task_id)
 }
 
-/// Refresh an expired temporary signed URL using the original source link.
+/// Refresh an expired temporary signed URL using the original source link or a new direct URL.
 #[tauri::command]
 pub async fn refresh_task_link(
     state: State<'_, AppState>,
-    task_id: String,
-    original_url: String,
+    task_id: Option<String>,
+    #[allow(non_snake_case)]
+    taskId: Option<String>,
+    new_url: Option<String>,
+    #[allow(non_snake_case)]
+    newUrl: Option<String>,
+    original_url: Option<String>,
+    #[allow(non_snake_case)]
+    originalUrl: Option<String>,
 ) -> Result<String, String> {
+    let id = task_id.or(taskId).ok_or_else(|| "Missing task_id".to_string())?;
+    let provided_new = new_url.or(newUrl);
+    let provided_orig = original_url.or(originalUrl);
+
     let client = {
         let mgr = state.manager.read();
         mgr.http_client.clone()
     };
 
-    let mut placeholder_meta = DownloadMetadata {
-        id: task_id.clone(),
-        url: original_url.clone(),
-        destination: String::new(),
-        filename: String::new(),
-        total_bytes: 0,
-        status: TaskStatus::Downloading,
-        etag: None,
-        last_modified: None,
-        supports_range: true,
-        num_connections: 8,
-        priority: 1,
-        category: "General".into(),
-        chunks: Vec::new(),
-        created_at: 0,
-        updated_at: 0,
+    let fresh_url = if let Some(ref u) = provided_new {
+        let trimmed = u.trim();
+        if !trimmed.is_empty() {
+            trimmed.to_string()
+        } else {
+            let (source_url, mut placeholder) = {
+                let mgr = state.manager.read();
+                let h = mgr.tasks.get(&id).ok_or_else(|| "Task not found".to_string())?;
+                let s_url = provided_orig.unwrap_or_else(|| h.metadata.url.clone());
+                (s_url, h.metadata.clone())
+            };
+            crate::engine::recovery::RecoveryEngine::refresh_expired_link(
+                &client,
+                &source_url,
+                &mut placeholder,
+            ).await?
+        }
+    } else {
+        let (source_url, mut placeholder) = {
+            let mgr = state.manager.read();
+            let h = mgr.tasks.get(&id).ok_or_else(|| "Task not found".to_string())?;
+            let s_url = provided_orig.unwrap_or_else(|| h.metadata.url.clone());
+            (s_url, h.metadata.clone())
+        };
+        crate::engine::recovery::RecoveryEngine::refresh_expired_link(
+            &client,
+            &source_url,
+            &mut placeholder,
+        ).await?
     };
 
-    let fresh_url = crate::engine::recovery::RecoveryEngine::refresh_expired_link(
-        &client,
-        &original_url,
-        &mut placeholder_meta,
-    ).await?;
-
-    let mut mgr = state.manager.write();
-    if let Some(h) = mgr.tasks.get_mut(&task_id) {
+    let (dest_path, meta_clone, all_tasks) = {
+        let mut mgr = state.manager.write();
+        let h = mgr.tasks.get_mut(&id).ok_or_else(|| "Task not found".to_string())?;
         h.metadata.url = fresh_url.clone();
-    }
+        h.metadata.updated_at = chrono::Utc::now().timestamp_millis();
+        if h.metadata.status == TaskStatus::Failed {
+            h.metadata.status = TaskStatus::Paused;
+        }
+        let dest = PathBuf::from(&h.metadata.destination);
+        let meta = h.metadata.clone();
+        let all = mgr.tasks.values().map(|t| t.metadata.clone()).collect::<Vec<_>>();
+        (dest, meta, all)
+    };
+
+    // Save updated checkpoint .part.json with fresh URL
+    let _ = storage::save_part_json_atomic(&dest_path, &meta_clone).await;
+    let _ = storage::save_tasks_db(&all_tasks).await;
 
     Ok(fresh_url)
+}
+
+/// Send a native Windows Toast notification on download complete.
+#[tauri::command]
+pub async fn notify_download_complete(
+    app: AppHandle,
+    title: String,
+    body: String,
+) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
 }
 
 /// Open the extension folder in Windows Explorer so the user can load it manually.
 #[tauri::command]
 pub async fn open_extension_folder() -> Result<(), String> {
-    let exe_path = std::env::current_exe().map_err(|e| format!("Cannot find exe: {}", e))?;
-    let base_dir = exe_path.parent().ok_or("Cannot find parent dir")?;
-    let ext_dir = base_dir.join("extension");
+    let desktop_dir = dirs::desktop_dir().map(|d| d.join("SuperIDM-Extension"));
+    let appdata_dir = crate::engine::browser_integration::get_embedded_extension_dir();
 
-    // If the extension folder doesn't exist next to the exe, check the workspace root
-    let ext_dir = if ext_dir.exists() {
-        ext_dir
+    let target_dir = if let Some(ref d) = desktop_dir {
+        if d.exists() {
+            d.clone()
+        } else {
+            appdata_dir
+        }
     } else {
-        // Fallback: check relative to the cargo manifest
-        let fallback = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent()
-            .map(|p| p.join("extension"))
-            .unwrap_or(ext_dir);
-        fallback
+        appdata_dir
     };
 
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("explorer.exe")
-            .arg(&ext_dir)
+            .arg(&target_dir)
             .spawn()
             .map_err(|e| format!("Failed to open extension folder: {}", e))?;
     }
@@ -1156,13 +1421,23 @@ pub async fn open_extension_folder() -> Result<(), String> {
 }
 
 /// Poll for pending RPC download requests from the browser extension.
-/// The frontend calls this periodically and auto-starts any queued downloads.
+/// Automatically unminimizes and brings the window to the front when a new request arrives!
 #[tauri::command]
 pub fn poll_rpc_downloads(
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Vec<serde_json::Value> {
     let mut mgr = state.manager.write();
     let pending: Vec<_> = mgr.pending_rpc_downloads.drain(..).collect();
+    if !pending.is_empty() {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_always_on_top(true);
+            let _ = window.set_focus();
+            let _ = window.set_always_on_top(false);
+        }
+    }
     pending
         .into_iter()
         .map(|req| {
@@ -1174,6 +1449,19 @@ pub fn poll_rpc_downloads(
             })
         })
         .collect()
+}
+
+/// Explicitly bring the main window to the front and focus it.
+#[tauri::command]
+pub fn focus_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_always_on_top(true);
+        let _ = window.set_focus();
+        let _ = window.set_always_on_top(false);
+    }
+    Ok(())
 }
 
 /// Get the active RPC security token for browser extension authentication.
@@ -1204,4 +1492,70 @@ pub fn get_extension_path() -> Result<String, String> {
 pub fn launch_browser_extensions(browser: String) -> Result<(), String> {
     crate::engine::browser_integration::launch_browser_extension_page(&browser)
 }
+
+/// Check if the target partition has enough free space for the requested download.
+#[tauri::command]
+pub async fn check_disk_space(
+    state: State<'_, AppState>,
+    destination: Option<String>,
+    required_bytes: u64,
+) -> Result<serde_json::Value, String> {
+    let dest_dir = if let Some(d) = destination {
+        if !d.is_empty() {
+            PathBuf::from(d)
+        } else {
+            state.manager.read().default_download_dir.clone()
+        }
+    } else {
+        state.manager.read().default_download_dir.clone()
+    };
+
+    let available = storage::get_available_disk_space(&dest_dir)
+        .map_err(|e| format!("Could not inspect disk space: {}", e))?;
+
+    let is_sufficient = available >= required_bytes;
+    Ok(serde_json::json!({
+        "available_bytes": available,
+        "required_bytes": required_bytes,
+        "is_sufficient": is_sufficient
+    }))
+}
+
+/// Force-update the decoupled video extractor core (yt-dlp) to the latest version.
+#[tauri::command]
+pub async fn update_extractor_core(state: State<'_, AppState>) -> Result<String, String> {
+    let client = {
+        let mgr = state.manager.read();
+        mgr.http_client.clone()
+    };
+
+    crate::engine::extractor::MediaExtractor::update_ytdlp_core(&client).await
+}
+
+/// Update the main window title for real-time taskbar speed display.
+#[tauri::command]
+pub async fn set_window_title(window: tauri::Window, title: String) -> Result<(), String> {
+    window.set_title(&title).map_err(|e| e.to_string())
+}
+
+/// Open an external URL in the default web browser (or Edge for store links).
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(&["/c", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+    Ok(())
+}
+
 

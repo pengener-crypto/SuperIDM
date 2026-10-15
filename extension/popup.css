@@ -369,6 +369,161 @@ input:checked + .toggle-slider:before {
   box-shadow: 0 0 8px rgba(0, 245, 255, 0.3);
 }
 
+/* ───── Navigation Tabs ───── */
+.popup-tabs {
+  display: flex;
+  background: rgba(14, 20, 32, 0.7);
+  border-bottom: 1px solid rgba(0, 245, 255, 0.15);
+  padding: 4px 8px 0;
+  gap: 4px;
+}
+
+.popup-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #8494a8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.popup-tab:hover {
+  color: #c8d2e0;
+  background: rgba(0, 245, 255, 0.04);
+}
+
+.popup-tab.active {
+  color: #00f5ff;
+  border-bottom-color: #00f5ff;
+  background: rgba(0, 245, 255, 0.08);
+  text-shadow: 0 0 8px rgba(0, 245, 255, 0.5);
+}
+
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block;
+  animation: superidm-popIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ───── Hotkeys Box ───── */
+.hotkey-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(14, 20, 32, 0.85);
+  border: 1px solid rgba(0, 245, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.hotkey-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hotkey-badge {
+  font-family: 'JetBrains Mono', monospace, Consolas, sans-serif;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #00f5ff;
+  background: rgba(0, 245, 255, 0.12);
+  border: 1px solid rgba(0, 245, 255, 0.35);
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-shadow: 0 0 6px rgba(0, 245, 255, 0.2);
+}
+
+.hotkey-desc {
+  font-size: 11px;
+  color: #c8d2e0;
+  text-align: right;
+  line-height: 1.25;
+}
+
+/* ───── Rule Textareas & Buttons ───── */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.rule-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(14, 20, 32, 0.85);
+  border: 1.5px solid rgba(0, 245, 255, 0.25);
+  border-radius: 8px;
+  color: #ffffff;
+  font-family: 'JetBrains Mono', monospace, Consolas, sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+  outline: none;
+  resize: vertical;
+  transition: all 0.2s ease;
+}
+
+.rule-textarea:focus {
+  border-color: #00f5ff;
+  background: rgba(18, 26, 42, 0.95);
+  box-shadow: 0 0 10px rgba(0, 245, 255, 0.35);
+}
+
+.btn-micro {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #00f5ff;
+  background: rgba(0, 245, 255, 0.1);
+  border: 1px solid rgba(0, 245, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-micro:hover {
+  background: #00f5ff;
+  color: #080c14;
+}
+
+.btn-primary-action {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #080c14;
+  background: #00f5ff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
+}
+
+.btn-primary-action:hover {
+  background: #63f7ff;
+  box-shadow: 0 0 16px rgba(0, 245, 255, 0.8);
+  transform: translateY(-1px);
+}
+
+.btn-primary-action:active {
+  transform: translateY(0);
+}
+
 /* ───── Footer ───── */
 .popup-footer {
   padding: 10px 16px;

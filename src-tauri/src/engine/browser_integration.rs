@@ -9,6 +9,8 @@ const EXT_OVERLAY_CSS: &str = include_str!("../../../extension/overlay.css");
 const EXT_POPUP_HTML: &str = include_str!("../../../extension/popup.html");
 const EXT_POPUP_CSS: &str = include_str!("../../../extension/popup.css");
 const EXT_POPUP_JS: &str = include_str!("../../../extension/popup.js");
+const EXT_INSTAGRAM_HELPER: &str = include_str!("../../../extension/instagram_helper.js");
+const EXT_GUIDE: &str = include_str!("../../../extension/طريقة_التثبيت_اليدوي.txt");
 
 const ICON_16: &[u8] = include_bytes!("../../../extension/icons/icon16.png");
 const ICON_32: &[u8] = include_bytes!("../../../extension/icons/icon32.png");
@@ -39,6 +41,8 @@ pub fn extract_and_sync_extension(rpc_token: &str) -> Result<PathBuf, String> {
     std::fs::write(ext_dir.join("popup.html"), EXT_POPUP_HTML).map_err(|e| e.to_string())?;
     std::fs::write(ext_dir.join("popup.css"), EXT_POPUP_CSS).map_err(|e| e.to_string())?;
     std::fs::write(ext_dir.join("popup.js"), EXT_POPUP_JS).map_err(|e| e.to_string())?;
+    std::fs::write(ext_dir.join("instagram_helper.js"), EXT_INSTAGRAM_HELPER).map_err(|e| e.to_string())?;
+    std::fs::write(ext_dir.join("طريقة_التثبيت_اليدوي.txt"), EXT_GUIDE).map_err(|e| e.to_string())?;
 
     // Write icons
     std::fs::write(icons_dir.join("icon16.png"), ICON_16).map_err(|e| e.to_string())?;
@@ -62,6 +66,8 @@ pub fn extract_and_sync_extension(rpc_token: &str) -> Result<PathBuf, String> {
             let _ = std::fs::write(desk_ext.join("popup.html"), EXT_POPUP_HTML);
             let _ = std::fs::write(desk_ext.join("popup.css"), EXT_POPUP_CSS);
             let _ = std::fs::write(desk_ext.join("popup.js"), EXT_POPUP_JS);
+            let _ = std::fs::write(desk_ext.join("instagram_helper.js"), EXT_INSTAGRAM_HELPER);
+            let _ = std::fs::write(desk_ext.join("طريقة_التثبيت_اليدوي.txt"), EXT_GUIDE);
             let _ = std::fs::write(desk_icons.join("icon16.png"), ICON_16);
             let _ = std::fs::write(desk_icons.join("icon32.png"), ICON_32);
             let _ = std::fs::write(desk_icons.join("icon48.png"), ICON_48);
@@ -118,10 +124,15 @@ pub fn register_browser_registry(browser: &str) -> Result<String, String> {
     Ok(format!("Extension registered for {}", browser))
 }
 
-/// Open browser to extensions management page with 1-click loading assistance
+/// Open browser to extensions management page or official store with 1-click loading assistance
 pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
+    let edge_store_url = "https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem";
+    let is_edge_store = browser.eq_ignore_ascii_case("edge_store");
+    let is_edge = matches!(browser.to_lowercase().as_str(), "edge" | "microsoft edge" | "edge_store" | "edge_dev");
+    
     let target_url = match browser.to_lowercase().as_str() {
-        "edge" | "microsoft edge" => "edge://extensions",
+        "edge_store" => edge_store_url,
+        "edge" | "microsoft edge" | "edge_dev" => "edge://extensions",
         "brave" => "brave://extensions",
         "opera" => "opera://extensions",
         "vivaldi" => "vivaldi://extensions",
@@ -130,19 +141,68 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        let browser_cmd = match browser.to_lowercase().as_str() {
-            "edge" | "microsoft edge" => "msedge",
-            "brave" => "brave",
-            "opera" => "opera",
-            "vivaldi" => "vivaldi",
-            _ => "chrome",
+        let browser_candidates: Vec<PathBuf> = match browser.to_lowercase().as_str() {
+            "edge" | "microsoft edge" | "edge_store" | "edge_dev" => vec![
+                PathBuf::from(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
+                PathBuf::from(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+            ],
+            "brave" => vec![
+                PathBuf::from(r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"),
+                dirs::data_local_dir().map(|p| p.join(r"BraveSoftware\Brave-Browser\Application\brave.exe")).unwrap_or_default(),
+            ],
+            "opera" => vec![
+                dirs::data_local_dir().map(|p| p.join(r"Programs\Opera\launcher.exe")).unwrap_or_default(),
+                PathBuf::from(r"C:\Program Files\Opera\launcher.exe"),
+            ],
+            _ => vec![
+                PathBuf::from(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+                PathBuf::from(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+                dirs::data_local_dir().map(|p| p.join(r"Google\Chrome\Application\chrome.exe")).unwrap_or_default(),
+            ],
         };
 
-        // Try direct browser launch or fallback to default url opening
-        if Command::new(browser_cmd).arg(target_url).spawn().is_err() {
-            let _ = Command::new("cmd")
-                .args(&["/c", "start", target_url])
-                .spawn();
+        // Determine extension directory to pass --load-extension for non-store browsers
+        let ext_dir = if let Some(desk) = dirs::desktop_dir() {
+            let d = desk.join("SuperIDM-Extension");
+            if d.exists() { d } else { get_embedded_extension_dir() }
+        } else {
+            get_embedded_extension_dir()
+        };
+        let load_ext_arg = format!("--load-extension={}", ext_dir.to_string_lossy());
+
+        let mut launched = false;
+        for exe in browser_candidates {
+            if exe.exists() {
+                let mut cmd = Command::new(&exe);
+                if is_edge_store {
+                    cmd.arg(target_url);
+                } else {
+                    cmd.args(&[&load_ext_arg, target_url]);
+                }
+                if cmd.spawn().is_ok() {
+                    launched = true;
+                    break;
+                }
+            }
+        }
+
+        // If not found by candidate paths, launch via cmd start with browser command name
+        if !launched {
+            let browser_name = match browser.to_lowercase().as_str() {
+                "edge" | "microsoft edge" => "msedge",
+                "brave" => "brave",
+                "opera" => "opera",
+                _ => "chrome",
+            };
+            if is_edge {
+                let _ = Command::new("cmd")
+                    .args(&["/c", "start", "", target_url])
+                    .spawn();
+            } else {
+                let _ = Command::new("cmd")
+                    .args(&["/c", "start", "", browser_name, &load_ext_arg, target_url])
+                    .spawn();
+            }
         }
     }
 

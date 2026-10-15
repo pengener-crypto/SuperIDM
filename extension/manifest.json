@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SuperIDM — Download Accelerator",
-  "version": "2.5.0",
+  "version": "2.7.0",
   "description": "Intercept downloads, grab streaming videos, and accelerate downloads with SuperIDM desktop engine.",
   "icons": {
     "16": "icons/icon16.png",
@@ -23,10 +23,17 @@
   },
   "content_scripts": [
     {
+      "matches": ["*://*.instagram.com/*"],
+      "js": ["instagram_helper.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "css": ["overlay.css"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "permissions": [
@@ -36,7 +43,8 @@
     "activeTab",
     "scripting",
     "webRequest",
-    "notifications"
+    "notifications",
+    "cookies"
   ],
   "host_permissions": [
     "<all_urls>"

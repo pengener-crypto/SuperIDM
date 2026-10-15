@@ -52,7 +52,7 @@ impl MediaExtractor {
             eprintln!("[SuperIDM] Clean machine detected. Downloading standalone media extractor core to: {:?}", local_bin);
             let resp = client
                 .get("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
-                .header("User-Agent", "SuperIDM-Core/2.5.0")
+                .header("User-Agent", "SuperIDM-Core/2.6.1")
                 .send()
                 .await
                 .map_err(|e| format!("Failed to download video extractor core: {}", e))?;
@@ -68,6 +68,69 @@ impl MediaExtractor {
         }
 
         Err("Unable to locate or bootstrap media extractor".to_string())
+    }
+
+    /// Force-update or download the latest standalone yt-dlp binary to `%LOCALAPPDATA%/SuperIDM/bin/yt-dlp.exe`.
+    ///
+    /// This decouples the extractor engine from the application installer,
+    /// allowing instant recovery when platforms (YouTube, TikTok, Facebook) update their layouts.
+    pub async fn update_ytdlp_core(client: &Client) -> Result<String, String> {
+        let local_bin = Self::get_local_ytdlp_path()
+            .ok_or_else(|| "Local AppData directory not found".to_string())?;
+
+        if let Some(parent) = local_bin.parent() {
+            let _ = tokio::fs::create_dir_all(parent).await;
+        }
+
+        // Try yt-dlp's built-in self-update command first if binary exists
+        if local_bin.exists() {
+            if let Ok(output) = std::process::Command::new(&local_bin).arg("-U").output() {
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                if output.status.success() {
+                    let msg = if !stdout.is_empty() { stdout } else { stderr };
+                    return Ok(format!("yt-dlp: {}", msg));
+                }
+            }
+        }
+
+        // Download directly from official GitHub releases (atomic update)
+        let tmp_bin = local_bin.with_extension("exe.tmp");
+        eprintln!("[SuperIDM] Fetching latest standalone extractor core to: {:?}", tmp_bin);
+
+        let resp = client
+            .get("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
+            .header("User-Agent", "SuperIDM-Core/2.6.1")
+            .send()
+            .await
+            .map_err(|e| format!("Network error checking for extractor updates: {}", e))?;
+
+        if !resp.status().is_success() {
+            return Err(format!("Server returned HTTP {} when fetching extractor", resp.status()));
+        }
+
+        let bytes = resp.bytes().await.map_err(|e| format!("Failed reading extractor binary bytes: {}", e))?;
+        if bytes.len() < 1_000_000 {
+            return Err("Received corrupted or truncated binary from update server".to_string());
+        }
+
+        tokio::fs::write(&tmp_bin, &bytes).await
+            .map_err(|e| format!("Failed writing temp extractor: {}", e))?;
+
+        // Atomic rename
+        tokio::fs::rename(&tmp_bin, &local_bin).await
+            .map_err(|e| format!("Failed committing updated extractor binary: {}", e))?;
+
+        // Query new version
+        let version = std::process::Command::new(&local_bin)
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_else(|| "latest".to_string());
+
+        Ok(format!("Video extractor core updated to version {}", version))
     }
 
     /// Locate the yt-dlp binary across PATH, Python Scripts, and WinGet directories.
@@ -169,22 +232,117 @@ impl MediaExtractor {
         None
     }
 
+    /// Extract a clean HTTP/HTTPS URL from markdown links e.g. [Title](https://...) or raw text.
+    pub fn clean_target_url(raw: &str) -> String {
+        let trimmed = raw.trim();
+        // 1. Markdown link format: [title](url)
+        if let Some(start) = trimmed.find("](") {
+            if let Some(end) = trimmed[start + 2..].find(')') {
+                let inner = &trimmed[start + 2..start + 2 + end];
+                if inner.starts_with("http://") || inner.starts_with("https://") {
+                    return inner.trim().to_string();
+                }
+            }
+        }
+        // 2. Text containing URL
+        if let Some(pos) = trimmed.find("https://").or_else(|| trimmed.find("http://")) {
+            let after = &trimmed[pos..];
+            let end_pos = after.find(|c: char| c.is_whitespace() || c == ')' || c == ']' || c == '"' || c == '\'').unwrap_or(after.len());
+            return after[..end_pos].to_string();
+        }
+        trimmed.to_string()
+    }
+
     /// Check if a URL is from a known video/media platform that requires signature/token extraction.
+    /// Comprehensive list of video/audio platforms supported via yt-dlp.
+    /// yt-dlp supports 1000+ sites; this list covers the major ones for UI routing.
     pub fn is_platform_url(url: &str) -> bool {
-        let u = url.to_lowercase();
-        u.contains("youtube.com")
-            || u.contains("youtu.be")
+        let cleaned = Self::clean_target_url(url);
+        let u = cleaned.to_lowercase();
+        // --- Major Video Platforms ---
+        u.contains("youtube.com") || u.contains("youtu.be") || u.contains("youtube-nocookie.com")
             || u.contains("tiktok.com")
-            || u.contains("vimeo.com")
-            || u.contains("twitter.com")
-            || u.contains("x.com")
-            || u.contains("instagram.com")
-            || u.contains("facebook.com")
-            || u.contains("fb.watch")
-            || u.contains("dailymotion.com")
-            || u.contains("bilibili.com")
-            || u.contains("twitch.tv")
-            || u.contains("reddit.com")
+            || u.contains("vimeo.com") || u.contains("player.vimeo.com")
+            || u.contains("twitter.com") || u.contains("x.com")
+            || ((u.contains("instagram.com") || u.contains("instagr.am")) && (
+                u.contains("/reel/") || u.contains("/p/") || u.contains("/tv/") || u.contains("/share/")
+                || (u.contains("/reels/") && !u.ends_with("/reels/") && !u.ends_with("/reels") && u.split("/reels/").nth(1).map(|s| !s.trim_matches('/').is_empty()).unwrap_or(false))
+            ))
+            || u.contains("facebook.com") || u.contains("fb.watch") || u.contains("fb.gg")
+            || u.contains("dailymotion.com") || u.contains("dai.ly")
+            || u.contains("bilibili.com") || u.contains("b23.tv")
+            || u.contains("twitch.tv") || u.contains("clips.twitch.tv")
+            || u.contains("reddit.com") || u.contains("v.redd.it")
+            // --- Streaming & Live ---
+            || u.contains("kick.com")
+            || u.contains("rumble.com")
+            || u.contains("odysee.com") || u.contains("lbry.tv")
+            || u.contains("bitchute.com")
+            || u.contains("rutube.ru")
+            || u.contains("ok.ru") || u.contains("odnoklassniki.ru")
+            || u.contains("vk.com") || u.contains("vk.video")
+            || u.contains("coub.com")
+            || u.contains("nimo.tv")
+            // --- Audio Platforms ---
+            || u.contains("soundcloud.com")
+            || u.contains("bandcamp.com")
+            || u.contains("audiomack.com")
+            || u.contains("mixcloud.com")
+            // --- News & Education ---
+            || u.contains("ted.com")
+            || u.contains("cnn.com")
+            || u.contains("bbc.co.uk") || u.contains("bbc.com")
+            || u.contains("aljazeera.com") || u.contains("aljazeera.net")
+            // --- Asian Platforms ---
+            || u.contains("nicovideo.jp") || u.contains("nico.ms")
+            || u.contains("weibo.com")
+            || u.contains("iqiyi.com")
+            || u.contains("youku.com")
+            || u.contains("v.qq.com")
+            || u.contains("mgtv.com")
+            // --- Arab Platforms ---
+            || u.contains("shahid.mbc.net") || u.contains("shahid.net")
+            || u.contains("cinemana.shabakaty.com")
+            || u.contains("anghami.com")
+            // --- File/Video Hosting ---
+            || u.contains("streamable.com")
+            || u.contains("vidio.com")
+            || u.contains("loom.com")
+            || u.contains("clipchamp.com")
+            || u.contains("streamtape.com") || u.contains("streamlare.com")
+            || u.contains("doodstream.com") || u.contains("dood.")
+            || u.contains("vidoza.net")
+            || u.contains("mp4upload.com")
+            || u.contains("mixdrop.co") || u.contains("mixdrop.to")
+            // --- Sports ---
+            || u.contains("espn.com")
+            || u.contains("mlb.com")
+            // --- Misc Popular ---
+            || u.contains("pinterest.com") || u.contains("pin.it")
+            || u.contains("tumblr.com")
+            || u.contains("imgur.com")
+            || u.contains("9gag.com")
+            || u.contains("linkedin.com")
+            || u.contains("snapchat.com")
+            || u.contains("threads.net")
+    }
+
+    /// Check if a URL or filename points to a direct downloadable file (not a streaming video).
+    /// If it looks like a direct file, we use our multi-connection HTTP engine.
+    /// If it looks like a streaming media platform, we try yt-dlp first.
+    pub fn is_likely_direct_file(name_or_url: &str) -> bool {
+        let u = name_or_url.to_lowercase();
+        let path = u.split('?').next().unwrap_or(&u);
+        let direct_exts = [
+            ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz",
+            ".exe", ".msi", ".dmg", ".deb", ".rpm", ".appimage",
+            ".iso", ".img",
+            ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+            ".apk", ".ipa", ".aab",
+            ".torrent",
+            ".bin", ".dat", ".cab",
+        ];
+        direct_exts.iter().any(|ext| path.ends_with(ext) || path.contains(ext))
     }
 
     /// Download video/audio via the extraction engine with real-time progress callbacks.
@@ -224,6 +382,8 @@ impl MediaExtractor {
         };
         let output_template = dest_dir.join("%(title)s.%(ext)s").to_string_lossy().to_string();
 
+        let clean_url = Self::clean_target_url(url);
+
         let mut cmd = tokio::process::Command::new(bin);
         cmd.arg("-f")
             .arg(&format_arg_str)
@@ -248,7 +408,7 @@ impl MediaExtractor {
             }
         }
 
-        cmd.arg(url);
+        cmd.arg(&clean_url);
 
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
@@ -333,7 +493,12 @@ impl MediaExtractor {
                             raw_percent = p_str.parse::<f64>().unwrap_or(0.0) / 100.0;
                         }
                         if *tok == "of" && i + 1 < tokens.len() {
-                            if let Some(tb) = Self::parse_bytes_str(tokens[i + 1]) {
+                            let raw_size_tok = if tokens[i + 1] == "~" && i + 2 < tokens.len() {
+                                tokens[i + 2]
+                            } else {
+                                tokens[i + 1]
+                            };
+                            if let Some(tb) = Self::parse_bytes_str(raw_size_tok) {
                                 if is_audio_pass {
                                     audio_bytes = tb;
                                 } else {
@@ -387,13 +552,46 @@ impl MediaExtractor {
                 final_path = Some(merged_file);
             }
 
-            let final_pb = final_path.unwrap_or_else(|| dest_dir.to_path_buf());
+            let final_pb = if let Some(fp) = final_path {
+                fp
+            } else {
+                Self::find_newest_media_file(dest_dir).await.unwrap_or_else(|| dest_dir.to_path_buf())
+            };
+            let disk_bytes = if let Ok(meta) = tokio::fs::metadata(&final_pb).await {
+                meta.len()
+            } else {
+                0
+            };
+            let reported_total = if disk_bytes > 0 { disk_bytes } else { total_bytes };
             let fname = final_pb.file_name().map(|n| n.to_string_lossy().to_string());
-            let _ = progress_tx.send((1.0, 0.0, total_bytes, total_bytes, 0.0, true, fname)).await;
+            let _ = progress_tx.send((1.0, 0.0, reported_total, reported_total, 0.0, true, fname)).await;
             Ok(final_pb)
         } else {
             Err("Video extraction download failed".into())
         }
+    }
+
+    /// Find the newest media file downloaded in the destination directory
+    pub async fn find_newest_media_file(dest_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+        let mut newest: Option<(std::path::PathBuf, std::time::SystemTime)> = None;
+        if let Ok(mut entries) = tokio::fs::read_dir(dest_dir).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    let ext_low = ext.to_lowercase();
+                    if ext_low == "mp4" || ext_low == "mkv" || ext_low == "webm" || ext_low == "mp3" || ext_low == "m4a" {
+                        if let Ok(meta) = entry.metadata().await {
+                            if let Ok(modified) = meta.modified() {
+                                if newest.as_ref().map(|(_, t)| modified > *t).unwrap_or(true) {
+                                    newest = Some((path, modified));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        newest.map(|(p, _)| p)
     }
 
     /// Automatically find matching video and audio part files in dest_dir and merge them with FFmpeg.
@@ -454,8 +652,10 @@ impl MediaExtractor {
     }
 
     fn parse_bytes_str(s: &str) -> Option<u64> {
-        let clean = s.trim().to_lowercase();
-        let num_str = clean.trim_end_matches(|c: char| !c.is_numeric() && c != '.');
+        let clean = s.trim().trim_start_matches('~').trim().to_lowercase();
+        let num_str = clean
+            .trim_start_matches(|c: char| !c.is_numeric() && c != '.')
+            .trim_end_matches(|c: char| !c.is_numeric() && c != '.');
         let val: f64 = num_str.parse().ok()?;
         if clean.ends_with("gib") || clean.ends_with("gb") {
             Some((val * 1024.0 * 1024.0 * 1024.0) as u64)
@@ -469,8 +669,10 @@ impl MediaExtractor {
     }
 
     fn parse_speed_str(s: &str) -> f64 {
-        let clean = s.trim().to_lowercase();
-        let num_str = clean.trim_end_matches(|c: char| !c.is_numeric() && c != '.');
+        let clean = s.trim().trim_start_matches('~').trim().to_lowercase();
+        let num_str = clean
+            .trim_start_matches(|c: char| !c.is_numeric() && c != '.')
+            .trim_end_matches(|c: char| !c.is_numeric() && c != '.');
         let val: f64 = num_str.parse().unwrap_or(0.0);
         if clean.contains("gib/s") || clean.contains("gb/s") {
             val * 1024.0 * 1024.0 * 1024.0
@@ -504,7 +706,8 @@ impl MediaExtractor {
 
     /// Extract media information and available formats from any webpage or video URL.
     pub async fn extract_info(client: &Client, url: &str) -> Result<MediaExtractionInfo, String> {
-        let clean_url = url.trim();
+        let clean_url_str = Self::clean_target_url(url);
+        let clean_url = clean_url_str.as_str();
 
         // 1. Cinemana Shabakaty special extractor
         if clean_url.contains("cinemana.shabakaty.com") {
@@ -520,8 +723,8 @@ impl MediaExtractor {
         match Self::extract_with_ytdlp(clean_url) {
             Ok(info) => return Ok(info),
             Err(e) => {
-                // If it's explicitly a video platform, return the actual extraction error
-                if clean_url.contains("youtube.com") || clean_url.contains("youtu.be") || clean_url.contains("tiktok.com") {
+                // If it's a known video platform, return the actual extraction error — don't fall back to HTML sniffer
+                if Self::is_platform_url(clean_url) {
                     return Err(e);
                 }
             }
@@ -617,6 +820,7 @@ impl MediaExtractor {
 
     /// Invoke `yt-dlp` CLI to extract clean JSON metadata.
     fn extract_with_ytdlp(url: &str) -> Result<MediaExtractionInfo, String> {
+        let clean_url = Self::clean_target_url(url);
         let bin = Self::find_ytdlp_binary().ok_or_else(|| "yt-dlp binary not found on system".to_string())?;
 
         let mut cmd = Command::new(bin);
@@ -625,7 +829,7 @@ impl MediaExtractor {
             .arg("--no-warnings")
             .arg("--user-agent")
             .arg(DEFAULT_USER_AGENT)
-            .arg(url);
+            .arg(&clean_url);
 
         #[cfg(target_os = "windows")]
         {
@@ -672,6 +876,10 @@ impl MediaExtractor {
                 let vcodec = f.get("vcodec").and_then(|v| v.as_str()).map(|s| s.to_string());
                 let acodec = f.get("acodec").and_then(|v| v.as_str()).map(|s| s.to_string());
                 let direct_url = f.get("url").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+                if ext == "mhtml" || ext == "webp" || ext == "jpg" || ext == "jpeg" || ext == "png" || format_id.starts_with("sb") || resolution.contains("storyboard") {
+                    continue;
+                }
 
                 if !format_id.is_empty() {
                     formats.push(MediaFormat {
@@ -959,5 +1167,37 @@ impl MediaExtractor {
             search_from = abs_pos + extension.len();
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_target_url_markdown() {
+        let input = "[Creatina para tus Músculos o Cerebro? | Casi Creativo](https://www.youtube.com/watch?v=ew0RSjgDgH8)";
+        assert_eq!(
+            MediaExtractor::clean_target_url(input),
+            "https://www.youtube.com/watch?v=ew0RSjgDgH8"
+        );
+    }
+
+    #[test]
+    fn test_clean_target_url_surrounding_text() {
+        let input = "Check this video: https://www.youtube.com/watch?v=ew0RSjgDgH8 and let me know";
+        assert_eq!(
+            MediaExtractor::clean_target_url(input),
+            "https://www.youtube.com/watch?v=ew0RSjgDgH8"
+        );
+    }
+
+    #[test]
+    fn test_clean_target_url_plain() {
+        let input = "https://www.youtube.com/watch?v=ew0RSjgDgH8";
+        assert_eq!(
+            MediaExtractor::clean_target_url(input),
+            "https://www.youtube.com/watch?v=ew0RSjgDgH8"
+        );
     }
 }

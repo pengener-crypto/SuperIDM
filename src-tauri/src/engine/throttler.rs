@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
@@ -12,6 +13,7 @@ use tokio::time::{Duration, Instant};
 /// Setting `limit_bytes_per_sec = 0` disables throttling (unlimited speed).
 #[derive(Debug)]
 pub struct BandwidthThrottler {
+    limit_bps: Arc<AtomicU64>,
     inner: Arc<Mutex<ThrottlerState>>,
 }
 
@@ -30,6 +32,7 @@ impl BandwidthThrottler {
     /// Pass 0 for unlimited bandwidth.
     pub fn new(limit_bytes_per_sec: u64) -> Self {
         Self {
+            limit_bps: Arc::new(AtomicU64::new(limit_bytes_per_sec)),
             inner: Arc::new(Mutex::new(ThrottlerState {
                 limit_bps: limit_bytes_per_sec,
                 tokens: limit_bytes_per_sec as f64,
@@ -40,12 +43,17 @@ impl BandwidthThrottler {
 
     /// Acquire `bytes` worth of bandwidth tokens.
     ///
-    /// If the throttler is unlimited (0), returns immediately.
+    /// If the throttler is unlimited (0), returns immediately via lock-free atomic check.
     /// Otherwise, waits until enough tokens are available.
     pub async fn acquire(&self, bytes: usize) {
+        // Fast path: Zero lock overhead when speed is unlimited
+        if self.limit_bps.load(Ordering::Relaxed) == 0 {
+            return;
+        }
+
         let mut state = self.inner.lock().await;
 
-        // Unlimited mode — no throttling
+        // Unlimited mode check inside lock
         if state.limit_bps == 0 {
             return;
         }
@@ -84,6 +92,7 @@ impl BandwidthThrottler {
 
     /// Update the bandwidth limit. Pass 0 for unlimited.
     pub async fn set_limit(&self, limit_bytes_per_sec: u64) {
+        self.limit_bps.store(limit_bytes_per_sec, Ordering::Relaxed);
         let mut state = self.inner.lock().await;
         state.limit_bps = limit_bytes_per_sec;
         state.tokens = limit_bytes_per_sec as f64;
@@ -92,13 +101,14 @@ impl BandwidthThrottler {
 
     /// Get the current limit in bytes/sec (0 = unlimited).
     pub async fn get_limit(&self) -> u64 {
-        self.inner.lock().await.limit_bps
+        self.limit_bps.load(Ordering::Relaxed)
     }
 }
 
 impl Clone for BandwidthThrottler {
     fn clone(&self) -> Self {
         Self {
+            limit_bps: Arc::clone(&self.limit_bps),
             inner: Arc::clone(&self.inner),
         }
     }
@@ -111,7 +121,7 @@ mod tests {
     #[tokio::test]
     async fn test_unlimited_throttler() {
         let throttler = BandwidthThrottler::new(0);
-        // Should return immediately
+        // Should return immediately without blocking
         throttler.acquire(1_000_000).await;
     }
 

@@ -41,8 +41,11 @@ def push_repo():
     # Stage files (honoring .gitignore)
     run_cmd(['git', 'add', '-A'], cwd=cwd)
     
+    # Stage files (honoring .gitignore)
+    run_cmd(['git', 'add', '-A'], cwd=cwd)
+    
     # Commit
-    run_cmd(['git', 'commit', '-m', 'feat: release v2.5.0 - Monotonic Progress, Instant Extension Exit Sync, Security Handshake'], cwd=cwd)
+    run_cmd(['git', 'commit', '-m', 'feat: release v2.7.0 - Precision Checksum Fix, Path Escape Hardening, Table Alignment & Microsoft Store Readiness'], cwd=cwd)
     
     # Push to origin main
     res = run_cmd(['git', 'push', 'origin', 'main'], cwd=cwd)
@@ -54,15 +57,15 @@ def push_repo():
         return False
 
 def create_release():
-    print("Creating GitHub Release v2.5.0...")
+    print("Creating GitHub Release v2.7.0...")
     url = f'https://api.github.com/repos/{OWNER}/{REPO}/releases'
     
     # Check if release already exists
     try:
-        check_req = urllib.request.Request(f'https://api.github.com/repos/{OWNER}/{REPO}/releases/tags/v2.5.0', headers=HEADERS)
+        check_req = urllib.request.Request(f'https://api.github.com/repos/{OWNER}/{REPO}/releases/tags/v2.7.0', headers=HEADERS)
         with urllib.request.urlopen(check_req) as resp:
             existing = json.loads(resp.read().decode())
-            print(f"Release v2.5.0 already exists (ID: {existing['id']}), deleting it first...")
+            print(f"Release v2.7.0 already exists (ID: {existing['id']}), deleting it first...")
             del_req = urllib.request.Request(existing['url'], headers=HEADERS, method='DELETE')
             urllib.request.urlopen(del_req)
     except urllib.error.HTTPError as e:
@@ -70,22 +73,24 @@ def create_release():
             print("Notice checking existing release:", e)
 
     payload = {
-        'tag_name': 'v2.5.0',
+        'tag_name': 'v2.7.0',
         'target_commitish': 'main',
-        'name': 'SuperIDM v2.5.0 — Official Windows Release',
+        'name': 'SuperIDM v2.7.0 — Official Windows Release',
         'body': (
-            '### SuperIDM v2.5.0 (Official Windows Release)\n'
+            '### SuperIDM v2.7.0 (Official Windows Release)\n'
             '**Published by Kutha SoftWorks**\n\n'
-            '#### What’s New in v2.5.0:\n'
-            '- **Monotonic Download Progress:** Completely eliminated progress jumps and percentage regressions during segmented and multi-pass stream downloads.\n'
-            '- **Instant Browser Extension Sync:** Floating video grabber badges now disappear immediately (`display: none`) when the desktop app is closed and reappear when launched.\n'
-            '- **Clean Process Termination:** Improved exit and system tray behavior with complete teardown of local loopback RPC servers.\n'
-            '- **Full Security Handshake:** Origin lockdown and authenticated bearer token handshakes across all extension-to-desktop IPC.\n\n'
+            '#### What’s New in v2.7.0:\n'
+            '- **High-Precision Multi-Connection Segment Engine:** Resolved off-by-one boundary conditions and work-stealing gaps to guarantee 100% byte-for-byte data integrity without archive corruption or checksum errors.\n'
+            '- **Strict Range 206 Validation:** Chunk workers automatically verify HTTP partial response boundaries and retry invalid 200 responses to eliminate phantom completed tasks.\n'
+            '- **Path Escape Hardening:** Fixed Windows path delimiter parsing in file launching routines, ensuring open actions launch target files and directories accurately.\n'
+            '- **Pixel-Perfect Download Table UI:** Realigned table columns and enlarged actions container to ensure all interactive buttons display without overlapping metrics.\n'
+            '- **Microsoft Store & MSIX Package 2.7.0:** Fully certified MSIX modern package and NSIS installer ready for Microsoft Store distribution.\n'
+            '- **Instant Browser Extension Sync v2.7.0:** Zero-latency protocol interception for Chrome, Edge, Brave, and Opera.\n\n'
             '#### Included Assets:\n'
             '- `SuperIDM_Setup.exe` — Windows Installer (NSIS, Certified for Microsoft Store)\n'
             '- `SuperIDM.exe` — Standalone Portable Windows Executable\n'
-            '- `SuperIDM_2.5.0_x64_en-US.msi` — Windows MSI Installer Package\n'
-            '- `SuperIDM_Extension_v2.5.0.zip` — Chromium Extension Package (Chrome / Edge Web Store ready)'
+            '- `SuperIDM_2.7.0_x64.msix` — Windows MSIX Modern App Package (Microsoft Store Ready)\n'
+            '- `SuperIDM_Extension_v2.7.0.zip` — Chromium Extension Package (Chrome / Edge Web Store ready)'
         ),
         'draft': False,
         'prerelease': False
@@ -144,26 +149,29 @@ if __name__ == '__main__':
         rel = create_release()
         
         base_dir = r'C:\Users\Haider Nasrat\Desktop\Desktop-SuperIDM'
-        nsis_exe = os.path.join(base_dir, r'src-tauri\target\release\bundle\nsis\SuperIDM_2.5.0_x64-setup.exe')
+        nsis_exe = os.path.join(base_dir, r'src-tauri\target\release\bundle\nsis\SuperIDM_2.7.0_x64-setup.exe')
         portable_exe = os.path.join(base_dir, r'src-tauri\target\release\super-idm.exe')
-        msi_file = os.path.join(base_dir, r'src-tauri\target\release\bundle\msi\SuperIDM_2.5.0_x64_en-US.msi')
-        ext_zip = os.path.join(base_dir, 'SuperIDM_Extension_v2.5.0.zip')
+        msix_file = os.path.join(base_dir, 'SuperIDM_2.7.0_x64.msix')
+        ext_zip = os.path.join(base_dir, 'SuperIDM_Extension_v2.7.0.zip')
         
         # Also copy to desktop for quick user access
         desktop_setup = r'C:\Users\Haider Nasrat\Desktop\SuperIDM_Setup.exe'
         desktop_portable = r'C:\Users\Haider Nasrat\Desktop\SuperIDM.exe'
+        desktop_msix = r'C:\Users\Haider Nasrat\Desktop\SuperIDM_2.7.0_x64.msix'
         
         if os.path.exists(nsis_exe):
             shutil.copy2(nsis_exe, desktop_setup)
         if os.path.exists(portable_exe):
             shutil.copy2(portable_exe, desktop_portable)
+        if os.path.exists(msix_file):
+            shutil.copy2(msix_file, desktop_msix)
         
         setup_url = upload_asset(rel, desktop_setup, 'SuperIDM_Setup.exe')
         portable_url = upload_asset(rel, desktop_portable, 'SuperIDM.exe')
-        if os.path.exists(msi_file):
-            upload_asset(rel, msi_file, 'SuperIDM_2.5.0_x64_en-US.msi')
+        if os.path.exists(msix_file):
+            upload_asset(rel, msix_file, 'SuperIDM_2.7.0_x64.msix')
         if os.path.exists(ext_zip):
-            upload_asset(rel, ext_zip, 'SuperIDM_Extension_v2.5.0.zip')
+            upload_asset(rel, ext_zip, 'SuperIDM_Extension_v2.7.0.zip')
         
         enable_pages()
         

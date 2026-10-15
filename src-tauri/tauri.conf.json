@@ -1,11 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui-app/tauri/main/.schema/config.schema.json",
   "productName": "SuperIDM",
-  "version": "2.5.0",
+  "version": "2.7.0",
   "identifier": "com.superidm.desktop",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:1420",
+    "devUrl": null,
     "beforeDevCommand": "",
     "beforeBuildCommand": ""
   },

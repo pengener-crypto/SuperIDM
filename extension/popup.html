@@ -19,68 +19,132 @@
     </div>
   </header>
 
-  <!-- Quick Download -->
-  <section class="section">
-    <label class="section-label">Quick Download</label>
-    <div class="input-row">
-      <input type="text" id="urlInput" placeholder="Paste URL here..." class="url-input">
-      <button id="dlBtn" class="dl-btn" title="Send to SuperIDM">⚡</button>
-    </div>
-  </section>
+  <!-- Navigation Tabs -->
+  <nav class="popup-tabs">
+    <button class="popup-tab active" id="tabBtnQuick" data-target="tabQuick">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      <span>Quick DL</span>
+    </button>
+    <button class="popup-tab" id="tabBtnIntercept" data-target="tabIntercept">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5z"/></svg>
+      <span>Capture & Keys</span>
+    </button>
+    <button class="popup-tab" id="tabBtnRules" data-target="tabRules">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      <span>File Types</span>
+    </button>
+  </nav>
 
-  <!-- Detected Media -->
-  <section class="section">
-    <label class="section-label">
-      Detected Media
-      <span id="mediaCount" class="media-count">0</span>
-    </label>
-    <div id="mediaList" class="media-list">
-      <div class="media-empty">No media detected on this tab</div>
-    </div>
-  </section>
+  <!-- TAB 1: Quick Download & Detected Media -->
+  <div class="tab-pane active" id="tabQuick">
+    <section class="section">
+      <label class="section-label">Quick Download</label>
+      <div class="input-row">
+        <input type="text" id="urlInput" placeholder="Paste URL here..." class="url-input">
+        <button id="dlBtn" class="dl-btn" title="Send to SuperIDM"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></button>
+      </div>
+    </section>
 
-  <!-- Settings -->
-  <section class="section">
-    <label class="section-label">Settings</label>
-
-    <div class="toggle-row">
-      <span class="toggle-label">Intercept Browser Downloads</span>
-      <label class="toggle-switch">
-        <input type="checkbox" id="togIntercept" checked>
-        <span class="toggle-slider"></span>
+    <section class="section">
+      <label class="section-label">
+        Detected Media Streams
+        <span id="mediaCount" class="media-count">0</span>
       </label>
-    </div>
+      <div id="mediaList" class="media-list">
+        <div class="media-empty">No media detected on this tab</div>
+      </div>
+    </section>
+  </div>
 
-    <div class="toggle-row">
-      <span class="toggle-label">Show Video Grabber</span>
-      <label class="toggle-switch">
-        <input type="checkbox" id="togGrabber" checked>
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
+  <!-- TAB 2: Capture & Hotkeys -->
+  <div class="tab-pane" id="tabIntercept">
+    <section class="section">
+      <label class="section-label">Capture Settings</label>
 
-    <div class="toggle-row">
-      <span class="toggle-label">Sniff Media Streams</span>
-      <label class="toggle-switch">
-        <input type="checkbox" id="togSniff" checked>
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
+      <div class="toggle-row">
+        <span class="toggle-label" title="Intercept download links immediately upon clicking them in webpage">Instant Click Interception</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="togClickIntercept" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
 
-    <div class="toggle-row">
-      <span class="toggle-label">Min File Size (MB)</span>
-      <input type="number" id="minSize" value="1" min="0" max="1000" class="size-input">
-    </div>
+      <div class="toggle-row">
+        <span class="toggle-label" title="Intercept browser downloads shelf and dynamic redirect links">Catch Browser Downloads</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="togIntercept" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
 
-    <div class="token-row">
-      <span class="toggle-label" title="Shared secret token with SuperIDM desktop app">Security Token</span>
-      <input type="password" id="tokenInput" placeholder="Auto-synced token..." class="token-input">
-    </div>
-  </section>
+      <div class="toggle-row">
+        <span class="toggle-label" title="Show floating button over video players (YouTube, Instagram, Facebook...)">Show Video Grabber</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="togGrabber" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <span class="toggle-label" title="Sniff HLS, DASH, and streaming media playlists">Sniff Media Streams</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="togSniff" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="section">
+      <label class="section-label">Keyboard Shortcuts</label>
+      <div class="hotkey-box">
+        <div class="hotkey-item">
+          <span class="hotkey-badge">Alt + Click</span>
+          <span class="hotkey-desc">Bypass SuperIDM & download with browser</span>
+        </div>
+        <div class="hotkey-item">
+          <span class="hotkey-badge">Ctrl + Click</span>
+          <span class="hotkey-desc">Force SuperIDM download on any link</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB 3: File Types & Rules -->
+  <div class="tab-pane" id="tabRules">
+    <section class="section">
+      <div class="section-header-row">
+        <label class="section-label" style="margin-bottom:0">File Types to Intercept</label>
+        <button id="resetExtsBtn" class="btn-micro" title="Reset to standard IDM extensions">Default</button>
+      </div>
+      <textarea id="fileExtsInput" class="rule-textarea" rows="3" placeholder="ZIP RAR 7Z EXE ISO MP4 MKV PDF..."></textarea>
+    </section>
+
+    <section class="section">
+      <label class="section-label">Excluded Sites (Do Not Intercept)</label>
+      <textarea id="excludedDomainsInput" class="rule-textarea" rows="2" placeholder="example.com, workportal.org, bank.com"></textarea>
+    </section>
+
+    <section class="section">
+      <div class="toggle-row">
+        <span class="toggle-label">Min File Size (MB)</span>
+        <input type="number" id="minSize" value="1" min="0" max="1000" class="size-input">
+      </div>
+
+      <div class="token-row" style="margin-top:6px">
+        <span class="toggle-label" title="Security token shared with desktop engine">Security Token</span>
+        <input type="password" id="tokenInput" placeholder="Auto-synced token..." class="token-input">
+      </div>
+
+      <div style="margin-top:12px; display:flex; justify-content:flex-end">
+        <button id="saveRulesBtn" class="btn-primary-action">Save Settings</button>
+      </div>
+    </section>
+  </div>
 
   <!-- Footer -->
   <footer class="popup-footer">
-    <span>SuperIDM v2.5.0</span>
+    <span>SuperIDM v2.6.1</span>
+    <span class="footer-chip">Engine Sync Ready</span>
   </footer>
 
   <script src="popup.js"></script>

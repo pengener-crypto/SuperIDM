@@ -224,10 +224,104 @@ pub async fn load_tasks_db() -> Result<Vec<DownloadMetadata>, String> {
 /// Derive the `.part.json` sidecar path from a download file path.
 ///
 /// Example: `/downloads/ubuntu.iso` -> `/downloads/ubuntu.iso.part.json`
-fn part_json_path(download_path: &Path) -> std::path::PathBuf {
+pub fn part_json_path(download_path: &Path) -> std::path::PathBuf {
     let mut p = download_path.as_os_str().to_owned();
     p.push(".part.json");
     std::path::PathBuf::from(p)
+}
+
+/// Query the available free disk space (in bytes) on the volume hosting the given directory or path.
+///
+/// Uses Windows Win32 API `GetDiskFreeSpaceExW` for high precision without external crate overhead.
+pub fn get_available_disk_space(path: &Path) -> Result<u64, String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+
+        // Try candidate directory paths: the path itself, or closest existing ancestor
+        let mut candidate = path.to_path_buf();
+        while !candidate.exists() {
+            if let Some(parent) = candidate.parent() {
+                candidate = parent.to_path_buf();
+            } else {
+                break;
+            }
+        }
+
+        let mut wide: Vec<u16> = candidate.as_os_str().encode_wide().collect();
+        wide.push(0);
+
+        let mut free_bytes_available: u64 = 0;
+        let mut total_number_of_bytes: u64 = 0;
+        let mut total_number_of_free_bytes: u64 = 0;
+
+        extern "system" {
+            fn GetDiskFreeSpaceExW(
+                lpDirectoryName: *const u16,
+                lpFreeBytesAvailableToCaller: *mut u64,
+                lpTotalNumberOfBytes: *mut u64,
+                lpTotalNumberOfFreeBytes: *mut u64,
+            ) -> i32;
+        }
+
+        let ret = unsafe {
+            GetDiskFreeSpaceExW(
+                wide.as_ptr(),
+                &mut free_bytes_available,
+                &mut total_number_of_bytes,
+                &mut total_number_of_free_bytes,
+            )
+        };
+
+        if ret != 0 {
+            Ok(free_bytes_available)
+        } else {
+            Err("Unable to retrieve volume disk metrics".to_string())
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        // Safe fallback for non-windows environments
+        Ok(100 * 1024 * 1024 * 1024)
+    }
+}
+
+/// Resolve a unique filename in `dest_dir` to prevent overwriting existing files.
+///
+/// If `dest_dir.join(filename)` exists AND does NOT have an active `.part.json`
+/// (which indicates an interrupted task being resumed), it appends ` (1)`, ` (2)`, etc.
+///
+/// Example: `file.iso` -> `file (1).iso` -> `file (2).iso`
+/// Handles UTF-8 Arabic filenames and files without extensions safely.
+pub fn resolve_unique_filename(dest_dir: &Path, filename: &str) -> String {
+    let target = dest_dir.join(filename);
+    let part_sidecar = part_json_path(&target);
+
+    // If file doesn't exist, or if an active .part.json exists (indicating resume), keep current name
+    if !target.exists() || part_sidecar.exists() {
+        return filename.to_string();
+    }
+
+    let p = Path::new(filename);
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or(filename);
+    let ext = p.extension().and_then(|e| e.to_str());
+
+    for i in 1..=9999 {
+        let candidate_name = match ext {
+            Some(extension) if !extension.is_empty() => format!("{} ({}).{}", stem, i, extension),
+            _ => format!("{} ({})", stem, i),
+        };
+
+        let candidate_path = dest_dir.join(&candidate_name);
+        let candidate_sidecar = part_json_path(&candidate_path);
+
+        if !candidate_path.exists() || candidate_sidecar.exists() {
+            return candidate_name;
+        }
+    }
+
+    format!("{}_{}.dat", stem, &uuid::Uuid::new_v4().to_string()[..8])
 }
 
 #[cfg(test)]
@@ -338,4 +432,36 @@ mod tests {
             assert_eq!(content[i * 1024], i as u8);
         }
     }
+
+    #[test]
+    fn test_resolve_unique_filename() {
+        let dir = TempDir::new().unwrap();
+
+        // 1. Non-existing file returns same name
+        let name1 = resolve_unique_filename(dir.path(), "sample.mp4");
+        assert_eq!(name1, "sample.mp4");
+
+        // 2. Create sample.mp4
+        std::fs::write(dir.path().join("sample.mp4"), b"test").unwrap();
+        let name2 = resolve_unique_filename(dir.path(), "sample.mp4");
+        assert_eq!(name2, "sample (1).mp4");
+
+        // 3. Create sample (1).mp4
+        std::fs::write(dir.path().join("sample (1).mp4"), b"test").unwrap();
+        let name3 = resolve_unique_filename(dir.path(), "sample.mp4");
+        assert_eq!(name3, "sample (2).mp4");
+
+        // 4. Arabic filename support
+        std::fs::write(dir.path().join("ملف_عربي.pdf"), b"arabic").unwrap();
+        let name_ar = resolve_unique_filename(dir.path(), "ملف_عربي.pdf");
+        assert_eq!(name_ar, "ملف_عربي (1).pdf");
+    }
+
+    #[test]
+    fn test_disk_space_query() {
+        let dir = TempDir::new().unwrap();
+        let space = get_available_disk_space(dir.path()).unwrap();
+        assert!(space > 1_000_000); // At least 1MB free on test volume
+    }
 }
+

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::StreamExt;
@@ -11,6 +13,9 @@ use super::speed::SpeedMeter;
 use super::storage;
 use super::throttler::BandwidthThrottler;
 use super::types::*;
+
+/// Thread-safe map tracking dynamic end limits for active chunks during work stealing.
+pub type ChunkLimitMap = Arc<parking_lot::RwLock<HashMap<usize, Arc<AtomicU64>>>>;
 
 /// Internal event sent from chunk workers to the download coordinator.
 /// Internal event sent from chunk workers to the download coordinator.
@@ -61,8 +66,9 @@ impl DownloadManager {
             .user_agent(DEFAULT_USER_AGENT)
             .redirect(reqwest::redirect::Policy::limited(15))
             .connect_timeout(Duration::from_secs(15))
-            .pool_max_idle_per_host(32)
-            .pool_idle_timeout(Some(Duration::from_secs(90)))
+            .tcp_nodelay(true)
+            .pool_max_idle_per_host(64)
+            .pool_idle_timeout(Some(Duration::from_secs(120)))
             .tcp_keepalive(Some(Duration::from_secs(60)))
             .build()
             .expect("Failed to build HTTP client");
@@ -248,92 +254,120 @@ pub async fn download_chunk_with_retry(
     event_tx: mpsc::Sender<WorkerEvent>,
     cancel_rx: watch::Receiver<bool>,
     custom_headers: Option<Vec<(String, String)>>,
+    chunk_limits: Option<ChunkLimitMap>,
 ) {
     let mut current_byte = chunk.current_byte;
     let end_byte = chunk.end_byte;
     let chunk_index = chunk.index;
     let mut retry_count = chunk.retry_count;
 
+    let chunk_limit = if let Some(ref limits) = chunk_limits {
+        let mut map = limits.write();
+        map.entry(chunk_index)
+            .or_insert_with(|| Arc::new(AtomicU64::new(end_byte)))
+            .clone()
+    } else {
+        Arc::new(AtomicU64::new(end_byte))
+    };
+
     loop {
         if *cancel_rx.borrow() {
             return; // Cancelled/paused
         }
 
-        if current_byte > end_byte {
+        let cur_limit = chunk_limit.load(Ordering::SeqCst);
+        let target_end = if cur_limit > 0 { cur_limit } else { end_byte };
+        // Chunk range is inclusive: done only once every byte up to target_end is written.
+        if current_byte > target_end {
             let _ = event_tx
                 .send(WorkerEvent::ChunkDone { chunk_index })
                 .await;
             return;
         }
 
-        if *cancel_rx.borrow() {
-            return;
-        }
-
-        match download_chunk_stream(
+        let attempt_start = current_byte;
+        let result = download_chunk_stream(
             &client,
             &url,
             chunk_index,
             current_byte,
-            end_byte,
+            target_end,
             &file_path,
             &throttler,
             &event_tx,
             &cancel_rx,
             &custom_headers,
+            &chunk_limit,
         )
-        .await
-        {
-            Ok(final_offset) => {
-                if *cancel_rx.borrow() {
-                    return;
-                }
-                current_byte = final_offset;
-                if current_byte > end_byte || end_byte == 0 || current_byte >= chunk.end_byte {
+        .await;
+
+        if *cancel_rx.borrow() {
+            return;
+        }
+
+        let err = match result {
+            Ok(outcome) => {
+                current_byte = outcome.next_offset;
+                let cur_limit = chunk_limit.load(Ordering::SeqCst);
+                let target_end = if cur_limit > 0 { cur_limit } else { end_byte };
+                if outcome.full_body_eof || current_byte > target_end {
                     let _ = event_tx
                         .send(WorkerEvent::ChunkDone { chunk_index })
                         .await;
                     return;
                 }
-            }
-            Err(err) => {
-                if *cancel_rx.borrow() {
-                    return;
+                if current_byte > attempt_start {
+                    // Server closed early but we made progress: reconnect from the new offset.
+                    continue;
                 }
-                retry_count += 1;
-                let will_retry = retry_count <= MAX_CHUNK_RETRIES;
-
-                let _ = event_tx
-                    .send(WorkerEvent::ChunkError {
-                        chunk_index,
-                        error: err.clone(),
-                        will_retry,
-                    })
-                    .await;
-
-                if !will_retry {
-                    eprintln!(
-                        "Chunk {} exhausted {} retries: {}",
-                        chunk_index, MAX_CHUNK_RETRIES, err
-                    );
-                    return;
-                }
-
-                // Exponential backoff with jitter
-                let base_ms = RETRY_BASE_DELAY_MS * 2u64.pow(retry_count as u32 - 1);
-                let jitter_ms = (rand::random::<u64>() % (base_ms / 2 + 1)) as i64
-                    - (base_ms as i64 / 4);
-                let delay_ms = (base_ms as i64 + jitter_ms).max(100) as u64;
-
-                eprintln!(
-                    "Chunk {} retry {}/{} in {}ms: {}",
-                    chunk_index, retry_count, MAX_CHUNK_RETRIES, delay_ms, err
-                );
-
-                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                format!(
+                    "Chunk {} stream ended early with no progress at offset {}",
+                    chunk_index, current_byte
+                )
             }
+            Err(e) => e,
+        };
+
+        retry_count += 1;
+        let will_retry = retry_count <= MAX_CHUNK_RETRIES;
+
+        let _ = event_tx
+            .send(WorkerEvent::ChunkError {
+                chunk_index,
+                error: err.clone(),
+                will_retry,
+            })
+            .await;
+
+        if !will_retry {
+            eprintln!(
+                "Chunk {} exhausted {} retries: {}",
+                chunk_index, MAX_CHUNK_RETRIES, err
+            );
+            return;
         }
+
+        // Exponential backoff with jitter
+        let base_ms = RETRY_BASE_DELAY_MS * 2u64.pow(retry_count as u32 - 1);
+        let jitter_ms = (rand::random::<u64>() % (base_ms / 2 + 1)) as i64
+            - (base_ms as i64 / 4);
+        let delay_ms = (base_ms as i64 + jitter_ms).max(100) as u64;
+
+        eprintln!(
+            "Chunk {} retry {}/{} in {}ms: {}",
+            chunk_index, retry_count, MAX_CHUNK_RETRIES, delay_ms, err
+        );
+
+        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
     }
+}
+
+/// Result of one streaming attempt for a chunk.
+struct StreamOutcome {
+    /// First byte offset NOT yet written (exclusive end of written data).
+    next_offset: u64,
+    /// Server sent the whole body (200 OK, no range) and it ended cleanly.
+    full_body_eof: bool,
 }
 
 /// Stream a chunk range from the server, writing data at correct offsets.
@@ -350,7 +384,8 @@ async fn download_chunk_stream(
     event_tx: &mpsc::Sender<WorkerEvent>,
     cancel_rx: &watch::Receiver<bool>,
     custom_headers: &Option<Vec<(String, String)>>,
-) -> Result<u64, String> {
+    chunk_limit: &Arc<AtomicU64>,
+) -> Result<StreamOutcome, String> {
     let mut req = client
         .get(url)
         .header("User-Agent", DEFAULT_USER_AGENT)
@@ -384,14 +419,35 @@ async fn download_chunk_stream(
         ));
     }
 
-    // If server returned 200 OK (full body from byte 0) instead of 206 Partial Content:
-    // Only chunk 0 can write from offset 0; secondary chunks exit cleanly to avoid corruption.
-    let mut offset = if status.as_u16() == 200 {
+    // If server returned 200 OK (full body from byte 0) instead of 206 Partial Content,
+    // only a chunk whose data starts at byte 0 can use it. Any other chunk must retry —
+    // reporting it as "done" without writing would leave a hole of zeros in the file.
+    let is_full_body = status.as_u16() == 200;
+    let mut offset = if is_full_body {
         if chunk_index > 0 {
-            return Ok(end_byte + 1);
+            return Err(format!(
+                "Server ignored Range for chunk {} (got 200 instead of 206)",
+                chunk_index
+            ));
         }
         0
     } else {
+        // Verify the server actually sent the range we asked for.
+        let range_start = resp
+            .headers()
+            .get("content-range")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().strip_prefix("bytes "))
+            .and_then(|v| v.split('-').next())
+            .and_then(|v| v.trim().parse::<u64>().ok());
+        if let Some(rs) = range_start {
+            if rs != start_byte {
+                return Err(format!(
+                    "Content-Range mismatch for chunk {}: asked {}, got {}",
+                    chunk_index, start_byte, rs
+                ));
+            }
+        }
         start_byte
     };
 
@@ -400,11 +456,28 @@ async fn download_chunk_stream(
         .map_err(|e| format!("Failed to open file for chunk {}: {}", chunk_index, e))?;
 
     let mut stream = resp.bytes_stream();
+    let mut write_buf: Vec<u8> = Vec::with_capacity(256 * 1024);
+    let mut buf_start_offset = offset;
+    let mut pending_bytes_reported: u64 = 0;
+    let mut last_report_time = std::time::Instant::now();
 
     while let Some(result) = stream.next().await {
         if *cancel_rx.borrow() {
+            if !write_buf.is_empty() {
+                storage::write_at_offset(&mut file, buf_start_offset, &write_buf).await?;
+                write_buf.clear();
+            }
+            if pending_bytes_reported > 0 {
+                let _ = event_tx
+                    .send(WorkerEvent::Progress {
+                        chunk_index,
+                        bytes_written: pending_bytes_reported,
+                        new_offset: offset,
+                    })
+                    .await;
+            }
             let _ = file.flush().await;
-            return Ok(offset); // Paused — return current position
+            return Ok(StreamOutcome { next_offset: offset, full_body_eof: false }); // Paused
         }
 
         let bytes = result.map_err(|e| {
@@ -416,23 +489,75 @@ async fn download_chunk_stream(
         // Apply bandwidth throttling
         throttler.acquire(bytes.len()).await;
 
-        // Write at exact offset
-        storage::write_at_offset(&mut file, offset, &bytes).await?;
-
+        write_buf.extend_from_slice(&bytes);
         offset += len;
+        pending_bytes_reported += len;
 
-        // Report progress
+        // Check if dynamic work-stealing shrunk this chunk's end boundary.
+        // cur_limit is an INCLUSIVE end byte; `offset` is EXCLUSIVE.
+        let cur_limit = chunk_limit.load(Ordering::SeqCst);
+        let stop_at = cur_limit.saturating_add(1); // exclusive
+        if cur_limit > 0 && offset > stop_at {
+            // Keep every byte with absolute position < stop_at.
+            let keep_len = stop_at.saturating_sub(buf_start_offset).min(write_buf.len() as u64) as usize;
+            let dropped = (write_buf.len() - keep_len) as u64;
+            write_buf.truncate(keep_len);
+            pending_bytes_reported = pending_bytes_reported.saturating_sub(dropped);
+            if !write_buf.is_empty() {
+                storage::write_at_offset(&mut file, buf_start_offset, &write_buf).await?;
+                write_buf.clear();
+            }
+            if pending_bytes_reported > 0 {
+                let _ = event_tx
+                    .send(WorkerEvent::Progress {
+                        chunk_index,
+                        bytes_written: pending_bytes_reported,
+                        new_offset: stop_at,
+                    })
+                    .await;
+            }
+            let _ = file.flush().await;
+            return Ok(StreamOutcome { next_offset: stop_at, full_body_eof: false });
+        }
+
+        // Flush write buffer if reached 256 KB
+        if write_buf.len() >= 256 * 1024 {
+            storage::write_at_offset(&mut file, buf_start_offset, &write_buf).await?;
+            write_buf.clear();
+            buf_start_offset = offset;
+        }
+
+        // Batch progress reporting: every >= 64 KB or every >= 50ms
+        if pending_bytes_reported >= 64 * 1024 || last_report_time.elapsed().as_millis() >= 50 {
+            let _ = event_tx
+                .send(WorkerEvent::Progress {
+                    chunk_index,
+                    bytes_written: pending_bytes_reported,
+                    new_offset: offset,
+                })
+                .await;
+            pending_bytes_reported = 0;
+            last_report_time = std::time::Instant::now();
+        }
+    }
+
+    // Flush any remaining buffered bytes
+    if !write_buf.is_empty() {
+        storage::write_at_offset(&mut file, buf_start_offset, &write_buf).await?;
+        write_buf.clear();
+    }
+    if pending_bytes_reported > 0 {
         let _ = event_tx
             .send(WorkerEvent::Progress {
                 chunk_index,
-                bytes_written: len,
+                bytes_written: pending_bytes_reported,
                 new_offset: offset,
             })
             .await;
     }
 
     let _ = file.flush().await;
-    Ok(offset)
+    Ok(StreamOutcome { next_offset: offset, full_body_eof: is_full_body })
 }
 
 /// Extract filename from Content-Disposition header supporting RFC 6266 / RFC 5987.
@@ -497,7 +622,23 @@ pub fn extract_filename_from_url(url: &str) -> Option<String> {
 
 /// Clean filename by removing invalid filesystem characters and path traversal tokens.
 pub fn clean_filename(s: &str) -> String {
-    let unquoted = s.trim().trim_matches('"').trim_matches('\'');
+    let mut unquoted = s.trim().trim_matches('"').trim_matches('\'');
+
+    // Strip notification counter prefixes like "(3) ", "[1] "
+    if let Some(rest) = unquoted.strip_prefix('(') {
+        if let Some(close_idx) = rest.find(')') {
+            if rest[..close_idx].chars().all(|c| c.is_ascii_digit()) {
+                unquoted = rest[close_idx + 1..].trim_start();
+            }
+        }
+    } else if let Some(rest) = unquoted.strip_prefix('[') {
+        if let Some(close_idx) = rest.find(']') {
+            if rest[..close_idx].chars().all(|c| c.is_ascii_digit()) {
+                unquoted = rest[close_idx + 1..].trim_start();
+            }
+        }
+    }
+
     let decoded = urlencoding_decode(unquoted);
     let sanitized: String = decoded
         .chars()
@@ -680,5 +821,69 @@ mod tests {
         let probe = probe_url(&client, "https://proof.ovh.net/files/10Mb.dat").await.unwrap();
         assert_eq!(probe.content_length, 10485760);
         assert!(probe.supports_range);
+    }
+
+    /// Segmented download + mid-stream work-steal must be byte-identical to a plain GET.
+    #[tokio::test]
+    async fn test_work_steal_integrity() {
+        use crate::engine::chunker;
+        let url = "https://proof.ovh.net/files/10Mb.dat".to_string();
+        let client = Client::builder().build().unwrap();
+        let expected = client.get(&url).send().await.unwrap().bytes().await.unwrap();
+        let total = expected.len() as u64;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("steal.bin");
+        storage::preallocate_file(&path, total).await.unwrap();
+
+        let mut chunks = chunker::calculate_chunks(total, 2);
+        // Throttle so chunks are still streaming when the steal happens.
+        let throttler = BandwidthThrottler::new(3 * 1024 * 1024);
+        let (tx, mut rx) = mpsc::channel::<WorkerEvent>(4096);
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let limits: ChunkLimitMap = Arc::new(parking_lot::RwLock::new(HashMap::new()));
+
+        let spawn = |c: ChunkInfo| {
+            let (cl, u, p, th, t, cr, lm) = (client.clone(), url.clone(), path.clone(),
+                throttler.clone(), tx.clone(), cancel_rx.clone(), Some(limits.clone()));
+            tokio::spawn(async move {
+                download_chunk_with_retry(cl, u, c, p, th, t, cr, None, lm).await;
+            });
+        };
+        for c in chunks.clone() { spawn(c); }
+
+        let mut stolen = false;
+        let mut done = 0usize;
+        while let Some(ev) = rx.recv().await {
+            match ev {
+                WorkerEvent::Progress { chunk_index, new_offset, .. } => {
+                    if chunk_index < chunks.len() { chunks[chunk_index].current_byte = new_offset; }
+                    // Steal once the donor has made real progress (mirrors run_coordinator).
+                    if !stolen && chunks[1].current_byte > chunks[1].start_byte + 512 * 1024 {
+                        if let Some((donor, nc)) = chunker::steal_work(&mut chunks) {
+                            limits.read().get(&donor).unwrap()
+                                .store(chunks[donor].end_byte, Ordering::SeqCst);
+                            limits.write().insert(nc.index, Arc::new(AtomicU64::new(nc.end_byte)));
+                            chunks.push(nc.clone());
+                            spawn(nc);
+                            stolen = true;
+                        }
+                    }
+                }
+                WorkerEvent::ChunkDone { .. } => {
+                    done += 1;
+                    if stolen && done == chunks.len() { break; }
+                }
+                WorkerEvent::ChunkError { error, will_retry, .. } => {
+                    assert!(will_retry, "chunk failed permanently: {}", error);
+                }
+            }
+        }
+        assert!(stolen, "work steal never triggered");
+
+        let actual = std::fs::read(&path).unwrap();
+        assert_eq!(actual.len(), expected.len());
+        let first_diff = actual.iter().zip(expected.iter()).position(|(a, b)| a != b);
+        assert_eq!(first_diff, None, "file differs from reference at byte {:?}", first_diff);
     }
 }

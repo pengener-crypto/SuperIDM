@@ -387,7 +387,7 @@ async fn handle_http_request(
         let b = serde_json::json!({
             "status": "ok",
             "app": "SuperIDM",
-            "version": "2.5.0",
+            "version": "2.6.1",
             "auth_required": true
         }).to_string();
         return format!(
@@ -524,7 +524,7 @@ async fn dispatch_method(
         }
 
         "superidm.ping" => {
-            serde_json::json!({ "status": "ok", "app": "SuperIDM", "version": "2.5.0", "authenticated": true })
+            serde_json::json!({ "status": "ok", "app": "SuperIDM", "version": "2.6.1", "authenticated": true })
         }
 
         _ => {

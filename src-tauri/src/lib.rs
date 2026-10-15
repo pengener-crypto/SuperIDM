@@ -66,15 +66,22 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             commands::get_all_tasks,
             commands::set_global_throttle,
             commands::open_download_folder,
+            commands::open_file,
             commands::extract_media_info,
             commands::start_stream_download,
             commands::refresh_task_link,
+            commands::notify_download_complete,
             commands::open_extension_folder,
             commands::poll_rpc_downloads,
             commands::get_rpc_token,
             commands::install_browser_integration,
             commands::get_extension_path,
             commands::launch_browser_extensions,
+            commands::check_disk_space,
+            commands::update_extractor_core,
+            commands::set_window_title,
+            commands::open_external_url,
+            commands::focus_window,
         ])
         .setup(move |app| {
             let manager_clone = manager.clone();
@@ -156,6 +163,15 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
                 })
                 .build(app)?;
 
+            // Start RPC server immediately so browser extension connects without delay
+            let rpc = RpcServer::new();
+            let mgr_rpc = manager_clone.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = rpc.start(mgr_rpc).await {
+                    eprintln!("Warning: RPC server failed to start: {}", e);
+                }
+            });
+
             // Scan for persistent tasks db and interrupted downloads on startup
             tauri::async_runtime::spawn(async move {
                 // 1. Load saved tasks from database
@@ -196,29 +212,15 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
                         eprintln!("Warning: Failed to scan for interrupted downloads: {}", e);
                     }
                 }
-
-                // Start RPC server
-                let rpc = RpcServer::new();
-                if let Err(e) = rpc.start(manager_clone).await {
-                    eprintln!("Warning: RPC server failed to start: {}", e);
-                }
             });
 
             Ok(())
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // If there are active downloads, keep running in tray so downloads finish safely.
-                // If no downloads are active, exit immediately so the app & background daemon close cleanly.
-                let state = window.state::<AppState>();
-                let has_active = state.manager.read().tasks.values().any(|h| h.metadata.status == engine::types::TaskStatus::Downloading);
-                if has_active {
-                    api.prevent_close();
-                    let _ = window.hide();
-                } else {
-                    SHOULD_EXIT.store(true, Ordering::SeqCst);
-                    std::process::exit(0);
-                }
+                // Like IDM: always minimize to system tray so browser interception stays active.
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
         .build(tauri::generate_context!())
