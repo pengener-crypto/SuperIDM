@@ -1396,18 +1396,7 @@ pub async fn notify_download_complete(
 /// Open the extension folder in Windows Explorer so the user can load it manually.
 #[tauri::command]
 pub async fn open_extension_folder() -> Result<(), String> {
-    let desktop_dir = dirs::desktop_dir().map(|d| d.join("SuperIDM-Extension"));
-    let appdata_dir = crate::engine::browser_integration::get_embedded_extension_dir();
-
-    let target_dir = if let Some(ref d) = desktop_dir {
-        if d.exists() {
-            d.clone()
-        } else {
-            appdata_dir
-        }
-    } else {
-        appdata_dir
-    };
+    let target_dir = crate::engine::browser_integration::get_embedded_extension_dir();
 
     #[cfg(target_os = "windows")]
     {
@@ -1521,15 +1510,57 @@ pub async fn check_disk_space(
     }))
 }
 
-/// Force-update the decoupled video extractor core (yt-dlp) to the latest version.
+/// Force-update the decoupled video extractor core (yt-dlp) to the latest version,
+/// make sure the FFmpeg merger is installed, and repair any leftover unmerged
+/// `.fNNN.mp4` + `.fNNN.m4a` pairs in the default download folder.
 #[tauri::command]
 pub async fn update_extractor_core(state: State<'_, AppState>) -> Result<String, String> {
+    let (client, download_dir) = {
+        let mgr = state.manager.read();
+        (mgr.http_client.clone(), mgr.default_download_dir.clone())
+    };
+
+    use crate::engine::extractor::MediaExtractor;
+
+    let ytdlp_msg = MediaExtractor::update_ytdlp_core(&client).await?;
+
+    let ffmpeg_msg = match MediaExtractor::ensure_ffmpeg_binary(&client).await {
+        Ok(_) => "FFmpeg merger ready".to_string(),
+        Err(e) => return Err(format!("{} | FFmpeg install failed: {}", ytdlp_msg, e)),
+    };
+
+    // Repair leftovers (loop: one pair merged per call)
+    let mut repaired = 0;
+    while repaired < 50 {
+        match MediaExtractor::auto_merge_unmerged_parts(&client, &download_dir).await {
+            Some(_) => repaired += 1,
+            None => break,
+        }
+    }
+
+    if repaired > 0 {
+        Ok(format!("{} | {} | Merged {} leftover file(s)", ytdlp_msg, ffmpeg_msg, repaired))
+    } else {
+        Ok(format!("{} | {}", ytdlp_msg, ffmpeg_msg))
+    }
+}
+
+/// On-demand auto-bootstrap of FFmpeg from yt-dlp/FFmpeg-Builds for high-res stream merging.
+#[tauri::command]
+pub async fn ensure_ffmpeg_core(state: State<'_, AppState>) -> Result<String, String> {
     let client = {
         let mgr = state.manager.read();
         mgr.http_client.clone()
     };
 
-    crate::engine::extractor::MediaExtractor::update_ytdlp_core(&client).await
+    let path = crate::engine::extractor::MediaExtractor::ensure_ffmpeg_binary(&client).await?;
+    Ok(format!("FFmpeg core active at: {:?}", path))
+}
+
+/// Check if FFmpeg is installed and accessible.
+#[tauri::command]
+pub fn check_ffmpeg_status() -> Result<bool, String> {
+    Ok(crate::engine::extractor::MediaExtractor::find_ffmpeg_binary().is_some())
 }
 
 /// Update the main window title for real-time taskbar speed display.

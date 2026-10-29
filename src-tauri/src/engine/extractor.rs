@@ -52,7 +52,7 @@ impl MediaExtractor {
             eprintln!("[SuperIDM] Clean machine detected. Downloading standalone media extractor core to: {:?}", local_bin);
             let resp = client
                 .get("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
-                .header("User-Agent", "SuperIDM-Core/2.6.1")
+                .header("User-Agent", DEFAULT_USER_AGENT)
                 .send()
                 .await
                 .map_err(|e| format!("Failed to download video extractor core: {}", e))?;
@@ -62,7 +62,13 @@ impl MediaExtractor {
             }
 
             let bytes = resp.bytes().await.map_err(|e| format!("Failed reading extractor bytes: {}", e))?;
-            tokio::fs::write(&local_bin, &bytes).await.map_err(|e| format!("Failed writing extractor: {}", e))?;
+            if bytes.len() < 1_000_000 {
+                return Err("Downloaded extractor binary is too small or truncated".to_string());
+            }
+
+            let tmp_bin = local_bin.with_extension("exe.tmp");
+            tokio::fs::write(&tmp_bin, &bytes).await.map_err(|e| format!("Failed writing extractor: {}", e))?;
+            tokio::fs::rename(&tmp_bin, &local_bin).await.map_err(|e| format!("Failed activating extractor: {}", e))?;
 
             return Ok(local_bin);
         }
@@ -100,7 +106,7 @@ impl MediaExtractor {
 
         let resp = client
             .get("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
-            .header("User-Agent", "SuperIDM-Core/2.6.1")
+            .header("User-Agent", format!("SuperIDM-Core/{}", env!("CARGO_PKG_VERSION")))
             .send()
             .await
             .map_err(|e| format!("Network error checking for extractor updates: {}", e))?;
@@ -133,41 +139,223 @@ impl MediaExtractor {
         Ok(format!("Video extractor core updated to version {}", version))
     }
 
-    /// Locate the yt-dlp binary across PATH, Python Scripts, and WinGet directories.
-    fn find_ytdlp_binary() -> Option<PathBuf> {
-        // Check AppData/Local/SuperIDM/bin first
-        if let Some(local_bin) = Self::get_local_ytdlp_path() {
-            if local_bin.exists() {
-                if let Ok(meta) = std::fs::metadata(&local_bin) {
-                    if meta.len() > 1_000_000 {
-                        return Some(local_bin);
+    /// Return path to AppData/Local/SuperIDM/bin/ffmpeg.exe
+    pub fn get_local_ffmpeg_path() -> Option<PathBuf> {
+        dirs::data_local_dir().map(|d| d.join("SuperIDM").join("bin").join("ffmpeg.exe"))
+    }
+
+    /// Locate or auto-download standalone FFmpeg binary on-demand from yt-dlp/FFmpeg-Builds.
+    ///
+    /// Downloaded and unpacked in the background once when high-resolution media (1080p / 4K)
+    /// is requested. This avoids bloating the initial installer size.
+    pub async fn ensure_ffmpeg_binary(client: &Client) -> Result<PathBuf, String> {
+        // 1. Check existing system and candidate paths
+        if let Some(p) = Self::find_ffmpeg_binary() {
+            return Ok(p);
+        }
+
+        // 2. Check LocalAppData SuperIDM bin
+        let local_bin = Self::get_local_ffmpeg_path()
+            .ok_or_else(|| "Local AppData directory not found".to_string())?;
+
+        if local_bin.exists() {
+            if let Ok(meta) = tokio::fs::metadata(&local_bin).await {
+                if meta.len() > 5_000_000 {
+                    return Ok(local_bin);
+                }
+            }
+        }
+
+        let bin_dir = local_bin.parent().ok_or_else(|| "Invalid bin dir".to_string())?;
+        let _ = tokio::fs::create_dir_all(bin_dir).await;
+
+        eprintln!("[SuperIDM FFmpeg-Bootstrap] Starting on-demand FFmpeg core download from yt-dlp/FFmpeg-Builds...");
+
+        let download_urls = [
+            "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+            "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+        ];
+
+        let tmp_zip = bin_dir.join("ffmpeg_bootstrap_temp.zip");
+        let mut download_success = false;
+
+        for url in download_urls {
+            eprintln!("[SuperIDM FFmpeg-Bootstrap] Attempting download from: {}", url);
+            let resp = match client
+                .get(url)
+                .header("User-Agent", format!("SuperIDM-Core/{}", env!("CARGO_PKG_VERSION")))
+                .send()
+                .await
+            {
+                Ok(r) if r.status().is_success() => r,
+                _ => continue,
+            };
+
+            use tokio::io::AsyncWriteExt;
+            let mut file = match tokio::fs::File::create(&tmp_zip).await {
+                Ok(f) => f,
+                Err(_) => continue,
+            };
+
+            let mut stream = resp.bytes_stream();
+            let mut write_ok = true;
+            use futures_util::StreamExt;
+            while let Some(chunk_res) = stream.next().await {
+                match chunk_res {
+                    Ok(chunk) => {
+                        if file.write_all(&chunk).await.is_err() {
+                            write_ok = false;
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        write_ok = false;
+                        break;
+                    }
+                }
+            }
+            let _ = file.flush().await;
+            drop(file);
+
+            if write_ok {
+                if let Ok(meta) = tokio::fs::metadata(&tmp_zip).await {
+                    if meta.len() > 10_000_000 {
+                        download_success = true;
+                        break;
+                    }
+                }
+            }
+            let _ = tokio::fs::remove_file(&tmp_zip).await;
+        }
+
+        if !download_success {
+            return Err("Failed downloading FFmpeg archive from official yt-dlp release repositories".to_string());
+        }
+
+        eprintln!("[SuperIDM FFmpeg-Bootstrap] Archive downloaded. Extracting ffmpeg.exe & ffprobe.exe...");
+
+        let bin_dir_clone = bin_dir.to_path_buf();
+        let tmp_zip_clone = tmp_zip.clone();
+
+        let extract_res = tokio::task::spawn_blocking(move || {
+            Self::extract_ffmpeg_from_zip(&tmp_zip_clone, &bin_dir_clone)
+        }).await.map_err(|e| format!("Extraction thread failed: {}", e))??;
+
+        let _ = tokio::fs::remove_file(&tmp_zip).await;
+
+        eprintln!("[SuperIDM FFmpeg-Bootstrap] Extraction complete! FFmpeg is ready at: {:?}", extract_res);
+        Ok(extract_res)
+    }
+
+    /// Extract `ffmpeg.exe` and `ffprobe.exe` from the zip archive into `target_dir`.
+    pub fn extract_ffmpeg_from_zip(zip_path: &std::path::Path, target_dir: &std::path::Path) -> Result<PathBuf, String> {
+        let file = std::fs::File::open(zip_path).map_err(|e| format!("Failed to open downloaded archive: {}", e))?;
+        let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip archive: {}", e))?;
+
+        let mut ffmpeg_target: Option<PathBuf> = None;
+
+        for i in 0..archive.len() {
+            let mut entry = match archive.by_index(i) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let name = entry.name().to_string();
+            let is_ffmpeg = name.ends_with("ffmpeg.exe");
+            let is_ffprobe = name.ends_with("ffprobe.exe");
+
+            if is_ffmpeg || is_ffprobe {
+                let fname = if is_ffmpeg { "ffmpeg.exe" } else { "ffprobe.exe" };
+                let out_path = target_dir.join(fname);
+                let tmp_path = target_dir.join(format!("{}.tmp", fname));
+
+                let mut out_file = std::fs::File::create(&tmp_path)
+                    .map_err(|e| format!("Failed to create {}: {}", fname, e))?;
+
+                std::io::copy(&mut entry, &mut out_file)
+                    .map_err(|e| format!("Failed to extract {}: {}", fname, e))?;
+
+                drop(out_file);
+                let _ = std::fs::rename(&tmp_path, &out_path);
+
+                if is_ffmpeg {
+                    ffmpeg_target = Some(out_path);
+                }
+            }
+        }
+
+        ffmpeg_target.ok_or_else(|| "ffmpeg.exe not found in downloaded archive".to_string())
+    }
+
+    /// Check if an executable exists on PATH or common tools
+    pub fn find_executable(name: &str) -> Option<PathBuf> {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            let mut cmd = Command::new("where");
+            let target = if name.ends_with(".exe") { name.to_string() } else { format!("{}.exe", name) };
+            cmd.arg(&target);
+            cmd.creation_flags(0x08000000);
+            if let Ok(output) = cmd.output() {
+                if output.status.success() {
+                    let out_str = String::from_utf8_lossy(&output.stdout);
+                    if let Some(first_line) = out_str.lines().next() {
+                        let pb = PathBuf::from(first_line.trim());
+                        if pb.exists() {
+                            return Some(pb);
+                        }
                     }
                 }
             }
         }
-
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            let mut cmd = Command::new("yt-dlp");
-            cmd.arg("--version");
-            cmd.creation_flags(0x08000000);
-            if let Ok(output) = cmd.output() {
-                if output.status.success() {
-                    return Some(PathBuf::from("yt-dlp"));
-                }
-            }
-        }
-
         #[cfg(not(target_os = "windows"))]
         {
-            if let Ok(output) = Command::new("yt-dlp").arg("--version").output() {
+            let mut cmd = Command::new("which");
+            cmd.arg(name);
+            if let Ok(output) = cmd.output() {
                 if output.status.success() {
-                    return Some(PathBuf::from("yt-dlp"));
+                    let out_str = String::from_utf8_lossy(&output.stdout);
+                    if let Some(first_line) = out_str.lines().next() {
+                        let pb = PathBuf::from(first_line.trim());
+                        if pb.exists() {
+                            return Some(pb);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Locate the yt-dlp binary across App Dir, SuperIDM bin, PATH, and standard directories.
+    pub fn find_ytdlp_binary() -> Option<PathBuf> {
+        // 1. Prefer the self-updated copy in AppData/Local/SuperIDM/bin (written by the
+        //    "Update engine" button). The bundled copy next to the exe is read-only inside
+        //    MSIX and quickly becomes outdated when YouTube changes its player.
+        if let Some(local_bin) = Self::get_local_ytdlp_path() {
+            if let Ok(meta) = std::fs::metadata(&local_bin) {
+                if meta.len() > 1_000_000 {
+                    return Some(local_bin);
                 }
             }
         }
 
+        // 2. Bundled binary next to running application
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(app_dir) = exe.parent() {
+                let p1 = app_dir.join("yt-dlp.exe");
+                if p1.exists() { return Some(p1); }
+                let p2 = app_dir.join("bin").join("yt-dlp.exe");
+                if p2.exists() { return Some(p2); }
+            }
+        }
+
+        // 3. Check system PATH via 'where yt-dlp'
+        if let Some(p) = Self::find_executable("yt-dlp") {
+            return Some(p);
+        }
+
+        // 4. Common standard candidate locations
         if let Some(home) = dirs::home_dir() {
             let candidates = vec![
                 home.join(r"AppData\Local\SuperIDM\bin\yt-dlp.exe"),
@@ -190,8 +378,31 @@ impl MediaExtractor {
         None
     }
 
-    /// Locate ffmpeg binary on the system with full absolute path.
+    /// Locate ffmpeg binary on the system across App Dir, SuperIDM bin, and system candidates.
     pub fn find_ffmpeg_binary() -> Option<PathBuf> {
+        // 1. Check next to running application (bundled binary in app dir)
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(app_dir) = exe.parent() {
+                let p1 = app_dir.join("ffmpeg.exe");
+                if p1.exists() { return Some(p1); }
+                let p2 = app_dir.join("bin").join("ffmpeg.exe");
+                if p2.exists() { return Some(p2); }
+            }
+        }
+
+        // 2. Check AppData/Local/SuperIDM/bin/ffmpeg.exe
+        if let Some(local_bin) = Self::get_local_ytdlp_path().and_then(|p| p.parent().map(|d| d.join("ffmpeg.exe"))) {
+            if local_bin.exists() {
+                return Some(local_bin);
+            }
+        }
+
+        // 3. Check system PATH via 'where ffmpeg'
+        if let Some(p) = Self::find_executable("ffmpeg") {
+            return Some(p);
+        }
+
+        // 4. Candidate locations
         if let Some(home) = dirs::home_dir() {
             let candidates = vec![
                 home.join(r"AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe"),
@@ -206,25 +417,6 @@ impl MediaExtractor {
             for path in candidates {
                 if path.exists() {
                     return Some(path);
-                }
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            let mut cmd = Command::new("where");
-            cmd.arg("ffmpeg.exe");
-            cmd.creation_flags(0x08000000);
-            if let Ok(output) = cmd.output() {
-                if output.status.success() {
-                    let out_str = String::from_utf8_lossy(&output.stdout);
-                    if let Some(first_line) = out_str.lines().next() {
-                        let pb = PathBuf::from(first_line.trim());
-                        if pb.exists() {
-                            return Some(pb);
-                        }
-                    }
                 }
             }
         }
@@ -361,22 +553,46 @@ impl MediaExtractor {
             Err(_) => Self::find_ytdlp_binary().ok_or_else(|| "Media extractor core not available".to_string())?,
         };
 
-        let has_ffmpeg = Self::find_ffmpeg_binary().is_some();
+        // YouTube (and most platforms) serve video and audio as SEPARATE streams for anything
+        // above 360p, so FFmpeg is required for virtually every download. Always bootstrap it
+        // when missing — not only for "high-res" format ids (format 397 = 480p was missed before,
+        // leaving the user with unmerged `.f397.mp4` + `.f140.m4a` files).
+        let mut has_ffmpeg = Self::find_ffmpeg_binary().is_some();
+        if !has_ffmpeg {
+            eprintln!("[SuperIDM] FFmpeg missing. Triggering On-Demand FFmpeg Auto-Bootstrap...");
+            match Self::ensure_ffmpeg_binary(client).await {
+                Ok(p) => {
+                    eprintln!("[SuperIDM] FFmpeg Auto-Bootstrap succeeded: {:?}", p);
+                    has_ffmpeg = true;
+                }
+                Err(e) => {
+                    eprintln!("[SuperIDM] FFmpeg Auto-Bootstrap failed ({}); falling back to single combined stream.", e);
+                }
+            }
+        }
+
+        // Without FFmpeg we must NEVER request a `video+audio` combination, otherwise yt-dlp
+        // leaves two unmerged part files. Only pick formats that already contain both tracks.
+        const SINGLE_STREAM_ONLY: &str =
+            "best[ext=mp4][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best";
+
         let format_arg_str = match format_id {
             Some(fid) if !fid.is_empty() && fid != "best" && fid != "auto" => {
-                if fid.contains('+') || fid.to_lowercase().contains("audio") {
-                    fid.to_string()
-                } else if has_ffmpeg {
-                    format!("{}+bestaudio[ext=m4a]/{}+bestaudio/best", fid, fid)
+                if has_ffmpeg {
+                    if fid.contains('+') || fid.to_lowercase().contains("audio") {
+                        fid.to_string()
+                    } else {
+                        format!("{}+bestaudio[ext=m4a]/{}+bestaudio/best", fid, fid)
+                    }
                 } else {
-                    format!("{}/best[ext=mp4]/best", fid)
+                    SINGLE_STREAM_ONLY.to_string()
                 }
             }
             _ => {
                 if has_ffmpeg {
                     "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best".to_string()
                 } else {
-                    "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best".to_string()
+                    SINGLE_STREAM_ONLY.to_string()
                 }
             }
         };
@@ -397,7 +613,12 @@ impl MediaExtractor {
             cmd.arg("--merge-output-format").arg("mp4");
         }
 
-        cmd.arg("--js-runtimes").arg("node");
+        // Only specify JS runtime if the executable is actually present on system
+        if Self::find_executable("node").is_some() {
+            cmd.arg("--js-runtimes").arg("node");
+        } else if Self::find_executable("deno").is_some() {
+            cmd.arg("--js-runtimes").arg("deno");
+        }
 
         if let Some(ffmpeg_bin) = Self::find_ffmpeg_binary() {
             cmd.arg("--ffmpeg-location").arg(ffmpeg_bin.to_string_lossy().to_string());
@@ -421,6 +642,23 @@ impl MediaExtractor {
         let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn extractor: {}", e))?;
         let stdout = child.stdout.take().ok_or_else(|| "Failed to open stdout".to_string())?;
         let mut reader = tokio::io::BufReader::new(stdout).lines();
+
+        // Asynchronously drain stderr to prevent pipe buffer deadlock on Windows
+        let stderr = child.stderr.take();
+        let stderr_log = std::sync::Arc::new(parking_lot::Mutex::new(Vec::<String>::new()));
+        let stderr_log_c = stderr_log.clone();
+        if let Some(err_stream) = stderr {
+            tokio::spawn(async move {
+                let mut err_reader = tokio::io::BufReader::new(err_stream).lines();
+                while let Ok(Some(err_line)) = err_reader.next_line().await {
+                    let mut log = stderr_log_c.lock();
+                    if log.len() >= 40 {
+                        log.remove(0);
+                    }
+                    log.push(err_line);
+                }
+            });
+        }
 
         let mut is_audio_pass = false;
         let mut final_path: Option<std::path::PathBuf> = None;
@@ -548,7 +786,7 @@ impl MediaExtractor {
         let status = child.wait().await.map_err(|e| format!("Child wait failed: {}", e))?;
         if status.success() {
             // Auto-recovery: If split .f*.mp4 and .f*.m4a files exist, merge them directly with FFmpeg
-            if let Some(merged_file) = Self::auto_merge_unmerged_parts(dest_dir).await {
+            if let Some(merged_file) = Self::auto_merge_unmerged_parts(client, dest_dir).await {
                 final_path = Some(merged_file);
             }
 
@@ -567,7 +805,15 @@ impl MediaExtractor {
             let _ = progress_tx.send((1.0, 0.0, reported_total, reported_total, 0.0, true, fname)).await;
             Ok(final_pb)
         } else {
-            Err("Video extraction download failed".into())
+            let last_err = {
+                let log = stderr_log.lock();
+                log.iter().rev()
+                    .find(|l| l.contains("ERROR:") || l.contains("Error") || l.contains("error"))
+                    .cloned()
+                    .unwrap_or_else(|| log.last().cloned().unwrap_or_else(|| "Video extraction failed".to_string()))
+            };
+            eprintln!("[MediaExtractor Error] yt-dlp exit status: {:?}, detail: {}", status.code(), last_err);
+            Err(format!("Video extraction failed: {}", last_err))
         }
     }
 
@@ -595,7 +841,7 @@ impl MediaExtractor {
     }
 
     /// Automatically find matching video and audio part files in dest_dir and merge them with FFmpeg.
-    pub async fn auto_merge_unmerged_parts(dest_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    pub async fn auto_merge_unmerged_parts(client: &Client, dest_dir: &std::path::Path) -> Option<std::path::PathBuf> {
         let mut video_parts = Vec::new();
         let mut audio_parts = Vec::new();
 
@@ -612,38 +858,52 @@ impl MediaExtractor {
             }
         }
 
-        if let Some(ffmpeg_bin) = Self::find_ffmpeg_binary() {
-            for vpath in &video_parts {
-                let vname = vpath.file_name()?.to_str()?;
-                let base_name = if let Some(idx) = vname.rfind(".f") {
-                    &vname[..idx]
-                } else {
-                    continue;
-                };
+        if video_parts.is_empty() || audio_parts.is_empty() {
+            return None;
+        }
 
-                if let Some(apath) = audio_parts.iter().find(|ap| {
-                    ap.file_name().and_then(|n| n.to_str()).map(|an| an.starts_with(base_name)).unwrap_or(false)
-                }) {
-                    let final_merged = dest_dir.join(format!("{}.mp4", base_name));
-                    let mut cmd = Command::new(&ffmpeg_bin);
-                    cmd.arg("-y")
-                        .arg("-i").arg(vpath)
-                        .arg("-i").arg(apath)
-                        .arg("-c").arg("copy")
-                        .arg(&final_merged);
+        // Parts exist but FFmpeg may be missing (e.g. bootstrap failed earlier) — retry it now.
+        let ffmpeg_bin = match Self::find_ffmpeg_binary() {
+            Some(b) => b,
+            None => Self::ensure_ffmpeg_binary(client).await.ok()?,
+        };
 
-                    #[cfg(target_os = "windows")]
-                    {
-                        use std::os::windows::process::CommandExt;
-                        cmd.creation_flags(0x08000000);
-                    }
+        for vpath in &video_parts {
+            let vname = match vpath.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+            let base_name = match vname.rfind(".f") {
+                Some(idx) => &vname[..idx],
+                None => continue,
+            };
+            let audio_prefix = format!("{}.f", base_name);
 
-                    if let Ok(status) = cmd.status() {
-                        if status.success() {
-                            let _ = tokio::fs::remove_file(vpath).await;
-                            let _ = tokio::fs::remove_file(apath).await;
-                            return Some(final_merged);
-                        }
+            if let Some(apath) = audio_parts.iter().find(|ap| {
+                ap.file_name().and_then(|n| n.to_str()).map(|an| an.starts_with(&audio_prefix)).unwrap_or(false)
+            }) {
+                let final_merged = dest_dir.join(format!("{}.mp4", base_name));
+                let mut cmd = tokio::process::Command::new(&ffmpeg_bin);
+                cmd.arg("-y")
+                    .arg("-i").arg(vpath)
+                    .arg("-i").arg(apath)
+                    .arg("-map").arg("0:v:0")
+                    .arg("-map").arg("1:a:0")
+                    .arg("-c").arg("copy")
+                    .arg(&final_merged)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null());
+
+                #[cfg(target_os = "windows")]
+                {
+                    cmd.creation_flags(0x08000000);
+                }
+
+                if let Ok(status) = cmd.status().await {
+                    if status.success() {
+                        let _ = tokio::fs::remove_file(vpath).await;
+                        let _ = tokio::fs::remove_file(apath).await;
+                        return Some(final_merged);
                     }
                 }
             }

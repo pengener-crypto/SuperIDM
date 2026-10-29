@@ -4,6 +4,8 @@
 > Developed by **Kutha SoftWorks**
 
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20it%20on%20Windows-0078D4?logo=microsoft&logoColor=white)](https://apps.microsoft.com/detail/XP8M52XFHFS9Z2)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Extension-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo)
+[![Edge Add-ons](https://img.shields.io/badge/Edge%20Add--ons-Extension-0078D7?logo=microsoftedge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-cyan.svg)](https://github.com/pengener-crypto/SuperIDM)
 [![Built With](https://img.shields.io/badge/Built%20With-Rust%202024%20%7C%20Tauri%20v2-orange.svg)](https://tauri.app/)
@@ -35,11 +37,15 @@ Grab the latest release from the [Releases](https://github.com/pengener-crypto/S
 * **Installer:** `SuperIDM_Setup.exe` (silent install supported via `/S`)
 * **Portable:** `SuperIDM.exe` (run directly without installation)
 
-### Browser Integration (Extension)
-Compatible with all Chromium-based browsers (Microsoft Edge, Google Chrome, Brave, Opera, Vivaldi):
-1. Open your browser's extensions page (`edge://extensions` or `chrome://extensions`).
-2. Enable **Developer Mode**.
-3. Load the unpacked `extension/` directory, or install the official packaged build.
+### 🧩 Browser Integration (Extension)
+Install the official extension from your browser's store — it pairs with the desktop app automatically (no token setup needed):
+
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo)
+[![Edge Add-ons](https://img.shields.io/badge/Edge%20Add--ons-Get%20for%20Edge-0078D7?logo=microsoftedge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem)
+
+* **Google Chrome / Brave / Opera / Vivaldi:** [Chrome Web Store](https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo)
+* **Microsoft Edge:** [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem)
+* **Manual (developers):** enable Developer Mode on `chrome://extensions` and load the unpacked `extension/` directory.
 
 ---
 
@@ -50,7 +56,7 @@ Compatible with all Chromium-based browsers (Microsoft Edge, Google Chrome, Brav
 │           Browser Extension           │
 │         (Chromium Manifest V3)        │
 └──────────────────┬────────────────────┘
-                   │ Local RPC (127.0.0.1:51733)
+                   │ Local RPC (127.0.0.1:6800 / 6801)
                    │ Authenticated Session Handshake
 ┌──────────────────▼────────────────────┐
 │          SuperIDM Core Engine         │

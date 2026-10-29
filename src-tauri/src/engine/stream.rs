@@ -203,7 +203,9 @@ impl StreamEngine {
 
         std::fs::write(&list_file, &content).map_err(|e| format!("Failed to write concat list: {}", e))?;
 
-        let mut cmd = Command::new("ffmpeg");
+        let ffmpeg_bin = crate::engine::extractor::MediaExtractor::find_ffmpeg_binary()
+            .unwrap_or_else(|| PathBuf::from("ffmpeg"));
+        let mut cmd = Command::new(&ffmpeg_bin);
         cmd.arg("-f")
             .arg("concat")
             .arg("-safe")

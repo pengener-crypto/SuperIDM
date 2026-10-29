@@ -19,6 +19,11 @@ __pycache__/
 github_manage.py
 push_and_release.py
 upload_installer.py
+SuperIDM_Setup.exe
+SuperIDM.exe
+*.msix
+msix_build/yt-dlp.exe
+msix_build/super-idm.exe
 
 # Operating System Files
 Thumbs.db

@@ -81,6 +81,39 @@ function saveSettings() {
   chrome.storage.local.set({ superidm_settings: settings, superidm_rpc_token: rpcToken });
 }
 
+// ═══════ Automatic Pairing ═══════
+// Each SuperIDM install generates its own secret token, so a store-installed extension
+// cannot ship with it. The desktop app hands the token only to browser-extension origins.
+let paired = false;
+let pairingPromise = null;
+
+async function pairWithApp() {
+  if (pairingPromise) return pairingPromise;
+  pairingPromise = (async () => {
+    try {
+      const res = await fetch(RPC_HTTP_URL + '/api/pair', { method: 'GET', cache: 'no-store' });
+      if (!res.ok) return false;
+      const json = await res.json();
+      if (json && typeof json.token === 'string' && json.token) {
+        if (json.token !== rpcToken) {
+          rpcToken = json.token;
+          await chrome.storage.local.set({ superidm_rpc_token: rpcToken });
+          // Re-authenticate any open WebSocket with the fresh token
+          if (ws) { try { ws.close(); } catch (e) {} }
+        }
+        paired = true;
+        return true;
+      }
+    } catch (e) { /* app offline or older version without pairing */ }
+    return false;
+  })();
+  try {
+    return await pairingPromise;
+  } finally {
+    pairingPromise = null;
+  }
+}
+
 // ═══════ WebSocket Connection ═══════
 async function isServerOnline() {
   try {
@@ -109,8 +142,9 @@ async function connectWS() {
   try {
     ws = new WebSocket(RPC_WS_URL);
 
-    ws.onopen = () => {
-      wsConnected = true;
+    ws.onopen = async () => {
+      if (!paired) await pairWithApp();
+      wsConnected = paired;
       // Send authentication handshake if token available
       if (rpcToken) {
         ws.send(JSON.stringify({
@@ -240,15 +274,11 @@ async function sendToSuperIDM(url, filename, format, headers, cookies) {
     }
   };
 
-  // Try WebSocket first
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(payload));
-    return { ok: true, via: 'ws' };
-  }
-
-  // Fallback to HTTP POST with Bearer Token and Custom Header
-  try {
-    const resp = await fetch(`${RPC_HTTP_URL}/api/download`, {
+  // Use HTTP so we get the app's real answer. (The old WebSocket path returned success
+  // immediately, even when the app rejected the request, so downloads silently vanished.)
+  const postDownload = async () => {
+    payload.params.token = rpcToken;
+    return fetch(`${RPC_HTTP_URL}/api/download`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -257,10 +287,38 @@ async function sendToSuperIDM(url, filename, format, headers, cookies) {
       },
       body: JSON.stringify(payload.params)
     });
-    if (resp.ok) return { ok: true, via: 'http' };
-  } catch (e) { /* fallback failed */ }
+  };
 
-  return { ok: false, error: 'SuperIDM desktop app is not running' };
+  try {
+    if (!rpcToken) await pairWithApp();
+    let resp = await postDownload();
+
+    // Token missing/stale (e.g. app reinstalled) -> pair automatically and retry once
+    if (resp.status === 401) {
+      paired = false;
+      if (await pairWithApp()) {
+        resp = await postDownload();
+      }
+    }
+
+    if (resp.status === 401) {
+      return { ok: false, error: 'Extension is not paired with SuperIDM. Please update the SuperIDM desktop app.' };
+    }
+    if (!resp.ok) {
+      return { ok: false, error: `SuperIDM rejected the request (HTTP ${resp.status})` };
+    }
+
+    let json = null;
+    try { json = await resp.json(); } catch (e) { /* ignore */ }
+    const result = json && json.result;
+    if (result && result.status && result.status !== 'ok') {
+      return { ok: false, error: result.message || 'SuperIDM could not queue this download' };
+    }
+    paired = true;
+    return { ok: true, via: 'http' };
+  } catch (e) {
+    return { ok: false, error: 'SuperIDM desktop app is not running' };
+  }
 }
 
 // ═══════ Context Menus ═══════
@@ -312,7 +370,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           type: 'basic',
           iconUrl: 'icons/icon128.png',
           title: 'SuperIDM',
-          message: 'Desktop app is not running. Please start SuperIDM first.'
+          message: result.error || 'Desktop app is not running. Please start SuperIDM first.'
         });
       }
     }
@@ -334,74 +392,107 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-// ═══════ Download Interceptor ═══════
-chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-  if (!settings.interceptDownloads) {
-    suggest();
-    return;
-  }
-
-  // Skip browser internal downloads, data/blob URLs
-  if (!item.url || item.url.startsWith('blob:') || item.url.startsWith('data:') ||
-      item.url.startsWith('chrome-extension://') || item.url.startsWith('edge://')) {
-    suggest();
-    return;
-  }
-
-  // Skip excluded domains
-  if (isDomainExcluded(item.url) || (item.referrer && isDomainExcluded(item.referrer))) {
-    suggest();
-    return;
-  }
-
-  // Check file extension or size threshold
-  const hasMatchingExt = isExtensionSupported(item.url, item.filename);
-  const minBytes = (settings.minFileSizeMB || 1) * 1024 * 1024;
-  if (!hasMatchingExt && item.totalBytes > 0 && item.totalBytes < minBytes) {
-    suggest();
-    return;
-  }
-
-  let dlUrl = item.url;
-  // If downloading an Instagram/FB DASH chunk and referrer points to a reel/post, route the page URL so yt-dlp muxes full video and audio
-  if ((dlUrl.includes('fbcdn.net') || dlUrl.includes('cdninstagram.com')) && item.referrer) {
-    if (item.referrer.includes('instagram.com/reel') || item.referrer.includes('instagram.com/p/')) {
-      dlUrl = item.referrer;
-    }
-  }
-
-  let handled = false;
-  const safeSuggest = () => {
-    if (!handled) {
-      handled = true;
+// ═══════ Download Interceptor (Cross-Browser: Chromium + Firefox) ═══════
+if (chrome.downloads && chrome.downloads.onDeterminingFilename) {
+  // Chromium-based browsers (Chrome, Edge, Brave, Opera)
+  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    if (!settings.interceptDownloads) {
       suggest();
+      return;
     }
-  };
 
-  // Wrap sendToSuperIDM with a 2500ms timeout
-  const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ ok: false, timeout: true }), 2500));
-  const reqHeaders = item.referrer ? { 'Referer': item.referrer } : undefined;
+    // Skip browser internal downloads, data/blob URLs
+    if (!item.url || item.url.startsWith('blob:') || item.url.startsWith('data:') ||
+        item.url.startsWith('chrome-extension://') || item.url.startsWith('edge://')) {
+      suggest();
+      return;
+    }
 
-  Promise.race([sendToSuperIDM(dlUrl, item.filename, null, reqHeaders), timeoutPromise])
-    .then(result => {
-      if (result && result.ok) {
-        handled = true;
-        chrome.downloads.cancel(item.id, () => {
-          if (chrome.runtime.lastError) { /* ignore cancel race */ }
-          chrome.downloads.erase({ id: item.id }, () => {
-            if (chrome.runtime.lastError) { /* ignore */ }
-          });
-        });
-      } else {
-        safeSuggest();
+    // Skip excluded domains
+    if (isDomainExcluded(item.url) || (item.referrer && isDomainExcluded(item.referrer))) {
+      suggest();
+      return;
+    }
+
+    // Check file extension or size threshold
+    const hasMatchingExt = isExtensionSupported(item.url, item.filename);
+    const minBytes = (settings.minFileSizeMB || 1) * 1024 * 1024;
+    if (!hasMatchingExt && item.totalBytes > 0 && item.totalBytes < minBytes) {
+      suggest();
+      return;
+    }
+
+    let dlUrl = item.url;
+    // If downloading an Instagram/FB DASH chunk and referrer points to a reel/post, route the page URL so yt-dlp muxes full video and audio
+    if ((dlUrl.includes('fbcdn.net') || dlUrl.includes('cdninstagram.com')) && item.referrer) {
+      if (item.referrer.includes('instagram.com/reel') || item.referrer.includes('instagram.com/p/')) {
+        dlUrl = item.referrer;
       }
-    })
-    .catch(() => {
-      safeSuggest();
-    });
+    }
 
-  return true; // Keep suggest channel open asynchronously
-});
+    let handled = false;
+    const safeSuggest = () => {
+      if (!handled) {
+        handled = true;
+        suggest();
+      }
+    };
+
+    // Wrap sendToSuperIDM with a 2500ms timeout
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ ok: false, timeout: true }), 2500));
+    const reqHeaders = item.referrer ? { 'Referer': item.referrer } : undefined;
+
+    Promise.race([sendToSuperIDM(dlUrl, item.filename, null, reqHeaders), timeoutPromise])
+      .then(result => {
+        if (result && result.ok) {
+          handled = true;
+          chrome.downloads.cancel(item.id, () => {
+            if (chrome.runtime.lastError) { /* ignore cancel race */ }
+            chrome.downloads.erase({ id: item.id }, () => {
+              if (chrome.runtime.lastError) { /* ignore */ }
+            });
+          });
+        } else {
+          safeSuggest();
+        }
+      })
+      .catch(() => {
+        safeSuggest();
+      });
+
+    return true; // Keep suggest channel open asynchronously
+  });
+} else if (chrome.downloads && chrome.downloads.onCreated) {
+  // Firefox (Gecko) fallback download interceptor
+  chrome.downloads.onCreated.addListener(async (item) => {
+    if (!settings.interceptDownloads) return;
+    if (!item.url || item.url.startsWith('blob:') || item.url.startsWith('data:') ||
+        item.url.startsWith('moz-extension://') || item.url.startsWith('about:')) return;
+
+    if (isDomainExcluded(item.url) || (item.referrer && isDomainExcluded(item.referrer))) return;
+
+    const hasMatchingExt = isExtensionSupported(item.url, item.filename);
+    const minBytes = (settings.minFileSizeMB || 1) * 1024 * 1024;
+    if (!hasMatchingExt && item.totalBytes > 0 && item.totalBytes < minBytes) return;
+
+    let dlUrl = item.url;
+    if ((dlUrl.includes('fbcdn.net') || dlUrl.includes('cdninstagram.com')) && item.referrer) {
+      if (item.referrer.includes('instagram.com/reel') || item.referrer.includes('instagram.com/p/')) {
+        dlUrl = item.referrer;
+      }
+    }
+
+    try {
+      chrome.downloads.cancel(item.id, () => {
+        if (chrome.runtime.lastError) {}
+        chrome.downloads.erase({ id: item.id }, () => {});
+      });
+    } catch (e) {}
+
+    const reqHeaders = item.referrer ? { 'Referer': item.referrer } : undefined;
+    sendToSuperIDM(dlUrl, item.filename, null, reqHeaders);
+  });
+}
 
 // ═══════ Media Stream Sniffer ═══════
 function processMediaRequest(details) {
@@ -546,8 +637,17 @@ connectWS();
 
 setInterval(async () => {
   const online = await isServerOnline();
-  if (online !== wsConnected) {
-    wsConnected = online;
+  if (!online) paired = false;
+
+  // Pair automatically as soon as the desktop app is reachable
+  if (online && !paired) {
+    await pairWithApp();
+  }
+
+  // "Connected" means the app is running AND this extension is paired with it
+  const ready = online && paired;
+  if (ready !== wsConnected) {
+    wsConnected = ready;
     if (!online && ws) {
       try { ws.close(); } catch(e) {}
       ws = null;

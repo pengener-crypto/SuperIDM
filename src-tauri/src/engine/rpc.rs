@@ -219,19 +219,13 @@ fn generate_and_save_token(path: &Path) -> String {
     token
 }
 
-/// Sync the token to the unpacked extension folders so it connects automatically.
+/// Sync the token to the locally unpacked Desktop extension folder so it connects automatically.
+///
+/// NOTE: We intentionally do NOT write into the project's source `extension/` folder anymore.
+/// Doing so leaked the developer's personal token into the Chrome/Edge store packages, which
+/// made every other user's app reject the extension. Store installs now use `/api/pair`.
 fn sync_token_to_extension(token: &str) {
     let json_content = serde_json::json!({ "token": token }).to_string();
-
-    // Check project extension folder
-    if let Ok(cargo_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let proj_ext = PathBuf::from(cargo_dir).parent().map(|p| p.join("extension"));
-        if let Some(dir) = proj_ext {
-            if dir.exists() {
-                let _ = std::fs::write(dir.join("rpc_token.json"), &json_content);
-            }
-        }
-    }
 
     // Check Desktop SuperIDM-Extension folder
     if let Some(desktop) = dirs::desktop_dir() {
@@ -387,11 +381,37 @@ async fn handle_http_request(
         let b = serde_json::json!({
             "status": "ok",
             "app": "SuperIDM",
-            "version": "2.6.1",
-            "auth_required": true
+            "version": env!("CARGO_PKG_VERSION"),
+            "auth_required": true,
+            "pairing": true
         }).to_string();
         return format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{}\r\nContent-Length: {}\r\n\r\n{}",
+            cors_header, b.len(), b
+        );
+    }
+
+    // GET /api/pair (automatic extension pairing)
+    // Store-installed extensions cannot know the per-machine token, so they request it here.
+    // Only a real browser-extension Origin is accepted. Web pages are already rejected above,
+    // and browsers never let a page forge a chrome-extension:// / moz-extension:// Origin.
+    if method == "GET" && path == "/api/pair" {
+        if origin.is_empty() {
+            eprintln!("[RPC Security] Rejected pairing request without extension Origin from {}", peer);
+            let err_body = r#"{"error":"Forbidden: pairing requires a browser extension origin"}"#;
+            return format!(
+                "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                err_body.len(), err_body
+            );
+        }
+        println!("[RPC Security] Paired browser extension: {}", origin);
+        let b = serde_json::json!({
+            "status": "ok",
+            "token": expected_token,
+            "version": env!("CARGO_PKG_VERSION")
+        }).to_string();
+        return format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{}\r\nCache-Control: no-store\r\nContent-Length: {}\r\n\r\n{}",
             cors_header, b.len(), b
         );
     }
@@ -524,7 +544,7 @@ async fn dispatch_method(
         }
 
         "superidm.ping" => {
-            serde_json::json!({ "status": "ok", "app": "SuperIDM", "version": "2.6.1", "authenticated": true })
+            serde_json::json!({ "status": "ok", "app": "SuperIDM", "version": env!("CARGO_PKG_VERSION"), "authenticated": true })
         }
 
         _ => {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SuperIDM &mdash; Download Engine v2.7.0</title>
+<title>SuperIDM &mdash; Download Engine v2.7.1</title>
 <meta name="description" content="SuperIDM is a high-performance download manager with multi-connection segmented downloading, queue management, and real-time bandwidth monitoring."/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -280,6 +280,23 @@ html[dir="rtl"] .text-right {
 html[dir="rtl"] .text-left {
   text-align: right !important;
 }
+
+/* ── RTL number/unit fix ──────────────────────────────────────────────
+   In Arabic mode the bidi algorithm was scrambling metrics:
+   "0.1 MB/s" → "MB/s 0.1", "1 / 2" → "2 / 1",
+   "72.4 MB / 87.7 MB" → "MB / 87.7 MB 72.4".
+   Numeric/mono fields now pick their direction from their own content
+   (Latin numbers stay LTR, Arabic labels stay RTL) while keeping the
+   card's right-side alignment, so speed reads identically in both languages. */
+html[dir="rtl"] [style*="JetBrains Mono"],
+html[dir="rtl"] .font-mono {
+  unicode-bidi: plaintext;
+  text-align: match-parent;
+}
+html[dir="rtl"] .flex.items-baseline {
+  direction: ltr;
+  justify-content: flex-end;
+}
 </style>
 </head>
 <body class="flex h-screen w-screen overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
@@ -293,7 +310,7 @@ html[dir="rtl"] .text-left {
       </div>
       <div>
         <h1 class="text-[16px] font-bold text-primary tracking-tight" style="font-family:Inter">SuperIDM</h1>
-        <p id="brandEngineVer" class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.7.0 Engine</p>
+        <p id="brandEngineVer" class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.7.1 Engine</p>
       </div>
     </div>
     <button id="btnAddModal" onclick="openAddModal()" data-act="open-modal" class="w-full py-2 px-4 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded transition-all flex items-center justify-center gap-2 active:scale-95 glow-btn text-[14px]" style="font-family:Inter">
@@ -575,26 +592,52 @@ html[dir="rtl"] .text-left {
           </button>
         </div>
 
-        <!-- Direct Edge Store Card in Settings -->
-        <div class="mb-4 p-3.5 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px]">E</span>
-              <span class="text-[12px] font-semibold text-on-surface" id="stEdgeDirectLbl">رابط متجر Microsoft Edge الرسمي (مباشر ومعتمد):</span>
+        <!-- Direct Store Links Cards in Settings (Chrome & Edge) -->
+        <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <!-- Chrome Store -->
+          <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px]">G</span>
+                <span class="text-[12px] font-semibold text-on-surface" id="stChromeDirectLbl">متجر Google Chrome الرسمي:</span>
+              </div>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">Chrome &bull; Brave</span>
             </div>
-            <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono" id="stEdgeStoreTag">Official Store</span>
+            <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
+              <span class="material-symbols-outlined text-primary text-[15px] ml-1">link</span>
+              <input id="chromeStoreUrlSettingsInp" type="text" readonly value="https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en" class="chrome-store-url-val flex-1 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" dir="ltr" />
+              <button type="button" onclick="copyChromeStoreLink()" class="px-2.5 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
+                <span class="material-symbols-outlined text-[13px] ico-copy-chrome">content_copy</span>
+                <span class="txt-copy-chrome">نسخ</span>
+              </button>
+              <button type="button" onclick="openChromeStorePage()" class="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+                <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+                <span class="txt-open-chrome">فتح</span>
+              </button>
+            </div>
           </div>
-          <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
-            <span class="material-symbols-outlined text-primary text-[16px] ml-1">link</span>
-            <input id="edgeStoreUrlSettingsInp" type="text" readonly value="https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem" class="edge-store-url-val flex-1 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" dir="ltr" />
-            <button type="button" onclick="copyEdgeStoreLink()" class="px-3 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
-              <span class="material-symbols-outlined text-[14px] ico-copy-edge">content_copy</span>
-              <span class="txt-copy-edge">نسخ الرابط</span>
-            </button>
-            <button type="button" onclick="openEdgeStorePage()" class="px-3 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
-              <span class="material-symbols-outlined text-[14px]">open_in_new</span>
-              <span class="txt-open-edge">فتح في المتصفح</span>
-            </button>
+
+          <!-- Edge Store -->
+          <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px]">E</span>
+                <span class="text-[12px] font-semibold text-on-surface" id="stEdgeDirectLbl">متجر Microsoft Edge الرسمي:</span>
+              </div>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">Edge Store</span>
+            </div>
+            <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
+              <span class="material-symbols-outlined text-primary text-[15px] ml-1">link</span>
+              <input id="edgeStoreUrlSettingsInp" type="text" readonly value="https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem" class="edge-store-url-val flex-1 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" dir="ltr" />
+              <button type="button" onclick="copyEdgeStoreLink()" class="px-2.5 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
+                <span class="material-symbols-outlined text-[13px] ico-copy-edge">content_copy</span>
+                <span class="txt-copy-edge">نسخ</span>
+              </button>
+              <button type="button" onclick="openEdgeStorePage()" class="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+                <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+                <span class="txt-open-edge">فتح</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -683,7 +726,7 @@ html[dir="rtl"] .text-left {
       <div class="col-span-2 bg-surface-container border border-outline-variant rounded p-5">
         <div id="stHdrAbout" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-3" style="font-family:'JetBrains Mono'">About SuperIDM</div>
         <div class="grid grid-cols-4 gap-4 text-[13px]" style="font-family:'JetBrains Mono'">
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary">2.7.0</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary">2.7.1</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblEngine" class="text-[11px] text-on-surface-variant mb-1">Engine</div><div class="text-on-surface">SuperIDM/Rust+Tokio</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblProto" class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface">HTTP/HTTPS/FTP</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant">2026.09.22</div></div>
@@ -854,8 +897,8 @@ html[dir="rtl"] .text-left {
     <!-- Tabs Switcher -->
     <div class="flex items-center gap-2 p-1 bg-surface-container-low border border-outline-variant/50 rounded-xl">
       <button type="button" id="tabExtStore" onclick="switchExtTab('store')" class="flex-1 py-1.5 text-center text-[12px] font-semibold rounded-lg bg-primary-container text-on-primary-container transition-all shadow cursor-pointer flex items-center justify-center gap-1.5">
-        <span class="w-4 h-4 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[10px]">E</span>
-        <span id="lblTabStore">متجر Edge الرسمي (تلقائي)</span>
+        <span class="material-symbols-outlined text-[15px]">verified</span>
+        <span id="lblTabStore">المتاجر الرسمية المعتمدة (بنقرة واحدة)</span>
       </button>
       <button type="button" id="tabExtManual" onclick="switchExtTab('manual')" class="flex-1 py-1.5 text-center text-[12px] font-semibold rounded-lg text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer flex items-center justify-center gap-1.5">
         <span class="material-symbols-outlined text-[15px]">menu_book</span>
@@ -864,18 +907,49 @@ html[dir="rtl"] .text-left {
     </div>
     
     <div class="text-[13px] text-on-surface-variant" id="extModalContent">
-      <!-- Tab 1: Official Edge Store Link View -->
+      <!-- Tab 1: Official Stores Links View (Chrome & Edge) -->
       <div id="extViewStore" class="space-y-3.5">
+        <!-- 1. Google Chrome Web Store Card -->
+        <div class="p-4 bg-primary/10 border border-primary/30 rounded-xl space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px]">G</span>
+              <span class="font-bold text-on-surface text-[14px]" id="extStoreHeadingChrome">متجر Google Chrome الرسمي (Chrome, Brave, Opera)</span>
+            </div>
+            <span class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">موصى به • رسمي</span>
+          </div>
+          <p class="text-[12px] text-on-surface-variant leading-relaxed" id="extStoreNoticeChrome">
+            الإضافة معتمدة رسمياً في متجر Google Chrome الإلكتروني. يمكنك تثبيتها بنقرة واحدة لمتصفح Chrome أو Brave أو Opera:
+          </p>
+          <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
+            <span class="material-symbols-outlined text-primary text-[17px] ml-1">link</span>
+            <input id="chromeStoreUrlInp" type="text" readonly value="https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en" class="chrome-store-url-val flex-1 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" dir="ltr" />
+            <button type="button" onclick="copyChromeStoreLink()" class="px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
+              <span class="material-symbols-outlined text-[15px] ico-copy-chrome">content_copy</span>
+              <span class="txt-copy-chrome">نسخ الرابط</span>
+            </button>
+            <button type="button" onclick="openChromeStorePage()" class="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+              <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+              <span class="txt-open-chrome">فتح بالمتصفح</span>
+            </button>
+          </div>
+          <div class="flex items-center gap-1.5 text-[11.5px] text-primary">
+            <span class="material-symbols-outlined text-[15px] flex-shrink-0">info</span>
+            <span id="extStoreInstructionChrome">بعد فتح الرابط في المتصفح، اضغط على زر <b>"إضافة إلى Chrome" (Add to Chrome)</b> الأزرق لتثبيت الإضافة مباشرة.</span>
+          </div>
+        </div>
+
+        <!-- 2. Microsoft Edge Add-ons Card -->
         <div class="p-4 bg-primary/10 border border-primary/30 rounded-xl space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px]">E</span>
-              <span class="font-bold text-on-surface text-[14px]" id="extStoreHeading">متجر Microsoft Edge الرسمي (معتمدة وآمنة)</span>
+              <span class="font-bold text-on-surface text-[14px]" id="extStoreHeadingEdge">متجر Microsoft Edge الرسمي (معتمدة وآمنة)</span>
             </div>
-            <span class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold" id="extStoreBadge">موصى به • رسمي</span>
+            <span class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">موصى به • رسمي</span>
           </div>
-          <p class="text-[12px] text-on-surface-variant leading-relaxed" id="extStoreNotice">
-            نظراً لأن الإضافة معتمدة حديثاً في متجر Edge، قد لا تظهر فوراً عند البحث عنها بالاسم. يمكنك نسخ هذا الرابط المباشر ولصقه في شريط عنوان المتصفح أو الضغط على زر الفتح:
+          <p class="text-[12px] text-on-surface-variant leading-relaxed" id="extStoreNoticeEdge">
+            الإضافة معتمدة رسمياً في متجر إضافات Microsoft Edge. يمكنك تثبيتها بنقرة واحدة لمتصفح Edge:
           </p>
           <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
             <span class="material-symbols-outlined text-primary text-[17px] ml-1">link</span>
@@ -891,7 +965,7 @@ html[dir="rtl"] .text-left {
           </div>
           <div class="flex items-center gap-1.5 text-[11.5px] text-primary">
             <span class="material-symbols-outlined text-[15px] flex-shrink-0">info</span>
-            <span id="extStoreInstruction">بعد فتح الرابط في المتصفح، اضغط على زر <b>"الحصول على" (Get)</b> الأزرق لتثبيت الإضافة بنقرة واحدة.</span>
+            <span id="extStoreInstructionEdge">بعد فتح الرابط في المتصفح، اضغط على زر <b>"الحصول على" (Get)</b> الأزرق لتثبيت الإضافة بنقرة واحدة.</span>
           </div>
         </div>
 
@@ -926,7 +1000,7 @@ html[dir="rtl"] .text-left {
                 </button>
               </div>
               <p class="text-[11px] text-on-surface-variant leading-relaxed" id="manStep1Desc">
-                اضغط على الزر أعلاه لفتح مجلد <b class="text-primary font-mono">SuperIDM-Extension</b> المستخرج على سطح مكتبك تلقائياً.
+                اضغط على الزر أعلاه لفتح مجلد الإضافة <b class="text-primary font-mono">extension</b> تلقائياً.
               </p>
             </div>
           </div>
@@ -974,8 +1048,8 @@ html[dir="rtl"] .text-left {
             <div class="flex-1 min-w-0">
               <p class="font-semibold text-on-surface text-[12px]" id="manStep4Hdr">تحميل وتثبيت الإضافة</p>
               <p class="text-[11px] text-on-surface-variant leading-relaxed" id="manStep4Desc">
-                • <b>الأسهل:</b> اسحب مجلد <code class="text-primary font-mono font-bold">SuperIDM-Extension</code> من سطح المكتب وأفلته بالماوس داخل صفحة المتصفح.<br/>
-                • <b>أو:</b> اضغط زر <b>"تحميل حزمة مفكوكة" (Load unpacked)</b> في أعلى صفحة المتصفح واختر مجلد SuperIDM-Extension.
+                • <b>الأسهل:</b> اسحب مجلد <code class="text-primary font-mono font-bold">extension</code> الذي فُتح لك وأفلته بالماوس داخل صفحة المتصفح.<br/>
+                • <b>أو:</b> اضغط زر <b>"تحميل حزمة مفكوكة" (Load unpacked)</b> في أعلى صفحة المتصفح واختر مجلد extension الذي فُتح لك.
               </p>
             </div>
           </div>
@@ -3117,7 +3191,7 @@ function playCompletionChime() {
 let gLastTitle = '';
 function updateWindowTitle(activeCount, totSpeed, avgProg) {
   const en = document.getElementById('taskbarSpeedOpt')?.checked ?? true;
-  let title = 'SuperIDM — Download Engine v2.7.0';
+  let title = 'SuperIDM — Download Engine v2.7.1';
   if (en && activeCount > 0) {
     const spdStr = fmtSpd(totSpeed);
     const pct = Math.round(avgProg * 100);
@@ -3358,7 +3432,7 @@ const I18N = {
   ar: {
     // Header & Brand
     langBtn: 'English',
-    brandEngineVer: 'محرك v2.7.0 فائق السرعة',
+    brandEngineVer: 'محرك v2.7.1 فائق السرعة',
     txtAddLink: 'إضافة رابط جديد',
     txtDownloadsHdr: 'التنزيلات',
     txtNavDl: 'جارٍ التنزيل',
@@ -3449,27 +3523,30 @@ const I18N = {
     stBtnChrome: 'تكامل بنقرة واحدة ←',
     stBtnEdge: 'تثبيت من متجر Edge الرسمي ←',
     stBtnBrave: 'تكامل بنقرة واحدة ←',
-    stEdgeDirectLbl: 'رابط متجر Microsoft Edge الرسمي (مباشر ومعتمد):',
+    stChromeDirectLbl: 'متجر Google Chrome الرسمي:',
+    stEdgeDirectLbl: 'متجر Microsoft Edge الرسمي:',
     stEdgeStoreTag: 'متجر رسمي معتمد',
     stLblExtLoc: 'حالة الإضافة:',
     stExtStatusTxt: 'جاهزة ومتزامنة',
     extModalTitle: 'تثبيت إضافة SuperIDM في المتصفح',
-    lblTabStore: 'متجر Edge الرسمي (تلقائي)',
+    lblTabStore: 'المتاجر الرسمية المعتمدة (بنقرة واحدة)',
     lblTabManual: 'إرشادات التثبيت اليدوي (خطوة بخطوة)',
-    extStoreHeading: 'متجر Microsoft Edge الرسمي (معتمدة وآمنة)',
-    extStoreBadge: 'موصى به • رسمي',
-    extStoreNotice: 'نظراً لأن الإضافة معتمدة حديثاً في متجر Edge، قد لا تظهر فوراً عند البحث عنها بالاسم. يمكنك نسخ هذا الرابط المباشر ولصقه في شريط عنوان المتصفح أو الضغط على زر الفتح:',
-    extStoreInstruction: 'بعد فتح الرابط في المتصفح، اضغط على زر "الحصول على" (Get) الأزرق لتثبيت الإضافة بنقرة واحدة.',
+    extStoreHeadingChrome: 'متجر Google Chrome الرسمي (Chrome, Brave, Opera)',
+    extStoreNoticeChrome: 'الإضافة معتمدة رسمياً في متجر Google Chrome الإلكتروني. يمكنك تثبيتها بنقرة واحدة لمتصفح Chrome أو Brave أو Opera:',
+    extStoreInstructionChrome: 'بعد فتح الرابط في المتصفح، اضغط على زر "إضافة إلى Chrome" (Add to Chrome) الأزرق لتثبيت الإضافة مباشرة.',
+    extStoreHeadingEdge: 'متجر Microsoft Edge الرسمي (معتمدة وآمنة)',
+    extStoreNoticeEdge: 'الإضافة معتمدة رسمياً في متجر إضافات Microsoft Edge. يمكنك تثبيتها بنقرة واحدة لمتصفح Edge:',
+    extStoreInstructionEdge: 'بعد فتح الرابط في المتصفح، اضغط على زر "الحصول على" (Get) الأزرق لتثبيت الإضافة بنقرة واحدة.',
     manGuideTitle: 'خطوات التثبيت اليدوي المفصلة (لجميع المتصفحات):',
     manStep1Hdr: '1. فتح واستخراج مجلد الإضافة',
     manBtnOpenFolder: 'فتح المجلد الآن',
-    manStep1Desc: 'اضغط على الزر أعلاه لفتح مجلد SuperIDM-Extension المستخرج على سطح مكتبك تلقائياً.',
+    manStep1Desc: 'اضغط على الزر أعلاه لفتح مجلد الإضافة extension تلقائياً.',
     manStep2Hdr: '2. فتح صفحة إدارة الإضافات في متصفحك',
     manStep2Desc: 'اختر متصفحك لفتح صفحة الإضافات بنقرة واحدة مباشرة:',
     manStep3Hdr: '3. تفعيل خيار "وضع المطور" (Developer mode)',
     manStep3Desc: '• في Edge: ستجد في القائمة الجانبية اليسرى أو أعلى الصفحة خيار "وضع المطور"، اضغط عليه لتفعيله (المفتاح الأزرق).\n• في Chrome / Brave: ستجد في الزاوية العلوية اليمنى مفتاح "Developer mode"، قم بتشغيله.',
     manStep4Hdr: '4. تحميل وتثبيت الإضافة',
-    manStep4Desc: '• الأسهل: اسحب مجلد SuperIDM-Extension من سطح المكتب وأفلته بالماوس داخل صفحة المتصفح.\n• أو: اضغط زر "تحميل حزمة مفكوكة" (Load unpacked) في أعلى صفحة المتصفح واختر مجلد SuperIDM-Extension.',
+    manStep4Desc: '• الأسهل: اسحب مجلد extension الذي فُتح لك وأفلته بالماوس داخل صفحة المتصفح.\n• أو: اضغط زر "تحميل حزمة مفكوكة" (Load unpacked) في أعلى صفحة المتصفح واختر مجلد extension الذي فُتح لك.',
     manStep5Hdr: '5. تثبيت الأيقونة في المتصفح (Pin to Toolbar)',
     manStep5Desc: 'اضغط على أيقونة الإضافات (رمز قطعة البازل 🧩) في شريط المتصفح بجانب شريط العناوين، ثم اضغط رمز الدبوس 📌 بجانب SuperIDM لتثبيتها دائماً.',
     extModalBtnFolder: 'فتح مجلد الإضافة',
@@ -3570,7 +3647,7 @@ const I18N = {
   en: {
     // Header & Brand
     langBtn: 'العربية',
-    brandEngineVer: 'v2.7.0 Engine',
+    brandEngineVer: 'v2.7.1 Engine',
     txtAddLink: 'Add New Link',
     txtDownloadsHdr: 'Downloads',
     txtNavDl: 'Downloading',
@@ -3661,27 +3738,30 @@ const I18N = {
     stBtnChrome: '1-Click Integrate →',
     stBtnEdge: 'Official Edge Store Install →',
     stBtnBrave: '1-Click Integrate →',
-    stEdgeDirectLbl: 'Official Microsoft Edge Store (Direct Verified Link):',
+    stChromeDirectLbl: 'Official Google Chrome Store:',
+    stEdgeDirectLbl: 'Official Microsoft Edge Store:',
     stEdgeStoreTag: 'Official Store',
     stLblExtLoc: 'Extension Status:',
     stExtStatusTxt: 'Ready & Synced',
     extModalTitle: 'Install SuperIDM Browser Extension',
-    lblTabStore: 'Official Edge Store (Automatic)',
+    lblTabStore: 'Official Extension Stores (1-Click)',
     lblTabManual: 'Manual Step-by-Step Guide',
-    extStoreHeading: 'Official Microsoft Edge Store (Verified & Safe)',
-    extStoreBadge: 'Recommended • Official',
-    extStoreNotice: 'Because the extension is newly approved, it may take time to appear in the internal store search. Use this direct link to install it with 1-click:',
-    extStoreInstruction: 'After opening the page in your browser, click the blue "Get" button to install the extension directly.',
+    extStoreHeadingChrome: 'Official Google Chrome Store (Chrome, Brave, Opera)',
+    extStoreNoticeChrome: 'The extension is officially verified in Google Chrome Web Store. Install with 1-click for Chrome, Brave, or Opera:',
+    extStoreInstructionChrome: 'After opening the page in your browser, click the blue "Add to Chrome" button to install the extension directly.',
+    extStoreHeadingEdge: 'Official Microsoft Edge Store (Verified & Safe)',
+    extStoreNoticeEdge: 'The extension is officially verified in Microsoft Edge Add-ons. Install with 1-click for Microsoft Edge:',
+    extStoreInstructionEdge: 'After opening the page in your browser, click the blue "Get" button to install the extension directly.',
     manGuideTitle: 'Detailed Manual Installation Steps (All Browsers):',
     manStep1Hdr: '1. Open & Extract Extension Folder',
     manBtnOpenFolder: 'Open Folder Now',
-    manStep1Desc: 'Click the button above to open the SuperIDM-Extension folder extracted on your desktop.',
+    manStep1Desc: 'Click the button above to open the extension folder automatically.',
     manStep2Hdr: '2. Open Extensions Management Page in Browser',
     manStep2Desc: 'Choose your browser to open its extensions page directly with 1-click:',
     manStep3Hdr: '3. Enable "Developer mode"',
     manStep3Desc: '• In Edge: Look in the left sidebar or top for "Developer mode" and switch it on (blue switch).\n• In Chrome / Brave: In the top-right corner, turn on the "Developer mode" switch.',
     manStep4Hdr: '4. Load & Install the Extension',
-    manStep4Desc: '• Easiest: Drag & drop the SuperIDM-Extension folder from your desktop directly into the browser window.\n• Or: Click "Load unpacked" at the top of the browser page and choose SuperIDM-Extension folder.',
+    manStep4Desc: '• Easiest: Drag & drop the opened extension folder directly into the browser window.\n• Or: Click "Load unpacked" at the top of the browser page and choose the opened extension folder.',
     manStep5Hdr: '5. Pin Icon to Browser Toolbar',
     manStep5Desc: 'Click the extensions puzzle icon 🧩 in your browser toolbar next to the address bar, then click the pin 📌 next to SuperIDM to keep it visible.',
     extModalBtnFolder: 'Open Extension Folder',
@@ -4150,7 +4230,7 @@ setInterval(localTick, 350);
 setInterval(chkSched, 60000);
 clipInt = setInterval(chkClip, 2500);
 
-addLog('info', '[INIT] SuperIDM v2.7.0 Engine started');
+addLog('info', '[INIT] SuperIDM v2.7.1 Engine started');
 addLog('info', '[READY] All buttons, modals, and download engine are 100% active');
 setTimeout(() => {
   showT('success', 'SuperIDM Engine Ready', 'All buttons active. Click "+ Add New Link" or press Ctrl+N');
@@ -4159,6 +4239,7 @@ setTimeout(() => {
 
 // ════════ BROWSER INTEGRATION ACTIONS ════════
 const EDGE_STORE_URL = 'https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem';
+const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en';
 
 function openExtModal() {
   const m = document.getElementById('extSetupModal');
@@ -4202,6 +4283,51 @@ function switchExtTab(tab) {
   }
 }
 
+async function copyChromeStoreLink() {
+  const isAr = (curLang === 'ar');
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(CHROME_STORE_URL);
+    } else {
+      const inps = document.querySelectorAll('.chrome-store-url-val');
+      if (inps && inps.length > 0) {
+        inps[0].select();
+        document.execCommand('copy');
+      }
+    }
+    showT('success', isAr ? 'تم نسخ الرابط' : 'Link Copied', isAr ? 'تم نسخ رابط متجر Chrome إلى الحافظة! الصقه في المتصفح.' : 'Chrome store link copied! Paste it in Chrome address bar.');
+    
+    const txts = document.querySelectorAll('.txt-copy-chrome');
+    const icos = document.querySelectorAll('.ico-copy-chrome');
+    txts.forEach(t => t.textContent = isAr ? 'تم النسخ!' : 'Copied!');
+    icos.forEach(i => i.textContent = 'check');
+    setTimeout(() => {
+      txts.forEach(t => t.textContent = isAr ? 'نسخ' : 'Copy');
+      icos.forEach(i => i.textContent = 'content_copy');
+    }, 3000);
+  } catch (e) {
+    showT('warn', 'Link', CHROME_STORE_URL);
+  }
+}
+
+async function openChromeStorePage() {
+  const isAr = (curLang === 'ar');
+  showT('info', isAr ? 'متجر Google Chrome' : 'Google Chrome Store', isAr ? 'جاري فتح صفحة الإضافة في المتصفح...' : 'Opening extension page in browser...');
+  if (hasTauriIPC()) {
+    try {
+      await tauriCall('open_external_url', { url: CHROME_STORE_URL });
+    } catch (e) {
+      try {
+        await tauriCall('launch_browser_extensions', { browser: 'chrome_store' });
+      } catch (err) {
+        window.open(CHROME_STORE_URL, '_blank');
+      }
+    }
+  } else {
+    window.open(CHROME_STORE_URL, '_blank');
+  }
+}
+
 async function copyEdgeStoreLink() {
   const isAr = (curLang === 'ar');
   try {
@@ -4221,7 +4347,7 @@ async function copyEdgeStoreLink() {
     txts.forEach(t => t.textContent = isAr ? 'تم النسخ!' : 'Copied!');
     icos.forEach(i => i.textContent = 'check');
     setTimeout(() => {
-      txts.forEach(t => t.textContent = isAr ? 'نسخ الرابط' : 'Copy Link');
+      txts.forEach(t => t.textContent = isAr ? 'نسخ' : 'Copy');
       icos.forEach(i => i.textContent = 'content_copy');
     }, 3000);
   } catch (e) {
@@ -4261,18 +4387,11 @@ async function openBrowserExtensionsPage(browser) {
 
 async function installBrowserExt(browser) {
   openExtModal();
+  switchExtTab('store');
   if (browser === 'edge' || browser === 'microsoft edge') {
-    switchExtTab('store');
     openEdgeStorePage();
   } else {
-    switchExtTab('manual');
-    if (hasTauriIPC()) {
-      try {
-        await tauriCall('install_browser_integration', { browser });
-        await tauriCall('launch_browser_extensions', { browser });
-        await tauriCall('open_extension_folder');
-      } catch (e) {}
-    }
+    openChromeStorePage();
   }
 }
 
@@ -4341,6 +4460,9 @@ function resetBrowserExts() {
 }
 
 window.EDGE_STORE_URL = EDGE_STORE_URL;
+window.CHROME_STORE_URL = CHROME_STORE_URL;
+window.copyChromeStoreLink = copyChromeStoreLink;
+window.openChromeStorePage = openChromeStorePage;
 window.copyEdgeStoreLink = copyEdgeStoreLink;
 window.openEdgeStorePage = openEdgeStorePage;
 window.switchExtTab = switchExtTab;

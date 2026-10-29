@@ -54,27 +54,9 @@ pub fn extract_and_sync_extension(rpc_token: &str) -> Result<PathBuf, String> {
     let token_json = serde_json::json!({ "token": rpc_token });
     let _ = std::fs::write(ext_dir.join("rpc_token.json"), token_json.to_string());
 
-    // Also sync to Desktop folder if present
-    if let Some(desktop) = dirs::desktop_dir() {
-        let desk_ext = desktop.join("SuperIDM-Extension");
-        let desk_icons = desk_ext.join("icons");
-        if let Ok(_) = std::fs::create_dir_all(&desk_icons) {
-            let _ = std::fs::write(desk_ext.join("manifest.json"), EXT_MANIFEST);
-            let _ = std::fs::write(desk_ext.join("background.js"), EXT_BACKGROUND);
-            let _ = std::fs::write(desk_ext.join("content.js"), EXT_CONTENT);
-            let _ = std::fs::write(desk_ext.join("overlay.css"), EXT_OVERLAY_CSS);
-            let _ = std::fs::write(desk_ext.join("popup.html"), EXT_POPUP_HTML);
-            let _ = std::fs::write(desk_ext.join("popup.css"), EXT_POPUP_CSS);
-            let _ = std::fs::write(desk_ext.join("popup.js"), EXT_POPUP_JS);
-            let _ = std::fs::write(desk_ext.join("instagram_helper.js"), EXT_INSTAGRAM_HELPER);
-            let _ = std::fs::write(desk_ext.join("طريقة_التثبيت_اليدوي.txt"), EXT_GUIDE);
-            let _ = std::fs::write(desk_icons.join("icon16.png"), ICON_16);
-            let _ = std::fs::write(desk_icons.join("icon32.png"), ICON_32);
-            let _ = std::fs::write(desk_icons.join("icon48.png"), ICON_48);
-            let _ = std::fs::write(desk_icons.join("icon128.png"), ICON_128);
-            let _ = std::fs::write(desk_ext.join("rpc_token.json"), token_json.to_string());
-        }
-    }
+    // NOTE: We no longer create a `SuperIDM-Extension` folder on the user's Desktop.
+    // The extension is installed from the Chrome Web Store / Edge Add-ons, and the
+    // manual (unpacked) copy lives only in %APPDATA%\SuperIDM\extension.
 
     Ok(ext_dir)
 }
@@ -127,16 +109,21 @@ pub fn register_browser_registry(browser: &str) -> Result<String, String> {
 /// Open browser to extensions management page or official store with 1-click loading assistance
 pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
     let edge_store_url = "https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem";
-    let is_edge_store = browser.eq_ignore_ascii_case("edge_store");
-    let is_edge = matches!(browser.to_lowercase().as_str(), "edge" | "microsoft edge" | "edge_store" | "edge_dev");
+    let chrome_store_url = "https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en";
+    let _is_store = browser.eq_ignore_ascii_case("edge_store") || browser.eq_ignore_ascii_case("chrome_store") || browser.eq_ignore_ascii_case("store");
+    let _is_edge = matches!(browser.to_lowercase().as_str(), "edge" | "microsoft edge" | "edge_store" | "edge_dev");
     
     let target_url = match browser.to_lowercase().as_str() {
         "edge_store" => edge_store_url,
-        "edge" | "microsoft edge" | "edge_dev" => "edge://extensions",
-        "brave" => "brave://extensions",
-        "opera" => "opera://extensions",
-        "vivaldi" => "vivaldi://extensions",
-        _ => "chrome://extensions",
+        "chrome_store" => chrome_store_url,
+        "edge" | "microsoft edge" => edge_store_url,
+        "chrome" | "google chrome" | "brave" | "opera" | "vivaldi" => chrome_store_url,
+        "edge_dev" => "edge://extensions",
+        "chrome_dev" => "chrome://extensions",
+        "brave_dev" => "brave://extensions",
+        "opera_dev" => "opera://extensions",
+        "vivaldi_dev" => "vivaldi://extensions",
+        _ => chrome_store_url,
     };
 
     #[cfg(target_os = "windows")]
@@ -162,19 +149,16 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
         };
 
         // Determine extension directory to pass --load-extension for non-store browsers
-        let ext_dir = if let Some(desk) = dirs::desktop_dir() {
-            let d = desk.join("SuperIDM-Extension");
-            if d.exists() { d } else { get_embedded_extension_dir() }
-        } else {
-            get_embedded_extension_dir()
-        };
+        let ext_dir = get_embedded_extension_dir();
         let load_ext_arg = format!("--load-extension={}", ext_dir.to_string_lossy());
 
         let mut launched = false;
+        let is_http_target = target_url.starts_with("http://") || target_url.starts_with("https://");
+
         for exe in browser_candidates {
             if exe.exists() {
                 let mut cmd = Command::new(&exe);
-                if is_edge_store {
+                if is_http_target {
                     cmd.arg(target_url);
                 } else {
                     cmd.args(&[&load_ext_arg, target_url]);
@@ -188,17 +172,17 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
 
         // If not found by candidate paths, launch via cmd start with browser command name
         if !launched {
-            let browser_name = match browser.to_lowercase().as_str() {
-                "edge" | "microsoft edge" => "msedge",
-                "brave" => "brave",
-                "opera" => "opera",
-                _ => "chrome",
-            };
-            if is_edge {
+            if is_http_target {
                 let _ = Command::new("cmd")
                     .args(&["/c", "start", "", target_url])
                     .spawn();
             } else {
+                let browser_name = match browser.to_lowercase().as_str() {
+                    "edge" | "microsoft edge" => "msedge",
+                    "brave" => "brave",
+                    "opera" => "opera",
+                    _ => "chrome",
+                };
                 let _ = Command::new("cmd")
                     .args(&["/c", "start", "", browser_name, &load_ext_arg, target_url])
                     .spawn();

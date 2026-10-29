@@ -79,6 +79,8 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             commands::launch_browser_extensions,
             commands::check_disk_space,
             commands::update_extractor_core,
+            commands::ensure_ffmpeg_core,
+            commands::check_ffmpeg_status,
             commands::set_window_title,
             commands::open_external_url,
             commands::focus_window,
