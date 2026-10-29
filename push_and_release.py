@@ -5,13 +5,37 @@ import urllib.request
 import urllib.error
 import shutil
 
-token_path = os.path.join(os.path.dirname(__file__), '.token')
-with open(token_path, 'r', encoding='utf-8') as f:
-    TOKEN = f.read().strip()
+def load_github_token():
+    token_path = os.path.join(os.path.dirname(__file__), '.token')
+    if os.path.exists(token_path):
+        t = open(token_path, 'r', encoding='utf-8').read().strip()
+        try:
+            req = urllib.request.Request(
+                'https://api.github.com/user',
+                headers={'Authorization': f'token {t}', 'User-Agent': 'SuperIDM-Deployer'}
+            )
+            urllib.request.urlopen(req, timeout=10)
+            return t
+        except Exception:
+            pass
+    # Fallback to git's configured credential helper
+    res = subprocess.run(
+        ['git', 'credential', 'fill'],
+        input='protocol=https\nhost=github.com\n\n',
+        capture_output=True,
+        text=True,
+        encoding='utf-8'
+    )
+    for line in res.stdout.splitlines():
+        if line.startswith('password='):
+            return line.split('=', 1)[1].strip()
+    return ''
+
+TOKEN = load_github_token()
 
 OWNER = 'pengener-crypto'
 REPO = 'SuperIDM'
-REMOTE_URL = f'https://{TOKEN}@github.com/{OWNER}/{REPO}.git'
+REMOTE_URL = f'https://github.com/{OWNER}/{REPO}.git'
 
 HEADERS = {
     'Authorization': f'token {TOKEN}',
@@ -47,7 +71,7 @@ def push_repo():
     # Commit
     run_cmd(['git', 'commit', '-m', 'feat: release v2.7.1 - On-Demand FFmpeg Auto-Bootstrap, Universal Auto-Pairing & Video Core Hardening'], cwd=cwd)
     
-    # Push to origin main
+    # Push to origin main (pass if already up-to-date)
     res = run_cmd(['git', 'push', 'origin', 'main'], cwd=cwd)
     if res.returncode == 0:
         print("Successfully pushed repository to GitHub!")
