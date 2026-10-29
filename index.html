@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SuperIDM &mdash; Download Engine v2.7.1</title>
+<title>SuperIDM &mdash; Download Engine v2.7.2</title>
 <meta name="description" content="SuperIDM is a high-performance download manager with multi-connection segmented downloading, queue management, and real-time bandwidth monitoring."/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -310,7 +310,7 @@ html[dir="rtl"] .flex.items-baseline {
       </div>
       <div>
         <h1 class="text-[16px] font-bold text-primary tracking-tight" style="font-family:Inter">SuperIDM</h1>
-        <p id="brandEngineVer" class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.7.1 Engine</p>
+        <p id="brandEngineVer" class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.7.2 Engine</p>
       </div>
     </div>
     <button id="btnAddModal" onclick="openAddModal()" data-act="open-modal" class="w-full py-2 px-4 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded transition-all flex items-center justify-center gap-2 active:scale-95 glow-btn text-[14px]" style="font-family:Inter">
@@ -726,7 +726,7 @@ html[dir="rtl"] .flex.items-baseline {
       <div class="col-span-2 bg-surface-container border border-outline-variant rounded p-5">
         <div id="stHdrAbout" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-3" style="font-family:'JetBrains Mono'">About SuperIDM</div>
         <div class="grid grid-cols-4 gap-4 text-[13px]" style="font-family:'JetBrains Mono'">
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary">2.7.1</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary">2.7.2</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblEngine" class="text-[11px] text-on-surface-variant mb-1">Engine</div><div class="text-on-surface">SuperIDM/Rust+Tokio</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblProto" class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface">HTTP/HTTPS/FTP</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant">2026.09.22</div></div>
@@ -3191,7 +3191,7 @@ function playCompletionChime() {
 let gLastTitle = '';
 function updateWindowTitle(activeCount, totSpeed, avgProg) {
   const en = document.getElementById('taskbarSpeedOpt')?.checked ?? true;
-  let title = 'SuperIDM — Download Engine v2.7.1';
+  let title = 'SuperIDM — Download Engine v2.7.2';
   if (en && activeCount > 0) {
     const spdStr = fmtSpd(totSpeed);
     const pct = Math.round(avgProg * 100);
@@ -3432,7 +3432,7 @@ const I18N = {
   ar: {
     // Header & Brand
     langBtn: 'English',
-    brandEngineVer: 'محرك v2.7.1 فائق السرعة',
+    brandEngineVer: 'محرك v2.7.2 فائق السرعة',
     txtAddLink: 'إضافة رابط جديد',
     txtDownloadsHdr: 'التنزيلات',
     txtNavDl: 'جارٍ التنزيل',
@@ -3647,7 +3647,7 @@ const I18N = {
   en: {
     // Header & Brand
     langBtn: 'العربية',
-    brandEngineVer: 'v2.7.1 Engine',
+    brandEngineVer: 'v2.7.2 Engine',
     txtAddLink: 'Add New Link',
     txtDownloadsHdr: 'Downloads',
     txtNavDl: 'Downloading',
@@ -4230,7 +4230,7 @@ setInterval(localTick, 350);
 setInterval(chkSched, 60000);
 clipInt = setInterval(chkClip, 2500);
 
-addLog('info', '[INIT] SuperIDM v2.7.1 Engine started');
+addLog('info', '[INIT] SuperIDM v2.7.2 Engine started');
 addLog('info', '[READY] All buttons, modals, and download engine are 100% active');
 setTimeout(() => {
   showT('success', 'SuperIDM Engine Ready', 'All buttons active. Click "+ Add New Link" or press Ctrl+N');

@@ -5,8 +5,8 @@ import shutil
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SRC_EXT = os.path.join(BASE_DIR, 'extension')
-DIST_FIREFOX_ZIP = os.path.join(BASE_DIR, 'SuperIDM_Firefox_v2.7.1.zip')
-DESKTOP_FIREFOX_ZIP = os.path.join(r'C:\Users\Haider Nasrat\Desktop', 'SuperIDM_Firefox_v2.7.1.zip')
+DIST_FIREFOX_ZIP = os.path.join(BASE_DIR, 'SuperIDM_Firefox_v2.7.2.zip')
+DESKTOP_FIREFOX_ZIP = os.path.join(r'C:\Users\Haider Nasrat\Desktop', 'SuperIDM_Firefox_v2.7.2.zip')
 
 def build_firefox_package():
     print("Building SuperIDM for Mozilla Firefox (AMO Ready)...")

@@ -8,7 +8,7 @@
   <Identity
     Name="KuthaSoftWorks.SuperIDMDownloadManager"
     Publisher="CN=099F81B6-F017-44AC-90BB-BE8FF2032D89"
-    Version="2.7.1.0"
+    Version="2.7.2.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
