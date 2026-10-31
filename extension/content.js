@@ -598,15 +598,9 @@
     badge.style.display = shouldShowBadges() ? '' : 'none';
     badge.style.pointerEvents = 'auto';
     badge.style.zIndex = '2147483647';
-    badge.style.display = shouldShowBadges() ? '' : 'none';
-    badge.style.pointerEvents = 'auto';
-    badge.style.zIndex = '2147483647';
 
     const menu = createQualityMenu(videoEl);
     badge.appendChild(menu);
-
-    const mainBtn = badge.querySelector('.superidm-btn-main');
-    const chevronBtn = badge.querySelector('.superidm-btn-chevron');
 
     // Direct Download Click (Immediate download)
     mainBtn.addEventListener('click', (e) => {
@@ -619,7 +613,7 @@
     }, true);
 
     // Chevron Click (Toggle Quality Menu)
-    chevronBtn.addEventListener('click', (e) => {
+    chevBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.stopImmediatePropagation();
       e.preventDefault();
@@ -726,9 +720,6 @@
         const menu = createQualityMenu(videoEl);
         badge.appendChild(menu);
 
-        const mainBtn = badge.querySelector('.superidm-btn-main');
-        const chevronBtn = badge.querySelector('.superidm-btn-chevron');
-
         mainBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           e.preventDefault();
@@ -737,7 +728,7 @@
           sendDownload(null, 'Video', videoEl);
         });
 
-        chevronBtn.addEventListener('click', (e) => {
+        chevBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           e.preventDefault();
           const isOpen = menu.classList.toggle('superidm-menu-visible');
