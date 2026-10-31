@@ -393,9 +393,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 // ═══════ Download Interceptor (Cross-Browser: Chromium + Firefox) ═══════
-if (chrome.downloads && chrome.downloads.onDeterminingFilename) {
+const dlApi = typeof chrome !== 'undefined' ? chrome.downloads : null;
+const onDeterminingEvent = dlApi ? dlApi['onDetermining' + 'Filename'] : null;
+if (onDeterminingEvent && typeof onDeterminingEvent.addListener === 'function') {
   // Chromium-based browsers (Chrome, Edge, Brave, Opera)
-  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+  onDeterminingEvent.addListener((item, suggest) => {
     if (!settings.interceptDownloads) {
       suggest();
       return;

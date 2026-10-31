@@ -271,6 +271,32 @@
     </svg>
   `;
 
+  function parseSVG(svgString) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgString.trim(), 'image/svg+xml');
+      return doc.documentElement;
+    } catch (e) {
+      return document.createElement('span');
+    }
+  }
+
+  function createBadgeContent(isAudio, customText) {
+    const mainBtn = document.createElement('div');
+    mainBtn.className = 'superidm-btn-main';
+    mainBtn.appendChild(parseSVG(ARROW_SVG));
+    const txt = document.createElement('span');
+    txt.className = 'superidm-btn-text';
+    txt.textContent = customText || (isAudio ? 'Download Audio' : 'Download');
+    mainBtn.appendChild(txt);
+
+    const chevBtn = document.createElement('div');
+    chevBtn.className = 'superidm-btn-chevron';
+    chevBtn.appendChild(parseSVG(CHEVRON_SVG));
+
+    return { mainBtn, chevBtn };
+  }
+
   // ═══════ Extract the best Instagram permalink for the current video ═══════
   async function getInstagramPermalink(videoEl) {
     if (!videoEl) return null;
@@ -464,7 +490,12 @@
 
     const header = document.createElement('div');
     header.className = 'superidm-menu-header';
-    header.innerHTML = '<span>Select Quality</span><span>SuperIDM</span>';
+    const s1 = document.createElement('span');
+    s1.textContent = 'Select Quality';
+    const s2 = document.createElement('span');
+    s2.textContent = 'SuperIDM';
+    header.appendChild(s1);
+    header.appendChild(s2);
     menu.appendChild(header);
 
     const formats = [
@@ -478,7 +509,13 @@
     formats.forEach(({ name, tag, format }) => {
       const item = document.createElement('div');
       item.className = 'superidm-menu-item';
-      item.innerHTML = `<span>${name}</span><span class="superidm-item-tag">${tag}</span>`;
+      const nSpan = document.createElement('span');
+      nSpan.textContent = name;
+      const tSpan = document.createElement('span');
+      tSpan.className = 'superidm-item-tag';
+      tSpan.textContent = tag;
+      item.appendChild(nSpan);
+      item.appendChild(tSpan);
       item.addEventListener('click', (e) => {
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -502,7 +539,11 @@
       toast.id = 'superidm-toast';
       document.body.appendChild(toast);
     }
-    toast.innerHTML = `${ARROW_SVG} <span>${msg}</span>`;
+    toast.textContent = '';
+    toast.appendChild(parseSVG(ARROW_SVG));
+    const span = document.createElement('span');
+    span.textContent = ' ' + msg;
+    toast.appendChild(span);
     toast.classList.add('superidm-toast-show');
     setTimeout(() => toast.classList.remove('superidm-toast-show'), 3500);
   }
@@ -551,7 +592,12 @@
     // Create badge
     const badge = document.createElement('div');
     badge.className = BADGE_CLASS + (isAudio ? ' superidm-audio-badge' : '');
-    badge.innerHTML = `<div class="superidm-btn-main">${ARROW_SVG}<span class="superidm-btn-text">${isAudio ? 'Download Audio' : 'Download'}</span></div><div class="superidm-btn-chevron">${CHEVRON_SVG}</div>`;
+    const { mainBtn, chevBtn } = createBadgeContent(isAudio);
+    badge.appendChild(mainBtn);
+    badge.appendChild(chevBtn);
+    badge.style.display = shouldShowBadges() ? '' : 'none';
+    badge.style.pointerEvents = 'auto';
+    badge.style.zIndex = '2147483647';
     badge.style.display = shouldShowBadges() ? '' : 'none';
     badge.style.pointerEvents = 'auto';
     badge.style.zIndex = '2147483647';
@@ -671,7 +717,9 @@
 
         const badge = document.createElement('div');
         badge.className = BADGE_CLASS + ' superidm-yt-badge';
-        badge.innerHTML = `<div class="superidm-btn-main">${ARROW_SVG}<span class="superidm-btn-text">Download</span></div><div class="superidm-btn-chevron">${CHEVRON_SVG}</div>`;
+        const { mainBtn, chevBtn } = createBadgeContent(false, 'Download');
+        badge.appendChild(mainBtn);
+        badge.appendChild(chevBtn);
         badge.style.display = shouldShowBadges() ? '' : 'none';
 
         const videoEl = player.querySelector('video');

@@ -153,11 +153,15 @@ function renderMedia(mediaList) {
   count.textContent = mediaList.length;
 
   if (mediaList.length === 0) {
-    container.innerHTML = '<div class="media-empty">No media detected on this tab</div>';
+    container.textContent = '';
+    const empty = document.createElement('div');
+    empty.className = 'media-empty';
+    empty.textContent = 'No media detected on this tab';
+    container.appendChild(empty);
     return;
   }
 
-  container.innerHTML = '';
+  container.textContent = '';
   mediaList.forEach(m => {
     const item = document.createElement('div');
     item.className = 'media-item';
@@ -168,12 +172,18 @@ function renderMedia(mediaList) {
       shortUrl = urlObj.pathname.split('/').pop() || urlObj.hostname;
     } catch (e) {}
 
-    item.innerHTML = `
-      <div class="media-info">
-        <div class="media-name" title="${m.url}">${shortUrl}</div>
-        <div class="media-type">${m.type || 'media'}</div>
-      </div>
-    `;
+    const info = document.createElement('div');
+    info.className = 'media-info';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'media-name';
+    nameEl.title = m.url;
+    nameEl.textContent = shortUrl;
+    const typeEl = document.createElement('div');
+    typeEl.className = 'media-type';
+    typeEl.textContent = m.type || 'media';
+    info.appendChild(nameEl);
+    info.appendChild(typeEl);
+    item.appendChild(info);
 
     const btn = document.createElement('button');
     btn.className = 'media-dl-btn';
