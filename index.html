@@ -342,7 +342,7 @@ html[dir="rtl"] .flex.items-baseline {
     <div class="mt-3 px-3 flex items-center gap-3">
       <div class="w-8 h-8 rounded-full bg-primary/15 border border-primary/25 flex items-center justify-center"><span class="material-symbols-outlined text-primary text-[16px]">person</span></div>
       <div class="text-[11px] text-on-surface-variant truncate flex-1 font-semibold" style="font-family:'JetBrains Mono'">Kutha SoftWorks</div>
-      <div class="w-2 h-2 rounded-full bg-primary-container animate-pulse" title="Connected"></div>
+      <div id="connDot" class="w-2 h-2 rounded-full bg-primary-container animate-pulse" title="Connected"></div>
     </div>
   </div>
 </aside>
@@ -369,7 +369,7 @@ html[dir="rtl"] .flex.items-baseline {
       <div class="flex items-center gap-2">
         <button onclick="toggleLang()" class="hdr-icon-btn font-bold text-[12px]" id="langBtn" title="تبديل اللغة / Switch Language" data-act="lang-tog" style="font-family:'JetBrains Mono',sans-serif">عربي</button>
         <button onclick="openExtModal()" class="hdr-icon-btn text-primary hover:text-primary-container" title="إضافة المتصفح / Browser Extension" id="hdrExtBtn"><span class="material-symbols-outlined text-[19px]">extension</span></button>
-        <button onclick="toggleTheme()" class="hdr-icon-btn" title="Dark / Light Mode" data-act="theme-tog"><span class="material-symbols-outlined text-[19px]" id="themeIco">dark_mode</span></button>
+        <button onclick="toggleTheme()" class="hdr-icon-btn" id="themeBtn" title="Dark / Light Mode" data-act="theme-tog"><span class="material-symbols-outlined text-[19px]" id="themeIco">dark_mode</span></button>
         <button onclick="showNotifications()" class="hdr-icon-btn" title="Notifications" id="notifBtn" data-act="notif-tog"><span class="material-symbols-outlined text-[19px]">notifications</span><span id="notifDot" class="hidden"></span></button>
         <button onclick="pauseAll()" class="hdr-icon-btn" title="Pause all (Ctrl+P)" id="btnPauseAll" data-act="pause-all"><span class="material-symbols-outlined text-[19px]">pause</span></button>
         <button onclick="resumeAll()" class="hdr-icon-btn" title="Resume all (Ctrl+R)" id="btnResumeAll" data-act="resume-all"><span class="material-symbols-outlined text-[19px]">play_arrow</span></button>
@@ -449,17 +449,17 @@ html[dir="rtl"] .flex.items-baseline {
       <div class="bg-surface-container border border-outline-variant rounded p-4">
         <div class="flex justify-between items-center mb-3">
           <span id="bwLblDnSpd" class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">Download Speed</span>
-          <span class="text-[13px] text-primary-container" style="font-family:'JetBrains Mono'">Peak: <span id="bwPkDn">0.0</span> MB/s</span>
+          <span class="text-[13px] text-primary-container" style="font-family:'JetBrains Mono'"><span id="bwLblPeak">Peak:</span> <span id="bwPkDn">0.0</span> MB/s</span>
         </div>
         <div class="bw-bars" id="bwDnBars"></div>
         <div class="flex justify-between text-[11px] text-on-surface-variant mt-2 font-mono">
-          <span>30s ago</span><span id="bwCurDn">0.0 MB/s</span><span>Now</span>
+          <span id="bwLbl30s">30s ago</span><span id="bwCurDn">0.0 MB/s</span><span id="bwLblNow">Now</span>
         </div>
       </div>
       <div class="bg-surface-container border border-outline-variant rounded p-4">
         <div class="flex justify-between items-center mb-3">
           <span id="bwLblUpSpd" class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">Upload Speed</span>
-          <span class="text-[13px] text-on-surface-variant font-mono">Avg: 0.1 MB/s</span>
+          <span class="text-[13px] text-on-surface-variant font-mono"><span id="bwLblAvg">Avg:</span> 0.1 MB/s</span>
         </div>
         <div class="bw-bars" id="bwUpBars"></div>
       </div>
@@ -508,7 +508,7 @@ html[dir="rtl"] .flex.items-baseline {
         <div class="flex items-center justify-between"><span id="schedLblPostExt" class="text-[13px] text-on-surface" style="font-family:Inter">Auto-extract archives after download</span><label class="tgl-sw"><input type="checkbox" id="autoExtSched" checked/><span class="tgl-sl"></span></label></div>
         <div class="flex items-center justify-between"><span id="schedLblPostToast" class="text-[13px] text-on-surface" style="font-family:Inter">Show completion toast notification</span><label class="tgl-sw"><input type="checkbox" id="showToastOpt" checked/><span class="tgl-sl"></span></label></div>
         <div class="flex items-center justify-between"><span id="schedLblPostClip" class="text-[13px] text-on-surface" style="font-family:Inter">Clipboard URL monitoring</span><label class="tgl-sw"><input type="checkbox" id="clipMon" checked onchange="toggleClipMon()"/><span class="tgl-sl"></span></label></div>
-        <div class="flex items-center justify-between opacity-70"><span id="schedLblPostShutdown" class="text-[13px] text-on-surface flex items-center gap-2" style="font-family:Inter"><span>Shut down PC after batch completes</span><span class="text-[10px] text-primary font-mono bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded" id="schedShutdownBadge">قريباً / Coming Soon</span></span><label class="tgl-sw cursor-not-allowed"><input type="checkbox" id="shutdownPcOpt" disabled/><span class="tgl-sl opacity-50"></span></label></div>
+        <div class="flex items-center justify-between opacity-70"><span class="text-[13px] text-on-surface flex items-center gap-2" style="font-family:Inter"><span id="schedLblPostShutdown">Shut down PC after batch completes</span><span class="text-[10px] text-primary font-mono bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded" id="schedShutdownBadge">Coming Soon</span></span><label class="tgl-sw cursor-not-allowed"><input type="checkbox" id="shutdownPcOpt" disabled/><span class="tgl-sl opacity-50"></span></label></div>
       </div>
     </div>
   </div>
@@ -561,8 +561,8 @@ html[dir="rtl"] .flex.items-baseline {
               <p id="stDescBrowserInt" class="text-[12px] text-on-surface-variant" style="font-family:Inter">Seamless 1-Click integration for Google Chrome, Microsoft Edge, Brave &amp; Opera</p>
             </div>
           </div>
-          <span id="stBadgeActiveReady" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono bg-primary-container/20 text-primary-container border border-primary-container/30">
-            <span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>Active &amp; Ready
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono bg-primary-container/20 text-primary-container border border-primary-container/30">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span><span id="stBadgeActiveReady">Active &amp; Ready</span>
           </span>
         </div>
 
@@ -608,11 +608,11 @@ html[dir="rtl"] .flex.items-baseline {
               <input id="chromeStoreUrlSettingsInp" type="text" readonly value="https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en" class="chrome-store-url-val flex-1 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" dir="ltr" />
               <button type="button" onclick="copyChromeStoreLink()" class="px-2.5 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
                 <span class="material-symbols-outlined text-[13px] ico-copy-chrome">content_copy</span>
-                <span class="txt-copy-chrome">نسخ</span>
+                <span id="stTxtCopyChrome" class="txt-copy-chrome">نسخ</span>
               </button>
               <button type="button" onclick="openChromeStorePage()" class="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
                 <span class="material-symbols-outlined text-[13px]">open_in_new</span>
-                <span class="txt-open-chrome">فتح</span>
+                <span id="stTxtOpenChrome" class="txt-open-chrome">فتح</span>
               </button>
             </div>
           </div>
@@ -624,18 +624,18 @@ html[dir="rtl"] .flex.items-baseline {
                 <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px]">E</span>
                 <span class="text-[12px] font-semibold text-on-surface" id="stEdgeDirectLbl">متجر Microsoft Edge الرسمي:</span>
               </div>
-              <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">Edge Store</span>
+              <span id="stEdgeStoreTag" class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">Edge Store</span>
             </div>
             <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
               <span class="material-symbols-outlined text-primary text-[15px] ml-1">link</span>
               <input id="edgeStoreUrlSettingsInp" type="text" readonly value="https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem" class="edge-store-url-val flex-1 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" dir="ltr" />
               <button type="button" onclick="copyEdgeStoreLink()" class="px-2.5 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
                 <span class="material-symbols-outlined text-[13px] ico-copy-edge">content_copy</span>
-                <span class="txt-copy-edge">نسخ</span>
+                <span id="stTxtCopyEdge" class="txt-copy-edge">نسخ</span>
               </button>
               <button type="button" onclick="openEdgeStorePage()" class="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
                 <span class="material-symbols-outlined text-[13px]">open_in_new</span>
-                <span class="txt-open-edge">فتح</span>
+                <span id="stTxtOpenEdge" class="txt-open-edge">فتح</span>
               </button>
             </div>
           </div>
@@ -781,7 +781,7 @@ html[dir="rtl"] .flex.items-baseline {
           <div class="flex items-center gap-3">
             <label id="extFormatLabel" class="text-[11px] text-on-surface-variant uppercase font-mono">Stream Quality:</label>
             <select id="extFormatSel" class="flex-1 bg-surface-container-highest border border-outline-variant text-on-surface text-[12px] rounded px-2.5 py-1.5 outline-none font-mono">
-              <option value="best">Auto (Best Quality - 1080p/720p)</option>
+              <option value="best" id="extFormatBestOpt">Auto (Best Quality - 1080p/720p)</option>
             </select>
           </div>
         </div>
@@ -916,7 +916,7 @@ html[dir="rtl"] .flex.items-baseline {
               <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px]">G</span>
               <span class="font-bold text-on-surface text-[14px]" id="extStoreHeadingChrome">متجر Google Chrome الرسمي (Chrome, Brave, Opera)</span>
             </div>
-            <span class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">موصى به • رسمي</span>
+            <span id="extBadgeOfficialChrome" class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">موصى به • رسمي</span>
           </div>
           <p class="text-[12px] text-on-surface-variant leading-relaxed" id="extStoreNoticeChrome">
             الإضافة معتمدة رسمياً في متجر Google Chrome الإلكتروني. يمكنك تثبيتها بنقرة واحدة لمتصفح Chrome أو Brave أو Opera:
@@ -926,11 +926,11 @@ html[dir="rtl"] .flex.items-baseline {
             <input id="chromeStoreUrlInp" type="text" readonly value="https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en" class="chrome-store-url-val flex-1 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" dir="ltr" />
             <button type="button" onclick="copyChromeStoreLink()" class="px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
               <span class="material-symbols-outlined text-[15px] ico-copy-chrome">content_copy</span>
-              <span class="txt-copy-chrome">نسخ الرابط</span>
+              <span id="extBtnCopyChrome" class="txt-copy-chrome">نسخ الرابط</span>
             </button>
             <button type="button" onclick="openChromeStorePage()" class="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
               <span class="material-symbols-outlined text-[15px]">open_in_new</span>
-              <span class="txt-open-chrome">فتح بالمتصفح</span>
+              <span id="extBtnOpenChrome" class="txt-open-chrome">فتح بالمتصفح</span>
             </button>
           </div>
           <div class="flex items-center gap-1.5 text-[11.5px] text-primary">
@@ -946,7 +946,7 @@ html[dir="rtl"] .flex.items-baseline {
               <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px]">E</span>
               <span class="font-bold text-on-surface text-[14px]" id="extStoreHeadingEdge">متجر Microsoft Edge الرسمي (معتمدة وآمنة)</span>
             </div>
-            <span class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">موصى به • رسمي</span>
+            <span id="extBadgeOfficialEdge" class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">موصى به • رسمي</span>
           </div>
           <p class="text-[12px] text-on-surface-variant leading-relaxed" id="extStoreNoticeEdge">
             الإضافة معتمدة رسمياً في متجر إضافات Microsoft Edge. يمكنك تثبيتها بنقرة واحدة لمتصفح Edge:
@@ -956,11 +956,11 @@ html[dir="rtl"] .flex.items-baseline {
             <input id="edgeStoreUrlInp" type="text" readonly value="https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem" class="edge-store-url-val flex-1 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" dir="ltr" />
             <button type="button" onclick="copyEdgeStoreLink()" class="px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
               <span class="material-symbols-outlined text-[15px] ico-copy-edge">content_copy</span>
-              <span class="txt-copy-edge">نسخ الرابط</span>
+              <span id="extBtnCopyEdge" class="txt-copy-edge">نسخ الرابط</span>
             </button>
             <button type="button" onclick="openEdgeStorePage()" class="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
               <span class="material-symbols-outlined text-[15px]">open_in_new</span>
-              <span class="txt-open-edge">فتح بالمتصفح</span>
+              <span id="extBtnOpenEdge" class="txt-open-edge">فتح بالمتصفح</span>
             </button>
           </div>
           <div class="flex items-center gap-1.5 text-[11.5px] text-primary">
@@ -972,9 +972,9 @@ html[dir="rtl"] .flex.items-baseline {
         <div class="p-3 bg-surface-container-low rounded-lg border border-outline-variant/60 text-[12px] flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-primary text-[18px]">touch_app</span>
-            <span>هل تفضل تثبيت الإضافة يدوياً بالمجلد؟</span>
+            <span id="extPreferManualTxt">هل تفضل تثبيت الإضافة يدوياً بالمجلد؟</span>
           </div>
-          <button type="button" onclick="switchExtTab('manual')" class="text-primary hover:underline font-semibold text-[12px]">عرض إرشادات التثبيت اليدوي &larr;</button>
+          <button type="button" id="extPreferManualBtn" onclick="switchExtTab('manual')" class="text-primary hover:underline font-semibold text-[12px]">عرض إرشادات التثبيت اليدوي &larr;</button>
         </div>
       </div>
 
@@ -982,9 +982,9 @@ html[dir="rtl"] .flex.items-baseline {
       <div id="extViewManual" class="space-y-3 hidden">
         <div class="p-3.5 bg-surface-container-low border border-outline-variant/60 rounded-xl space-y-3">
           <div class="flex items-center justify-between pb-2 border-b border-outline-variant/40">
-            <span class="font-bold text-on-surface text-[13px] flex items-center gap-1.5" id="manGuideTitle">
+            <span class="font-bold text-on-surface text-[13px] flex items-center gap-1.5">
               <span class="material-symbols-outlined text-primary text-[18px]">build</span>
-              خطوات التثبيت اليدوي المفصلة (لجميع المتصفحات):
+              <span id="manGuideTitle">خطوات التثبيت اليدوي المفصلة (لجميع المتصفحات):</span>
             </span>
             <span class="text-[10px] bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 rounded font-mono">Edge • Chrome • Brave</span>
           </div>
@@ -1016,15 +1016,15 @@ html[dir="rtl"] .flex.items-baseline {
               <div class="flex items-center gap-2 flex-wrap">
                 <button type="button" onclick="openBrowserExtensionsPage('edge')" class="px-2.5 py-1 bg-surface-container-highest hover:bg-surface-container-high border border-outline-variant text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95">
                   <span class="w-3.5 h-3.5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[9px]">E</span>
-                  <span>صفحة إضافات Edge</span>
+                  <span id="manBtnExtEdge">صفحة إضافات Edge</span>
                 </button>
                 <button type="button" onclick="openBrowserExtensionsPage('chrome')" class="px-2.5 py-1 bg-surface-container-highest hover:bg-surface-container-high border border-outline-variant text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95">
                   <span class="w-3.5 h-3.5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[9px]">G</span>
-                  <span>صفحة إضافات Chrome</span>
+                  <span id="manBtnExtChrome">صفحة إضافات Chrome</span>
                 </button>
                 <button type="button" onclick="openBrowserExtensionsPage('brave')" class="px-2.5 py-1 bg-surface-container-highest hover:bg-surface-container-high border border-outline-variant text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95">
                   <span class="w-3.5 h-3.5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[9px]">B</span>
-                  <span>صفحة إضافات Brave</span>
+                  <span id="manBtnExtBrave">صفحة إضافات Brave</span>
                 </button>
               </div>
             </div>
@@ -1146,10 +1146,10 @@ html[dir="rtl"] .flex.items-baseline {
         <span class="text-[14px] font-bold text-on-surface truncate font-mono" id="idmModalFileName">Filename.ext</span>
       </div>
       <div class="flex items-center gap-1.5 flex-shrink-0">
-        <button type="button" onclick="hideIdmModal()" class="w-7 h-7 rounded hover:bg-surface-container-highest text-on-surface-variant flex items-center justify-center transition-all" title="إخفاء في الخلفية / Hide">
+        <button type="button" id="idmBtnHide" onclick="hideIdmModal()" class="w-7 h-7 rounded hover:bg-surface-container-highest text-on-surface-variant flex items-center justify-center transition-all" title="Hide">
           <span class="material-symbols-outlined text-[18px]">minimize</span>
         </button>
-        <button type="button" onclick="hideIdmModal()" class="w-7 h-7 rounded hover:bg-red-500/20 hover:text-red-400 text-on-surface-variant flex items-center justify-center transition-all" title="إغلاق / Close">
+        <button type="button" id="idmBtnClose" onclick="hideIdmModal()" class="w-7 h-7 rounded hover:bg-red-500/20 hover:text-red-400 text-on-surface-variant flex items-center justify-center transition-all" title="Close">
           <span class="material-symbols-outlined text-[18px]">close</span>
         </button>
       </div>
@@ -1233,17 +1233,17 @@ html[dir="rtl"] .flex.items-baseline {
 <div id="clipPrompt" class="hidden fixed bottom-6 left-1/2 z-[80] glass-panel rounded-xl px-5 py-4 shadow-2xl pointer-events-auto" style="min-width:320px; max-width:min(480px, calc(100vw - 32px)); transform:translate(-50%, 0)">
   <div class="flex items-center gap-3 mb-3">
     <span class="material-symbols-outlined text-primary-container text-[22px]">content_paste</span>
-    <div class="flex-1 min-w-0"><div class="text-[14px] font-semibold text-on-surface" style="font-family:Inter">Download Link Detected</div><div class="text-[12px] text-on-surface-variant truncate" id="clipUrlTxt" style="font-family:'JetBrains Mono'"></div></div>
+    <div class="flex-1 min-w-0"><div id="clipPromptTitle" class="text-[14px] font-semibold text-on-surface" style="font-family:Inter">Download Link Detected</div><div class="text-[12px] text-on-surface-variant truncate" id="clipUrlTxt" style="font-family:'JetBrains Mono'"></div></div>
   </div>
   <div class="flex justify-end gap-2">
-    <button data-act="dism-clip" class="px-3 py-1.5 text-[13px] text-on-surface-variant hover:text-on-surface border border-transparent hover:border-outline-variant rounded" style="font-family:Inter">Dismiss</button>
-    <button data-act="acc-clip" class="px-3 py-1.5 text-[13px] bg-primary-container text-on-primary-container rounded font-semibold hover:bg-primary-fixed transition-all" style="font-family:Inter">Download Now</button>
+    <button id="clipBtnDismiss" data-act="dism-clip" class="px-3 py-1.5 text-[13px] text-on-surface-variant hover:text-on-surface border border-transparent hover:border-outline-variant rounded" style="font-family:Inter">Dismiss</button>
+    <button id="clipBtnAccept" data-act="acc-clip" class="px-3 py-1.5 text-[13px] bg-primary-container text-on-primary-container rounded font-semibold hover:bg-primary-fixed transition-all" style="font-family:Inter">Download Now</button>
   </div>
 </div>
 <!-- ══ GLOBAL ERROR BANNER ══ -->
 <div id="globalErrBox" class="hidden fixed top-0 left-0 right-0 z-[100] bg-red-600 text-white text-[13px] py-2 px-4 text-center font-mono shadow-lg flex items-center justify-between">
   <span id="globalErrMsg"></span>
-  <button onclick="document.getElementById('globalErrBox').classList.add('hidden')" class="ml-4 px-2 py-0.5 bg-black/30 rounded hover:bg-black/50 text-[11px]">Dismiss</button>
+  <button id="globalErrDismiss" onclick="document.getElementById('globalErrBox').classList.add('hidden')" class="ml-4 px-2 py-0.5 bg-black/30 rounded hover:bg-black/50 text-[11px]">Dismiss</button>
 </div>
 
 <script>
@@ -1683,7 +1683,7 @@ async function addDL(rawUrl, opts = {}) {
 
       if (taskId) {
         addLog('success', `[ENGINE START] Backend Task: ${String(taskId).substring(0, 8)} — ${finalName}`);
-        showT('success', 'Download Started', `${finalName} (${conn} connections)`);
+        showT('success', curLang === 'ar' ? 'بدء التحميل' : 'Download Started', curLang === 'ar' ? `${finalName} (${conn} خط اتصال)` : `${finalName} (${conn} connections)`);
         await syncFromBackend();
         const autoShow = localStorage.getItem('superidm_auto_show_progress') !== 'false';
         if (autoShow) {
@@ -1729,7 +1729,8 @@ async function addDL(rawUrl, opts = {}) {
     };
     dls.unshift(dl);
     addLog('info', `[${isQ ? 'TASK QUEUED' : 'TASK ADDED'}] ${finalName || n} — ${conn} connections [${opts.pri || curPri}]`);
-    showT(isQ ? 'info' : 'success', isQ ? 'Task Queued' : 'Task Added', isQ ? `${finalName || n} (Waiting in queue)` : finalName || n);
+    const isAr = curLang === 'ar';
+    showT(isQ ? 'info' : 'success', isQ ? (isAr ? 'تمت الجدولة' : 'Task Queued') : (isAr ? 'تمت الإضافة' : 'Task Added'), isQ ? `${finalName || n} (${isAr ? 'في قائمة الانتظار' : 'Waiting in queue'})` : finalName || n);
     renderDLs();
     updBdg();
     updStats();
@@ -1762,13 +1763,14 @@ async function sniffMediaStream() {
   if (!url) return false;
   if (inp && url !== raw) inp.value = url;
 
+  const isAr = curLang === 'ar';
   const sniffBtn = document.getElementById('sniffBtn');
   if (sniffBtn) {
-    sniffBtn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[16px]">sync</span> Sniffing...';
+    sniffBtn.innerHTML = `<span class="material-symbols-outlined animate-spin text-[16px]">sync</span> <span id="sniffBtnTxt">${isAr ? 'جارٍ الالتقاط...' : 'Sniffing...'}</span>`;
     sniffBtn.disabled = true;
   }
 
-  showT('info', 'Media Sniffer', 'Extracting stream formats...');
+  showT('info', isAr ? 'ملتقط الوسائط' : 'Media Sniffer', isAr ? 'جارٍ استخراج صيغ البث المتاحة...' : 'Extracting stream formats...');
   addLog('info', `[EXTRACTOR] Analyzing media: ${url}`);
 
   if (hasTauriIPC()) {
@@ -1781,21 +1783,24 @@ async function sniffMediaStream() {
         const typeEl = document.getElementById('extStreamType');
         const sel = document.getElementById('extFormatSel');
 
-        if (titleEl) titleEl.textContent = info.title || 'Extracted Media Stream';
-        if (typeEl) typeEl.textContent = info.is_stream ? 'HLS/DASH Stream' : 'Direct Video';
+        if (titleEl) titleEl.textContent = info.title || (isAr ? 'بث وسائط مستخرج' : 'Extracted Media Stream');
+        if (typeEl) typeEl.textContent = info.is_stream ? (isAr ? 'بث متكيف HLS/DASH' : 'HLS/DASH Stream') : (isAr ? 'فيديو مباشر' : 'Direct Video');
 
         if (sel) {
           sel.innerHTML = '';
           const autoOpt = document.createElement('option');
           autoOpt.value = 'best';
-          autoOpt.textContent = 'Auto (Best Quality - 1080p/4K with Sound)';
+          autoOpt.id = 'extFormatBestOpt';
+          autoOpt.textContent = isAr ? 'تلقائي (أفضل جودة - 1080p/4K مع الصوت)' : 'Auto (Best Quality - 1080p/4K with Sound)';
           sel.appendChild(autoOpt);
 
           info.formats.forEach((fmt, idx) => {
             if (fmt.resolution && fmt.resolution !== 'audio only') {
               const opt = document.createElement('option');
               opt.value = fmt.format_id || fmt.url;
-              opt.textContent = `${fmt.resolution} (${fmt.ext.toUpperCase()}) + Audio • ${fmt.note || 'HD'} ${fmt.filesize ? '• ' + fmtSz(fmt.filesize) : ''}`;
+              opt.textContent = isAr
+                ? `${fmt.resolution} (${fmt.ext.toUpperCase()}) + صوت • ${fmt.note || 'HD'} ${fmt.filesize ? '• ' + fmtSz(fmt.filesize) : ''}`
+                : `${fmt.resolution} (${fmt.ext.toUpperCase()}) + Audio • ${fmt.note || 'HD'} ${fmt.filesize ? '• ' + fmtSz(fmt.filesize) : ''}`;
               sel.appendChild(opt);
             }
           });
@@ -1803,29 +1808,29 @@ async function sniffMediaStream() {
           // Add audio only option
           const audioOpt = document.createElement('option');
           audioOpt.value = 'bestaudio[ext=m4a]/bestaudio';
-          audioOpt.textContent = 'Audio Only (MP3 / High Quality Audio)';
+          audioOpt.textContent = isAr ? 'صوت فقط (MP3 / جودة صوت عالية)' : 'Audio Only (MP3 / High Quality Audio)';
           sel.appendChild(audioOpt);
         }
 
         if (card) card.classList.remove('hidden');
-        showT('success', 'Media Stream Sniffed', `${info.formats.length} format(s) ready!`);
+        showT('success', isAr ? 'تم استخراج البث' : 'Media Stream Sniffed', isAr ? `تم تجهيز ${info.formats.length} جودة متاحة!` : `${info.formats.length} format(s) ready!`);
         addLog('success', `[EXTRACTOR] Found ${info.formats.length} stream format(s) for: ${info.title}`);
         if (sniffBtn) {
-          sniffBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check</span> Extracted';
+          sniffBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">check</span> <span id="sniffBtnTxt">${isAr ? 'تم الاستخراج' : 'Extracted'}</span>`;
           sniffBtn.disabled = false;
         }
         return true;
       } else {
-        showT('warn', 'Media Sniffer', 'No direct streams found. Will download using direct HTTP engine.');
+        showT('warn', isAr ? 'ملتقط الوسائط' : 'Media Sniffer', isAr ? 'لم يتم العثور على بث منفصل. سيتم التحميل عبر المحرك المباشر.' : 'No direct streams found. Will download using direct HTTP engine.');
       }
     } catch (e) {
-      showT('error', 'Media Extractor', String(e));
+      showT('error', isAr ? 'مستخرج الوسائط' : 'Media Extractor', String(e));
       addLog('error', `[EXTRACTOR ERROR] ${e}`);
     }
   }
 
   if (sniffBtn) {
-    sniffBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">search</span>Sniff &amp; Extract';
+    sniffBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">search</span><span id="sniffBtnTxt">${isAr ? 'التقاط واستخراج' : 'Sniff & Extract'}</span>`;
     sniffBtn.disabled = false;
   }
   return false;
@@ -1833,16 +1838,17 @@ async function sniffMediaStream() {
 window.sniffMediaStream = sniffMediaStream;
 
 async function pasteClipToInp() {
+  const isAr = curLang === 'ar';
   try {
     if (navigator.clipboard && navigator.clipboard.readText) {
       const text = await navigator.clipboard.readText();
       if (text && text.trim()) {
         fillSample(cleanTargetUrl(text.trim()));
-        showT('info', 'Pasted URL', cleanTargetUrl(text.trim()));
+        showT('info', isAr ? 'تم لصق الرابط' : 'Pasted URL', cleanTargetUrl(text.trim()));
       }
     }
   } catch (e) {
-    showT('warn', 'Clipboard', 'Please paste using Ctrl+V');
+    showT('warn', isAr ? 'الحافظة' : 'Clipboard', isAr ? 'يرجى اللصق باستخدام Ctrl+V' : 'Please paste using Ctrl+V');
   }
 }
 
@@ -1924,18 +1930,19 @@ async function startDL() {
     }
     const finalHeaders = Object.keys(customHeaders).length > 0 ? customHeaders : undefined;
 
+    const isAr = curLang === 'ar';
     if (batchMode) {
       const raw = document.getElementById('batchInp')?.value || '';
       const urls = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
       if (!urls.length) {
-        showT('error', 'Batch Input Empty', 'Please enter at least one download URL');
+        showT('error', isAr ? 'حقل الدفعات فارغ' : 'Batch Input Empty', isAr ? 'يرجى إدخال رابط واحد على الأقل' : 'Please enter at least one download URL');
         document.getElementById('batchInp')?.focus();
         return;
       }
       for (const u of urls) {
         await addDL(u, { conn, pri: curPri, cat, headers: finalHeaders });
       }
-      showT('success', 'Batch Queued', `${urls.length} download task(s) started`);
+      showT('success', isAr ? 'تمت جدولة الدفعة' : 'Batch Queued', isAr ? `تم بدء ${urls.length} مهمة تنزيل` : `${urls.length} download task(s) started`);
     } else {
       if (!downloadUrl) {
         downloadUrl = 'https://proof.ovh.net/files/10Mb.dat';
@@ -1961,10 +1968,11 @@ async function startDL() {
 }
 
 async function queueDL() {
+  const isAr = curLang === 'ar';
   const inp = document.getElementById('urlInp');
   const url = (inp?.value || '').trim();
   if (!url) {
-    showT('error', 'URL Required', 'Please enter a download URL to queue');
+    showT('error', isAr ? 'الرابط مطلوب' : 'URL Required', isAr ? 'يرجى إدخال رابط التنزيل لجدولته' : 'Please enter a download URL to queue');
     inp?.focus();
     return;
   }
@@ -1991,7 +1999,7 @@ async function queueDL() {
   const finalHeaders = Object.keys(customHeaders).length > 0 ? customHeaders : undefined;
 
   addDL(url, { conn, pri: 'Low', cat, status: 'queued', headers: finalHeaders });
-  showT('info', 'Task Queued', 'Download scheduled in queue');
+  showT('info', isAr ? 'تمت الجدولة' : 'Task Queued', isAr ? 'تمت إضافة التنزيل إلى قائمة الانتظار' : 'Download scheduled in queue');
   closeAddModal();
   setView('queued');
 }
@@ -2013,7 +2021,7 @@ async function pauseDL(id) {
       console.warn(e);
     }
   }
-  showT('info', 'Download Paused', dl.filename || dl.name);
+  showT('info', curLang === 'ar' ? 'تم الإيقاف المؤقت' : 'Download Paused', dl.filename || dl.name);
   setTimeout(processQueue, 100);
 }
 
@@ -2033,7 +2041,7 @@ async function resumeDL(id) {
       console.warn(e);
     }
   }
-  showT('success', 'Download Resumed', dl.filename || dl.name);
+  showT('success', curLang === 'ar' ? 'تم استئناف التنزيل' : 'Download Resumed', dl.filename || dl.name);
 }
 
 async function cancelDL(id) {
@@ -2052,7 +2060,7 @@ async function cancelDL(id) {
       console.warn(e);
     }
   }
-  showT('info', 'Download Removed', dl.filename || dl.name);
+  showT('info', curLang === 'ar' ? 'تم حذف المهمة' : 'Download Removed', dl.filename || dl.name);
   setTimeout(processQueue, 100);
 }
 
@@ -2066,7 +2074,7 @@ async function openFolder(id, path) {
       console.warn(e);
     }
   }
-  showT('info', 'Opening Explorer', p || 'Downloads');
+  showT('info', curLang === 'ar' ? 'فتح المجلد' : 'Opening Explorer', p || 'Downloads');
   addLog('info', `[EXPLORER] Opened folder: ${p}`);
 }
 
@@ -2406,6 +2414,7 @@ function handleRowDblClick(id) {
 }
 
 function pauseAll() {
+  const isAr = curLang === 'ar';
   dls.forEach(d => {
     if (d.status === 'downloading') {
       d.status = 'paused';
@@ -2413,7 +2422,7 @@ function pauseAll() {
       if (hasTauriIPC()) tauriCall('pause_download', { taskId: String(d.id), task_id: String(d.id) }).catch(e => console.warn(e));
     }
   });
-  showT('info', 'All Downloads Paused', 'Paused all active tasks');
+  showT('info', isAr ? 'إيقاف جميع التنزيلات' : 'All Downloads Paused', isAr ? 'تم إيقاف جميع المهام النشطة مؤقتاً' : 'Paused all active tasks');
   addLog('warn', '[PAUSE ALL] All active downloads paused');
   renderDLs();
   updBdg();
@@ -2421,6 +2430,7 @@ function pauseAll() {
 }
 
 function resumeAll() {
+  const isAr = curLang === 'ar';
   dls.forEach(d => {
     if (d.status === 'paused' || d.status === 'queued') {
       d.status = 'downloading';
@@ -2428,7 +2438,7 @@ function resumeAll() {
       if (hasTauriIPC()) tauriCall('resume_download', { taskId: String(d.id), task_id: String(d.id) }).catch(e => console.warn(e));
     }
   });
-  showT('success', 'All Downloads Resumed', 'Resumed all paused tasks');
+  showT('success', isAr ? 'استئناف جميع التنزيلات' : 'All Downloads Resumed', isAr ? 'تم استئناف جميع المهام المتوقفة' : 'Resumed all paused tasks');
   addLog('info', '[RESUME ALL] All paused downloads resumed');
   renderDLs();
   updBdg();
@@ -2436,6 +2446,7 @@ function resumeAll() {
 }
 
 function clearDone() {
+  const isAr = curLang === 'ar';
   const prevLen = dls.length;
   const toRemove = dls.filter(d => d.status === 'complete' || d.status === 'cancelled' || d.status === 'error');
   dls = dls.filter(d => d.status !== 'complete' && d.status !== 'cancelled' && d.status !== 'error');
@@ -2447,7 +2458,7 @@ function clearDone() {
     });
   }
 
-  showT('info', 'Cleared Completed', `Removed ${removed} completed task(s)`);
+  showT('info', isAr ? 'مسح المكتملة' : 'Cleared Completed', isAr ? `تمت إزالة ${removed} مهمة مكتملة` : `Removed ${removed} completed task(s)`);
   addLog('info', `[CLEAR] Cleared ${removed} finished tasks`);
   renderDLs();
   updBdg();
@@ -2640,6 +2651,8 @@ function renderDLs() {
     const safeProto = escapeHtml(d.protocol || 'HTTPS (TLS 1.3)');
     const safeDest = escapeHtml(d.destination || savePth);
     const safeCat = escapeHtml(d.category || 'General');
+    const catMapAr = { Videos: 'فيديو', Music: 'صوتيات', Documents: 'مستندات', Archives: 'ملفات مضغوطة', Programs: 'برامج وتطبيقات', General: 'عام', Other: 'أخرى' };
+    const catDisplay = isAr ? (catMapAr[d.category] || safeCat) : safeCat;
     const safePri = escapeHtml(d.priority || 'High');
     const priDisplay = safePri === 'High' ? (isAr ? 'عالية' : 'High') : (isAr ? 'عادية' : 'Low');
     const displayTotal = d.total_bytes > 0 ? Math.max(d.downloaded_bytes, d.total_bytes) : d.downloaded_bytes;
@@ -2682,7 +2695,7 @@ function renderDLs() {
       </div>
       <div id="det-${safeId}" class="det-panel ${d.expanded ? 'open' : ''} grid-cols-4 gap-4 p-4 text-[12px]" style="font-family:'JetBrains Mono'">
         <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">${isAr ? 'الخادم / البروتوكول' : 'Server / Protocol'}</div><div class="text-on-surface truncate">${safeServer}</div><div class="text-primary-container text-[11px]">${safeProto}</div></div>
-        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">${isAr ? 'مسار الحفظ' : 'Save Path'}</div><div class="text-on-surface truncate" title="${safeDest}">${safeDest}</div><div class="text-on-surface-variant text-[11px]">${isAr ? 'الفئة' : 'Category'}: ${safeCat}</div></div>
+        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">${isAr ? 'مسار الحفظ' : 'Save Path'}</div><div class="text-on-surface truncate" title="${safeDest}">${safeDest}</div><div class="text-on-surface-variant text-[11px]">${isAr ? 'الفئة' : 'Category'}: ${catDisplay}</div></div>
         <div class="space-y-1">
           <div class="text-on-surface-variant text-[10px] uppercase">${isAr ? 'المسارات / الأولوية' : 'Streams / Priority'}</div>
           <div class="text-on-surface">${d.connections || 16} ${isAr ? 'مسارات ذكية متزامنة' : 'dynamic active streams'}</div>
@@ -3026,7 +3039,23 @@ function detectFT() {
 
   const { l } = getFI(url);
   const ftText = document.getElementById('ftText');
-  if (ftText) ftText.textContent = isVideo ? 'Video Page' : l;
+  const isAr = curLang === 'ar';
+  const lblMapAr = {
+    'Disk Image': 'صورة قرص',
+    'Archive': 'ملف مضغوط',
+    'Video': 'فيديو',
+    'Audio': 'ملف صوتي',
+    'PDF': 'مستند PDF',
+    'Document': 'مستند',
+    'Spreadsheet': 'جدول بيانات',
+    'Presentation': 'عرض تقديمي',
+    'Program': 'برنامج',
+    'Installer': 'مثبت برنامج',
+    'APK': 'تطبيق أندرويد',
+    'Package': 'حزمة نظام',
+    'File': 'ملف'
+  };
+  if (ftText) ftText.textContent = isVideo ? (isAr ? 'صفحة فيديو' : 'Video Page') : (isAr ? (lblMapAr[l] || l) : l);
   b.classList.remove('hidden');
 
   // Auto-sniff video pages with debounce
@@ -3065,14 +3094,15 @@ function togBatch() {
 }
 
 async function chgSavePath() {
+  const isAr = curLang === 'ar';
   let selected = null;
   if (hasTauriIPC() && window.__TAURI__ && window.__TAURI__.dialog) {
     try {
-      selected = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: 'Select Save Folder' });
+      selected = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: isAr ? 'اختر مجلد الحفظ' : 'Select Save Folder' });
     } catch(e) { console.warn(e); }
   }
   if (!selected) {
-    selected = prompt('Enter download destination directory:', savePth);
+    selected = prompt(isAr ? 'أدخل مسار مجلد حفظ التنزيلات:' : 'Enter download destination directory:', savePth);
   }
   if (selected && selected.trim()) {
     savePth = selected.trim();
@@ -3080,7 +3110,7 @@ async function chgSavePath() {
     if (defPath) defPath.textContent = savePth;
     const modPath = document.getElementById('modalPath');
     if (modPath) modPath.textContent = savePth;
-    showT('success', 'Save Path Updated', savePth);
+    showT('success', isAr ? 'تم تحديث مسار الحفظ' : 'Save Path Updated', savePth);
     addLog('info', `[SETTINGS] Save destination changed to: ${savePth}`);
   }
 }
@@ -3139,9 +3169,10 @@ function showCompT(dl) {
 }
 
 function showNotifications() {
+  const isAr = curLang === 'ar';
   const comp = dls.filter(d => d.status === 'complete').length;
   const act = dls.filter(d => d.status === 'downloading').length;
-  showT('info', 'Download Status', `${act} active download(s), ${comp} completed`);
+  showT('info', isAr ? 'حالة التنزيلات' : 'Download Status', isAr ? `${act} تنزيلات نشطة، ${comp} مكتملة` : `${act} active download(s), ${comp} completed`);
 }
 
 // ════════ AUDIO COMPLETION CHIME (WEB AUDIO API) ════════
@@ -3246,27 +3277,30 @@ function toggleTaskbarSpeed() {
 }
 
 function toggleMinTray() {
+  const isAr = curLang === 'ar';
   const el = document.getElementById('minTrayOpt');
   const en = el?.checked ?? true;
   try { localStorage.setItem('superidm_min_tray', String(en)); } catch (e) {}
-  showT('info', 'System Tray', en ? 'Minimize to tray active' : 'System tray disabled');
+  showT('info', isAr ? 'شريط النظام' : 'System Tray', en ? (isAr ? 'تم تفعيل التصغير إلى شريط النظام' : 'Minimize to tray active') : (isAr ? 'تم تعطيل التصغير إلى شريط النظام' : 'System tray disabled'));
 }
 
 function toggleSoundAlert() {
+  const isAr = curLang === 'ar';
   const el = document.getElementById('soundAlertOpt');
   const en = el?.checked ?? false;
   try { localStorage.setItem('superidm_sound_alert', String(en)); } catch (e) {}
   if (en) {
     playCompletionChime();
-    showT('info', 'Sound Alert', 'Sound notification enabled');
+    showT('info', isAr ? 'التنبيه الصوتي' : 'Sound Alert', isAr ? 'تم تفعيل التنبيه الصوتي عند الاكتمال' : 'Sound notification enabled');
   }
 }
 
 function toggleForceHttps() {
+  const isAr = curLang === 'ar';
   const el = document.getElementById('forceHttpsOpt');
   const en = el?.checked ?? true;
   try { localStorage.setItem('superidm_force_https', String(en)); } catch (e) {}
-  showT('info', 'HTTPS Enforcement', en ? 'Force HTTPS active' : 'Standard HTTP allowed');
+  showT('info', isAr ? 'حماية HTTPS' : 'HTTPS Enforcement', en ? (isAr ? 'تم فرض اتصال HTTPS الآمن' : 'Force HTTPS active') : (isAr ? 'تم السماح باتصالات HTTP العادية' : 'Standard HTTP allowed'));
 }
 
 function loadSettings() {
@@ -3411,6 +3445,7 @@ async function processQueue() {
 
 // ════════ THEME TOGGLE ════════
 function toggleTheme() {
+  const isAr = curLang === 'ar';
   const isDark = document.documentElement.classList.toggle('dark');
   const ico = document.getElementById('themeIco');
   if (ico) ico.textContent = isDark ? 'dark_mode' : 'light_mode';
@@ -3419,7 +3454,7 @@ function toggleTheme() {
   try {
     localStorage.setItem('superidm_theme', isDark ? 'dark' : 'light');
   } catch (e) {}
-  showT('info', 'Theme Changed', isDark ? 'Dark mode enabled' : 'Light mode enabled');
+  showT('info', isAr ? 'تغيير المظهر' : 'Theme Changed', isDark ? (isAr ? 'تم تفعيل الوضع الليلي' : 'Dark mode enabled') : (isAr ? 'تم تفعيل الوضع النهاري' : 'Light mode enabled'));
 }
 
 // ════════ LOCALIZATION (I18N) & ARABIC RTL ════════
@@ -3456,6 +3491,7 @@ const I18N = {
     lblTotUp: 'إجمالي سرعة الرفع',
     lblActTasks: 'المهام النشطة',
     lblSysLoad: 'استهلاك النظام',
+    sHeartbeatTxt: 'نبض الشبكة نشط',
     downloaded: 'تم تنزيله',
     queued: 'في الانتظار',
 
@@ -3487,6 +3523,10 @@ const I18N = {
     bwDesc: 'معدل السرعة الحي خلال آخر 30 عينة (فترات 400 مللي ثانية)',
     bwLblDnSpd: 'سرعة التنزيل',
     bwLblUpSpd: 'سرعة الرفع',
+    bwLblPeak: 'الذروة:',
+    bwLbl30s: 'قبل 30 ثانية',
+    bwLblNow: 'الآن',
+    bwLblAvg: 'المتوسط:',
     bwLblThrottle: 'تحديد السرعة والباندويث',
     bwLblMaxDn: 'أقصى سرعة تنزيل (0 = بدون حد)',
     bwLblMaxConn: 'أقصى عدد خطوط اتصال لكل تنزيل',
@@ -3514,7 +3554,7 @@ const I18N = {
     stHdrInterface: 'الواجهة وسلوك التطبيق',
     stLblDarkMode: 'الوضع الليلي',
     stLblTaskbarSpeed: 'عرض السرعة في شريط المهام',
-    stLblMinTray: 'تصغير إلى علبة النظام (Tray)',
+    stLblMinTray: 'تصغير إلى شريط النظام',
     stLblSoundAlert: 'تنبيه صوتي عند اكتمال التنزيل',
     stLblForceHttps: 'فرض اتصال HTTPS الآمن فقط',
     stHdrBrowserInt: 'التكامل مع المتصفحات ولاقط الفيديو العائم',
@@ -3524,7 +3564,11 @@ const I18N = {
     stBtnEdge: 'تثبيت من متجر Edge الرسمي ←',
     stBtnBrave: 'تكامل بنقرة واحدة ←',
     stChromeDirectLbl: 'متجر Google Chrome الرسمي:',
+    stTxtCopyChrome: 'نسخ',
+    stTxtOpenChrome: 'فتح',
     stEdgeDirectLbl: 'متجر Microsoft Edge الرسمي:',
+    stTxtCopyEdge: 'نسخ',
+    stTxtOpenEdge: 'فتح',
     stEdgeStoreTag: 'متجر رسمي معتمد',
     stLblExtLoc: 'حالة الإضافة:',
     stExtStatusTxt: 'جاهزة ومتزامنة',
@@ -3532,22 +3576,33 @@ const I18N = {
     lblTabStore: 'المتاجر الرسمية المعتمدة (بنقرة واحدة)',
     lblTabManual: 'إرشادات التثبيت اليدوي (خطوة بخطوة)',
     extStoreHeadingChrome: 'متجر Google Chrome الرسمي (Chrome, Brave, Opera)',
+    extBadgeOfficialChrome: 'موصى به • رسمي',
     extStoreNoticeChrome: 'الإضافة معتمدة رسمياً في متجر Google Chrome الإلكتروني. يمكنك تثبيتها بنقرة واحدة لمتصفح Chrome أو Brave أو Opera:',
-    extStoreInstructionChrome: 'بعد فتح الرابط في المتصفح، اضغط على زر "إضافة إلى Chrome" (Add to Chrome) الأزرق لتثبيت الإضافة مباشرة.',
+    extBtnCopyChrome: 'نسخ الرابط',
+    extBtnOpenChrome: 'فتح بالمتصفح',
+    extStoreInstructionChrome: 'بعد فتح الرابط في المتصفح، اضغط على زر "إضافة إلى Chrome" الأزرق لتثبيت الإضافة مباشرة.',
     extStoreHeadingEdge: 'متجر Microsoft Edge الرسمي (معتمدة وآمنة)',
+    extBadgeOfficialEdge: 'موصى به • رسمي',
     extStoreNoticeEdge: 'الإضافة معتمدة رسمياً في متجر إضافات Microsoft Edge. يمكنك تثبيتها بنقرة واحدة لمتصفح Edge:',
-    extStoreInstructionEdge: 'بعد فتح الرابط في المتصفح، اضغط على زر "الحصول على" (Get) الأزرق لتثبيت الإضافة بنقرة واحدة.',
+    extBtnCopyEdge: 'نسخ الرابط',
+    extBtnOpenEdge: 'فتح بالمتصفح',
+    extStoreInstructionEdge: 'بعد فتح الرابط في المتصفح، اضغط على زر "الحصول على" الأزرق لتثبيت الإضافة بنقرة واحدة.',
+    extPreferManualTxt: 'هل تفضل تثبيت الإضافة يدوياً بالمجلد؟',
+    extPreferManualBtn: 'عرض إرشادات التثبيت اليدوي ←',
     manGuideTitle: 'خطوات التثبيت اليدوي المفصلة (لجميع المتصفحات):',
     manStep1Hdr: '1. فتح واستخراج مجلد الإضافة',
     manBtnOpenFolder: 'فتح المجلد الآن',
-    manStep1Desc: 'اضغط على الزر أعلاه لفتح مجلد الإضافة extension تلقائياً.',
+    manStep1Desc: 'اضغط على الزر أعلاه لفتح مجلد الإضافة تلقائياً.',
     manStep2Hdr: '2. فتح صفحة إدارة الإضافات في متصفحك',
     manStep2Desc: 'اختر متصفحك لفتح صفحة الإضافات بنقرة واحدة مباشرة:',
-    manStep3Hdr: '3. تفعيل خيار "وضع المطور" (Developer mode)',
-    manStep3Desc: '• في Edge: ستجد في القائمة الجانبية اليسرى أو أعلى الصفحة خيار "وضع المطور"، اضغط عليه لتفعيله (المفتاح الأزرق).\n• في Chrome / Brave: ستجد في الزاوية العلوية اليمنى مفتاح "Developer mode"، قم بتشغيله.',
+    manBtnExtEdge: 'صفحة إضافات Edge',
+    manBtnExtChrome: 'صفحة إضافات Chrome',
+    manBtnExtBrave: 'صفحة إضافات Brave',
+    manStep3Hdr: '3. تفعيل خيار "وضع المطور"',
+    manStep3Desc: '• في Edge: ستجد في القائمة الجانبية اليسرى أو أعلى الصفحة خيار "وضع المطور"، اضغط عليه لتفعيله (المفتاح الأزرق).\n• في Chrome / Brave: ستجد في الزاوية العلوية اليمنى مفتاح "وضع المطور"، قم بتشغيله.',
     manStep4Hdr: '4. تحميل وتثبيت الإضافة',
-    manStep4Desc: '• الأسهل: اسحب مجلد extension الذي فُتح لك وأفلته بالماوس داخل صفحة المتصفح.\n• أو: اضغط زر "تحميل حزمة مفكوكة" (Load unpacked) في أعلى صفحة المتصفح واختر مجلد extension الذي فُتح لك.',
-    manStep5Hdr: '5. تثبيت الأيقونة في المتصفح (Pin to Toolbar)',
+    manStep4Desc: '• الأسهل: اسحب مجلد الإضافة الذي فُتح لك وأفلته بالماوس داخل صفحة المتصفح.\n• أو: اضغط زر "تحميل إضافة غير محزومة" في أعلى صفحة المتصفح واختر مجلد الإضافة الذي فُتح لك.',
+    manStep5Hdr: '5. تثبيت الأيقونة في شريط المتصفح',
     manStep5Desc: 'اضغط على أيقونة الإضافات (رمز قطعة البازل 🧩) في شريط المتصفح بجانب شريط العناوين، ثم اضغط رمز الدبوس 📌 بجانب SuperIDM لتثبيتها دائماً.',
     extModalBtnFolder: 'فتح مجلد الإضافة',
     extModalBtnDone: 'إغلاق / تم التثبيت',
@@ -3566,6 +3621,7 @@ const I18N = {
     extractorCardDesc: 'محرك استخراج ذكي ومستقل يدعم يوتيوب وتيك توك وفيسبوك وانستغرام دون الحاجة لتحديث البرنامج كاملاً',
     updateExtractorTxt: 'فحص وتحديث المحرك الآن',
     extractorStatusLabel: 'حالة المحرك:',
+    extractorStatusTxt: 'جاهز ونشط',
     stHdrAbout: 'حول SuperIDM',
     stLblVer: 'الإصدار',
     stLblEngine: 'المحرك',
@@ -3579,6 +3635,14 @@ const I18N = {
     // Add Download Modal
     modalTitle: 'إضافة مهمة تنزيل جديدة',
     modalLblSrcUrl: 'رابط التحميل',
+    ftText: 'ملف',
+    extMediaTitle: 'تم اكتشاف بث وسائط',
+    extStreamType: 'بث متكيف',
+    extFormatLabel: 'جودة البث:',
+    extFormatBestOpt: 'تلقائي (أفضل جودة - 1080p/4K مع الصوت)',
+    ytNoticeTitle: 'مستخرج الوسائط الشامل:',
+    ytNoticeDesc: 'تم اكتشاف صفحة فيديو. يمكن لـ SuperIDM التقاط واستخراج البث المباشر بأعلى سرعة.',
+    sniffBtnTxt: 'التقاط واستخراج',
     modalLblPresets: 'نماذج سريعة:',
     modalPresetVid: '🎬 نموذج فيديو (.mp4)',
     modalPresetMus: '🎵 نموذج صوتي (.mp3)',
@@ -3604,6 +3668,7 @@ const I18N = {
     advBtnTxt: 'إعدادات متقدمة (الترويسات والمصادقة)',
     modalLblHeaders: 'ترويسات مخصصة (JSON)',
     modalLblUser: 'اسم المستخدم',
+    inpUser: 'اسم المستخدم',
     modalLblPass: 'كلمة المرور',
     modalBtnQueueTxt: 'جدولة في قائمة الانتظار',
     modalBtnCancel: 'إلغاء',
@@ -3635,14 +3700,21 @@ const I18N = {
     refModalBtnPaste: 'لصق',
     refModalBtnCancel: 'إلغاء',
     refModalBtnSubmitTxt: 'تحديث واستئناف',
+    idmModalStatusTxt: 'جارٍ التنزيل...',
     idmLblFileSize: 'حجم الملف:',
     idmLblDownloaded: 'تم تنزيل:',
     idmLblEta: 'الوقت المتبقي:',
     idmLblResume: 'استئناف التحميل:',
+    idmModalResume: 'نعم (مدعوم)',
     idmLblProgress: 'نسبة الإنجاز:',
     idmLblConnections: 'خيوط الاتصال والتقسيم:',
+    idmModalConnCount: '16 خط اتصال',
     idmLblAutoShow: 'إظهار نافذة التقدم تلقائياً عند بدء التحميل',
     lblSkipPromptNext: 'بدء التحميل تلقائياً دون إظهار هذه النافذة مستقبلاً',
+    clipPromptTitle: 'تم اكتشاف رابط تحميل',
+    clipBtnDismiss: 'تجاهل',
+    clipBtnAccept: 'تحميل الآن',
+    globalErrDismiss: 'إغلاق',
   },
   en: {
     // Header & Brand
@@ -3671,6 +3743,7 @@ const I18N = {
     lblTotUp: 'Total Up',
     lblActTasks: 'Active Tasks',
     lblSysLoad: 'System Load',
+    sHeartbeatTxt: 'Heartbeat active',
     downloaded: 'downloaded',
     queued: 'queued',
 
@@ -3702,6 +3775,10 @@ const I18N = {
     bwDesc: 'Real-time speed over the last 30 samples (400ms intervals)',
     bwLblDnSpd: 'Download Speed',
     bwLblUpSpd: 'Upload Speed',
+    bwLblPeak: 'Peak:',
+    bwLbl30s: '30s ago',
+    bwLblNow: 'Now',
+    bwLblAvg: 'Avg:',
     bwLblThrottle: 'Throttle Settings',
     bwLblMaxDn: 'Max Download Speed (0 = unlimited)',
     bwLblMaxConn: 'Max connections per download',
@@ -3739,7 +3816,11 @@ const I18N = {
     stBtnEdge: 'Official Edge Store Install →',
     stBtnBrave: '1-Click Integrate →',
     stChromeDirectLbl: 'Official Google Chrome Store:',
+    stTxtCopyChrome: 'Copy',
+    stTxtOpenChrome: 'Open',
     stEdgeDirectLbl: 'Official Microsoft Edge Store:',
+    stTxtCopyEdge: 'Copy',
+    stTxtOpenEdge: 'Open',
     stEdgeStoreTag: 'Official Store',
     stLblExtLoc: 'Extension Status:',
     stExtStatusTxt: 'Ready & Synced',
@@ -3747,17 +3828,28 @@ const I18N = {
     lblTabStore: 'Official Extension Stores (1-Click)',
     lblTabManual: 'Manual Step-by-Step Guide',
     extStoreHeadingChrome: 'Official Google Chrome Store (Chrome, Brave, Opera)',
+    extBadgeOfficialChrome: 'Recommended • Official',
     extStoreNoticeChrome: 'The extension is officially verified in Google Chrome Web Store. Install with 1-click for Chrome, Brave, or Opera:',
+    extBtnCopyChrome: 'Copy Link',
+    extBtnOpenChrome: 'Open in Browser',
     extStoreInstructionChrome: 'After opening the page in your browser, click the blue "Add to Chrome" button to install the extension directly.',
     extStoreHeadingEdge: 'Official Microsoft Edge Store (Verified & Safe)',
+    extBadgeOfficialEdge: 'Recommended • Official',
     extStoreNoticeEdge: 'The extension is officially verified in Microsoft Edge Add-ons. Install with 1-click for Microsoft Edge:',
+    extBtnCopyEdge: 'Copy Link',
+    extBtnOpenEdge: 'Open in Browser',
     extStoreInstructionEdge: 'After opening the page in your browser, click the blue "Get" button to install the extension directly.',
+    extPreferManualTxt: 'Prefer installing the extension manually from folder?',
+    extPreferManualBtn: 'View Manual Installation Guide →',
     manGuideTitle: 'Detailed Manual Installation Steps (All Browsers):',
     manStep1Hdr: '1. Open & Extract Extension Folder',
     manBtnOpenFolder: 'Open Folder Now',
     manStep1Desc: 'Click the button above to open the extension folder automatically.',
     manStep2Hdr: '2. Open Extensions Management Page in Browser',
     manStep2Desc: 'Choose your browser to open its extensions page directly with 1-click:',
+    manBtnExtEdge: 'Edge Extensions Page',
+    manBtnExtChrome: 'Chrome Extensions Page',
+    manBtnExtBrave: 'Brave Extensions Page',
     manStep3Hdr: '3. Enable "Developer mode"',
     manStep3Desc: '• In Edge: Look in the left sidebar or top for "Developer mode" and switch it on (blue switch).\n• In Chrome / Brave: In the top-right corner, turn on the "Developer mode" switch.',
     manStep4Hdr: '4. Load & Install the Extension',
@@ -3781,6 +3873,7 @@ const I18N = {
     extractorCardDesc: 'Independent engine powers YouTube, TikTok, Instagram & Facebook extraction without full app updates',
     updateExtractorTxt: 'Check & Update Engine',
     extractorStatusLabel: 'Core Status:',
+    extractorStatusTxt: 'Ready & Active',
     stHdrAbout: 'About SuperIDM',
     stLblVer: 'Version',
     stLblEngine: 'Engine',
@@ -3794,6 +3887,14 @@ const I18N = {
     // Add Download Modal
     modalTitle: 'New Task Pipeline',
     modalLblSrcUrl: 'Source URL',
+    ftText: 'File',
+    extMediaTitle: 'Media Stream Detected',
+    extStreamType: 'Adaptive Stream',
+    extFormatLabel: 'Stream Quality:',
+    extFormatBestOpt: 'Auto (Best Quality - 1080p/4K with Sound)',
+    ytNoticeTitle: 'Universal Media Extractor:',
+    ytNoticeDesc: 'Video webpage detected. SuperIDM can sniff and extract the direct high-speed video stream.',
+    sniffBtnTxt: 'Sniff & Extract',
     modalLblPresets: 'Quick presets:',
     modalPresetVid: '🎬 Sample Video (.mp4)',
     modalPresetMus: '🎵 Sample Music (.mp3)',
@@ -3819,6 +3920,7 @@ const I18N = {
     advBtnTxt: 'Advanced Configuration (Headers & Auth)',
     modalLblHeaders: 'Custom Headers (JSON)',
     modalLblUser: 'Username',
+    inpUser: 'username',
     modalLblPass: 'Password',
     modalBtnQueueTxt: 'Queue for Later',
     modalBtnCancel: 'Cancel',
@@ -3850,14 +3952,21 @@ const I18N = {
     refModalBtnPaste: 'Paste',
     refModalBtnCancel: 'Cancel',
     refModalBtnSubmitTxt: 'Update & Resume',
+    idmModalStatusTxt: 'Downloading...',
     idmLblFileSize: 'File Size:',
     idmLblDownloaded: 'Downloaded:',
     idmLblEta: 'Time Left (ETA):',
     idmLblResume: 'Resume Capability:',
+    idmModalResume: 'Yes (Supported)',
     idmLblProgress: 'Progress:',
     idmLblConnections: 'Active Connections & Chunks:',
+    idmModalConnCount: '16 connections',
     idmLblAutoShow: 'Auto-show progress dialog on download start',
     lblSkipPromptNext: 'Start downloads automatically next time without prompt',
+    clipPromptTitle: 'Download Link Detected',
+    clipBtnDismiss: 'Dismiss',
+    clipBtnAccept: 'Download Now',
+    globalErrDismiss: 'Dismiss',
   }
 };
 
@@ -3893,6 +4002,40 @@ function applyI18n() {
   if (pauseBtn) pauseBtn.title = t.pauseAllTitle;
   const resumeBtn = document.getElementById('btnResumeAll');
   if (resumeBtn) resumeBtn.title = t.resumeAllTitle;
+
+  // Localize tooltips / title attributes
+  const connDot = document.getElementById('connDot');
+  if (connDot) connDot.title = isRtl ? 'محرك الشبكة نشط' : 'Engine Active';
+  const langBtn = document.getElementById('langBtn');
+  if (langBtn) langBtn.title = isRtl ? 'Switch to English' : 'التبديل إلى العربية';
+  const hdrExtBtn = document.getElementById('hdrExtBtn');
+  if (hdrExtBtn) hdrExtBtn.title = isRtl ? 'تثبيت إضافة المتصفح' : 'Install Browser Extension';
+  const themeBtn = document.getElementById('themeBtn');
+  if (themeBtn) themeBtn.title = isRtl ? 'تغيير المظهر' : 'Toggle Theme';
+  const notifBtn = document.getElementById('notifBtn');
+  if (notifBtn) notifBtn.title = isRtl ? 'الإشعارات' : 'Notifications';
+  const idmBtnHide = document.getElementById('idmBtnHide');
+  if (idmBtnHide) idmBtnHide.title = isRtl ? 'إخفاء النافذة (يستمر التحميل بالخلفية)' : 'Minimize to background';
+  const idmBtnClose = document.getElementById('idmBtnClose');
+  if (idmBtnClose) idmBtnClose.title = isRtl ? 'إغلاق النافذة' : 'Close dialog';
+
+  // Refresh dynamic labels
+  const thrVal = parseInt(document.getElementById('throttleDn')?.value || '0');
+  const thrLbl = document.getElementById('throttleDnVal');
+  if (thrLbl) thrLbl.textContent = thrVal === 0 ? (isRtl ? 'بدون حد' : 'Unlimited') : thrVal + ' MB/s';
+
+  const schedEn = document.getElementById('schedEn')?.checked;
+  const schedSt = document.getElementById('schedSt');
+  if (schedSt) {
+    schedSt.textContent = schedEn ? (isRtl ? 'مفعّل' : 'Active') : (isRtl ? 'غير مفعّل' : 'Inactive');
+  }
+
+  const bBtn = document.getElementById('batchTogBtn');
+  if (bBtn) {
+    bBtn.textContent = batchMode
+      ? (isRtl ? '- وضع الرابط الفردي' : '- Single URL mode')
+      : (isRtl ? '+ تنزيل دفعات' : '+ Batch mode');
+  }
 
   setView(curView);
   renderDLs();
@@ -3936,12 +4079,12 @@ async function updateExtractorCore() {
       }, 1000);
     }
   } catch (e) {
-    showT('error', 'Update Error', String(e));
+    showT('error', curLang === 'ar' ? 'خطأ في التحديث' : 'Update Error', String(e));
     addLog('error', `[EXTRACTOR CORE ERROR] ${e}`);
   } finally {
     btn.disabled = false;
     if (ico) ico.classList.remove('animate-spin');
-    if (txt) txt.textContent = t.updateExtractorBtn;
+    if (txt) txt.textContent = t.updateExtractorTxt;
   }
 }
 window.updateExtractorCore = updateExtractorCore;
@@ -3966,24 +4109,26 @@ function renderLogs() {
 }
 
 function clrLogs() {
+  const isAr = curLang === 'ar';
   logs = [];
   renderLogs();
-  showT('info', 'Logs Cleared', 'Activity logs wiped');
+  showT('info', isAr ? 'مسح السجل' : 'Logs Cleared', isAr ? 'تم مسح سجل النشاط والعمليات' : 'Activity logs wiped');
 }
 
 // ════════ SCHEDULER ════════
 function updateSched() {
+  const isAr = curLang === 'ar';
   const en = document.getElementById('schedEn')?.checked;
   const st = document.getElementById('schedSt');
   if (st) {
     st.textContent = en
-      ? (curLang === 'ar' ? 'مفعّل' : 'Active')
-      : (curLang === 'ar' ? 'غير مفعّل' : 'Inactive');
+      ? (isAr ? 'مفعّل' : 'Active')
+      : (isAr ? 'غير مفعّل' : 'Inactive');
     st.className = en
       ? 'text-[11px] text-primary-container ml-2 px-2 py-0.5 bg-primary-container/20 rounded font-semibold'
       : 'text-[11px] text-on-surface-variant ml-2 px-2 py-0.5 bg-surface-container-highest rounded';
   }
-  showT('info', 'Scheduler Updated', en ? 'Scheduler is now active' : 'Scheduler disabled');
+  showT('info', isAr ? 'تحديث الجدولة' : 'Scheduler Updated', en ? (isAr ? 'تم تفعيل الجدولة الزمنية' : 'Scheduler is now active') : (isAr ? 'تم إيقاف الجدولة الزمنية' : 'Scheduler disabled'));
 }
 
 function chkSched() {
@@ -4031,7 +4176,7 @@ function dismClip() {
 function accClip() {
   if (clipPnd) {
     addDL(clipPnd);
-    showT('success', 'Download Started', getFI(clipPnd).n);
+    showT('success', curLang === 'ar' ? 'بدء التحميل' : 'Download Started', getFI(clipPnd).n);
     dismClip();
     setView('downloading');
   }
@@ -4233,7 +4378,8 @@ clipInt = setInterval(chkClip, 2500);
 addLog('info', '[INIT] SuperIDM v2.7.2 Engine started');
 addLog('info', '[READY] All buttons, modals, and download engine are 100% active');
 setTimeout(() => {
-  showT('success', 'SuperIDM Engine Ready', 'All buttons active. Click "+ Add New Link" or press Ctrl+N');
+  const isAr = curLang === 'ar';
+  showT('success', isAr ? 'محرك SuperIDM جاهز' : 'SuperIDM Engine Ready', isAr ? 'جميع الأزرار نشطة. اضغط "+ إضافة رابط جديد" أو Ctrl+N' : 'All buttons active. Click "+ Add New Link" or press Ctrl+N');
 }, 500);
 
 
@@ -4302,11 +4448,15 @@ async function copyChromeStoreLink() {
     txts.forEach(t => t.textContent = isAr ? 'تم النسخ!' : 'Copied!');
     icos.forEach(i => i.textContent = 'check');
     setTimeout(() => {
-      txts.forEach(t => t.textContent = isAr ? 'نسخ' : 'Copy');
+      const nowAr = (curLang === 'ar');
+      const stCopy = document.getElementById('stTxtCopyChrome');
+      if (stCopy) stCopy.textContent = nowAr ? 'نسخ' : 'Copy';
+      const extCopy = document.getElementById('extBtnCopyChrome');
+      if (extCopy) extCopy.textContent = nowAr ? 'نسخ الرابط' : 'Copy Link';
       icos.forEach(i => i.textContent = 'content_copy');
     }, 3000);
   } catch (e) {
-    showT('warn', 'Link', CHROME_STORE_URL);
+    showT('warn', isAr ? 'الرابط' : 'Link', CHROME_STORE_URL);
   }
 }
 
@@ -4347,11 +4497,15 @@ async function copyEdgeStoreLink() {
     txts.forEach(t => t.textContent = isAr ? 'تم النسخ!' : 'Copied!');
     icos.forEach(i => i.textContent = 'check');
     setTimeout(() => {
-      txts.forEach(t => t.textContent = isAr ? 'نسخ' : 'Copy');
+      const nowAr = (curLang === 'ar');
+      const stCopy = document.getElementById('stTxtCopyEdge');
+      if (stCopy) stCopy.textContent = nowAr ? 'نسخ' : 'Copy';
+      const extCopy = document.getElementById('extBtnCopyEdge');
+      if (extCopy) extCopy.textContent = nowAr ? 'نسخ الرابط' : 'Copy Link';
       icos.forEach(i => i.textContent = 'content_copy');
     }, 3000);
   } catch (e) {
-    showT('warn', 'Link', EDGE_STORE_URL);
+    showT('warn', isAr ? 'الرابط' : 'Link', EDGE_STORE_URL);
   }
 }
 
@@ -4375,12 +4529,12 @@ async function openEdgeStorePage() {
 
 async function openBrowserExtensionsPage(browser) {
   if (hasTauriIPC()) {
+    const isAr = (curLang === 'ar');
     try {
       await tauriCall('launch_browser_extensions', { browser });
-      const isAr = (curLang === 'ar');
       showT('info', isAr ? 'صفحة الإضافات' : 'Extensions Page', isAr ? `تم فتح صفحة إضافات ${browser}` : `Opened ${browser} extensions page`);
     } catch (e) {
-      showT('error', 'Error', String(e));
+      showT('error', isAr ? 'خطأ' : 'Error', String(e));
     }
   }
 }
@@ -4405,7 +4559,7 @@ async function autoInstallAllBrowsers() {
       await tauriCall('open_extension_folder');
       addLog('success', '[INTEGRATION] Setup triggered for all browsers');
     } catch (e) {
-      showT('error', 'Auto-Install Error', String(e));
+      showT('error', curLang === 'ar' ? 'خطأ في التثبيت' : 'Auto-Install Error', String(e));
     }
   }
 }
@@ -4415,7 +4569,7 @@ async function openExtensionFolder() {
   try {
     await tauriCall('open_extension_folder');
   } catch (e) {
-    showT('error', 'Error', String(e));
+    showT('error', curLang === 'ar' ? 'خطأ' : 'Error', String(e));
   }
 }
 
