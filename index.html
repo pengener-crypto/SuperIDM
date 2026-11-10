@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SuperIDM &mdash; Download Engine v2.7.2</title>
+<title>SuperIDM &mdash; Download Engine v2.7.5</title>
 <meta name="description" content="SuperIDM is a high-performance download manager with multi-connection segmented downloading, queue management, and real-time bandwidth monitoring."/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -310,7 +310,7 @@ html[dir="rtl"] .flex.items-baseline {
       </div>
       <div>
         <h1 class="text-[16px] font-bold text-primary tracking-tight" style="font-family:Inter">SuperIDM</h1>
-        <p id="brandEngineVer" class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.7.2 Engine</p>
+        <p id="brandEngineVer" class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.7.5 Engine</p>
       </div>
     </div>
     <button id="btnAddModal" onclick="openAddModal()" data-act="open-modal" class="w-full py-2 px-4 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded transition-all flex items-center justify-center gap-2 active:scale-95 glow-btn text-[14px]" style="font-family:Inter">
@@ -383,23 +383,23 @@ html[dir="rtl"] .flex.items-baseline {
     <div class="grid grid-cols-4 gap-3 mb-4">
       <div class="bg-surface-container-low border border-outline-variant rounded p-4">
         <div id="lblTotDown" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">Total Down</div>
-        <div class="flex items-baseline gap-1.5"><span id="sDnSpd" class="text-[18px] font-semibold text-primary" style="font-family:'JetBrains Mono'">0.0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">MB/s</span></div>
+        <div><span dir="ltr" class="inline-flex items-baseline gap-1.5"><span id="sDnSpd" class="text-[18px] font-semibold text-primary" style="font-family:'JetBrains Mono'">0.0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">MB/s</span></span></div>
         <div class="text-[11px] text-on-surface-variant mt-1" id="sTotalDn" style="font-family:'JetBrains Mono'">0 B downloaded</div>
       </div>
       <div class="bg-surface-container-low border border-outline-variant rounded p-4">
         <div id="lblTotUp" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">Total Up</div>
-        <div class="flex items-baseline gap-1.5"><span id="sUpSpd" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0.1</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">MB/s</span></div>
+        <div><span dir="ltr" class="inline-flex items-baseline gap-1.5"><span id="sUpSpd" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0.1</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">MB/s</span></span></div>
         <div class="text-[11px] text-on-surface-variant mt-1" id="sHeartbeatTxt" style="font-family:'JetBrains Mono'">Heartbeat active</div>
       </div>
       <div class="bg-surface-container-low border border-outline-variant rounded p-4">
         <div id="lblActTasks" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">Active Tasks</div>
-        <div class="flex items-baseline gap-1.5"><span id="sAct" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">/ <span id="sTot">0</span></span></div>
+        <div><span dir="ltr" class="inline-flex items-baseline gap-1.5"><span id="sAct" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">/ <span id="sTot">0</span></span></span></div>
         <div class="text-[11px] text-on-surface-variant mt-1" id="sQueuedTxt" style="font-family:'JetBrains Mono'">0 queued</div>
       </div>
       <div class="bg-surface-container-low border border-outline-variant rounded p-4 relative overflow-hidden">
         <div class="relative z-10">
           <div id="lblSysLoad" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">System Load</div>
-          <div class="flex items-baseline gap-1.5"><span id="sLoad" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">%</span></div>
+          <div><span dir="ltr" class="inline-flex items-baseline gap-1.5"><span id="sLoad" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">%</span></span></div>
           <div class="text-[11px] text-on-surface-variant mt-1" id="sConns" style="font-family:'JetBrains Mono'">0 connections</div>
         </div>
         <div class="absolute bottom-0 left-0 w-full h-1/2 mini-graph opacity-50 z-0"></div>
@@ -726,10 +726,10 @@ html[dir="rtl"] .flex.items-baseline {
       <div class="col-span-2 bg-surface-container border border-outline-variant rounded p-5">
         <div id="stHdrAbout" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-3" style="font-family:'JetBrains Mono'">About SuperIDM</div>
         <div class="grid grid-cols-4 gap-4 text-[13px]" style="font-family:'JetBrains Mono'">
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary">2.7.2</div></div>
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblEngine" class="text-[11px] text-on-surface-variant mb-1">Engine</div><div class="text-on-surface">SuperIDM/Rust+Tokio</div></div>
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblProto" class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface">HTTP/HTTPS/FTP</div></div>
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant">2026.09.22</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary" dir="ltr">2.7.5</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblEngine" class="text-[11px] text-on-surface-variant mb-1">Engine</div><div class="text-on-surface" dir="ltr">SuperIDM/Rust+Tokio</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblProto" class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface" dir="ltr">HTTP/HTTPS/FTP</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant" dir="ltr">2026.11.10</div></div>
         </div>
       </div>
     </div>
@@ -741,7 +741,7 @@ html[dir="rtl"] .flex.items-baseline {
       <h3 id="logsTitle" class="text-[22px] font-semibold text-primary" style="font-family:Inter">Activity Logs</h3>
       <button data-act="clear-logs" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">clear_all</span><span id="logsClearBtn">Clear</span></button>
     </div>
-    <div id="logBox" class="bg-surface-container-low border border-outline-variant rounded p-4 overflow-y-auto" style="max-height:calc(100vh - 200px)"></div>
+    <div id="logBox" dir="ltr" class="bg-surface-container-low border border-outline-variant rounded p-4 overflow-y-auto text-left" style="max-height:calc(100vh - 200px)"></div>
   </div>
 
 </main>
@@ -797,6 +797,19 @@ html[dir="rtl"] .flex.items-baseline {
             </button>
           </div>
         </div>
+
+        <div id="playlistNotice" class="hidden flex items-start gap-2 p-2.5 bg-primary-container/15 border border-primary-container/40 rounded text-[12px] text-on-surface">
+          <span class="material-symbols-outlined text-[20px] text-primary-container flex-shrink-0 mt-0.5">playlist_play</span>
+          <div class="flex-1 flex items-center justify-between">
+            <div>
+              <span class="font-semibold text-primary-container" id="playlistNoticeTitle">Media Playlist Detected:</span> <span id="playlistNoticeDesc">SuperIDM can extract all videos in this playlist for batch download.</span>
+            </div>
+            <button id="extractPlaylistBtn" type="button" onclick="sniffPlaylist()" class="text-[11px] bg-primary-container text-on-primary-container font-semibold px-2.5 py-1.5 rounded transition-all active:scale-95 ml-2 whitespace-nowrap flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">queue_music</span><span id="extractPlaylistBtnTxt">Extract Playlist</span>
+            </button>
+          </div>
+        </div>
+
         <div class="flex items-center gap-2 pt-1 flex-wrap">
           <span id="modalLblPresets" class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">Quick presets:</span>
           <button id="modalPresetVid" type="button" onclick="fillSample('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')" data-act="preset" data-url="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" class="text-[11px] bg-primary-container/20 hover:bg-primary-container/30 text-primary-container border border-primary-container/40 px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">🎬 Sample Video (.mp4)</button>
@@ -805,7 +818,27 @@ html[dir="rtl"] .flex.items-baseline {
           <button id="modalPresetPaste" type="button" onclick="pasteClipToInp()" data-act="paste-clip" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">📋 Paste</button>
           <button id="batchTogBtn" onclick="togBatch()" class="text-[11px] text-primary hover:text-primary-container ml-auto" style="font-family:'JetBrains Mono'" data-act="tog-batch">+ Batch mode</button>
         </div>
-        <div id="batchArea" class="hidden"><textarea id="batchInp" class="w-full bg-surface-container-lowest border border-outline-variant text-on-surface text-[12px] rounded p-3 outline-none focus:border-primary-container min-h-[80px] resize-y mt-2" placeholder="One URL per line for batch download..." style="font-family:'JetBrains Mono'"></textarea></div>
+        <div id="batchArea" class="hidden space-y-2 mt-2">
+          <textarea id="batchInp" class="w-full bg-surface-container-lowest border border-outline-variant text-on-surface text-[12px] rounded p-3 outline-none focus:border-primary-container min-h-[90px] resize-y" placeholder="One URL per line for batch download..." style="font-family:'JetBrains Mono'"></textarea>
+          <!-- Pattern Generator Sub-panel -->
+          <div class="bg-surface-container-lowest/80 border border-outline-variant/80 rounded-lg p-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[12px] font-semibold text-primary-container flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">dynamic_feed</span>
+                <span id="patternTitleTxt">Batch Pattern Generator</span>
+              </span>
+              <span class="text-[11px] text-on-surface-variant font-mono" id="patternSyntaxHint">e.g. file[01-20].zip or [a-z]</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <input id="patternInp" type="text" class="flex-1 bg-surface-container-low border border-outline-variant text-on-surface text-[12px] rounded px-3 py-1.5 outline-none focus:border-primary-container font-mono" placeholder="https://example.com/file[01-20].zip" onkeydown="if(event.key==='Enter')generateFromPattern()"/>
+              <button type="button" onclick="generateFromPattern()" class="px-3 py-1.5 text-[11px] font-semibold bg-primary-container text-on-primary-container rounded transition-all active:scale-95 flex items-center gap-1 flex-shrink-0">
+                <span class="material-symbols-outlined text-[14px]">bolt</span>
+                <span id="btnGenPatternTxt">Generate URLs</span>
+              </button>
+            </div>
+            <div class="text-[11px] text-on-surface-variant font-mono" id="patternStatsTxt">Supports numeric [1-50], padded [001-100], steps [0-50:5], and letters [a-z].</div>
+          </div>
+        </div>
       </div>
       <!-- Config grid -->
       <div class="grid grid-cols-2 gap-4">
@@ -1136,6 +1169,63 @@ html[dir="rtl"] .flex.items-baseline {
       </button>
     </div>
   </div>
+</div>
+
+<!-- ══ PLAYLIST BATCH EXTRACTION MODAL ══ -->
+<div id="playlistModal" class="fixed inset-0 z-[95] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.78);backdrop-filter:blur(10px)">
+  <div class="glass-panel w-full max-w-3xl rounded-xl shadow-2xl flex flex-col modal-enter max-h-[90vh] overflow-hidden border border-outline-variant/80">
+    <!-- Header -->
+    <div class="p-5 border-b border-outline-variant/60 flex items-center justify-between bg-surface-container-high/40">
+      <div class="flex items-center gap-3">
+        <span class="material-symbols-outlined text-primary-container text-[26px]">playlist_play</span>
+        <div>
+          <h3 id="playlistModalTitle" class="text-[17px] font-semibold text-on-surface" style="font-family:Inter">Playlist Batch Extractor</h3>
+          <p id="playlistModalSub" class="text-[12px] text-on-surface-variant font-mono">0 items found</p>
+        </div>
+      </div>
+      <button onclick="closePlaylistModal()" class="text-on-surface-variant hover:text-on-surface transition-colors p-1 active:scale-95"><span class="material-symbols-outlined">close</span></button>
+    </div>
+
+    <!-- Controls Bar -->
+    <div class="px-5 py-3 bg-surface-container-low border-b border-outline-variant/50 flex items-center justify-between flex-wrap gap-3 text-[12px]">
+      <div class="flex items-center gap-3">
+        <label class="flex items-center gap-2 cursor-pointer text-on-surface font-medium select-none">
+          <input type="checkbox" id="playlistSelectAll" checked onchange="toggleSelectAllPlaylist(this.checked)" class="rounded accent-primary-container cursor-pointer w-4 h-4" />
+          <span id="lblSelectAll">Select All</span>
+        </label>
+        <span class="text-outline-variant">|</span>
+        <span id="playlistSelectedCount" class="text-primary-container font-mono font-semibold">0 selected</span>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <label class="text-on-surface-variant font-mono text-[11px]" id="lblPlaylistQuality">Quality:</label>
+        <select id="playlistQualitySel" class="bg-surface-container-highest border border-outline-variant text-on-surface text-[12px] rounded px-3 py-1.5 outline-none font-mono">
+          <option value="best" id="optPlaylistBest">🎬 Video (Best MP4)</option>
+          <option value="audio" id="optPlaylistAudio">🎵 Audio Only (MP3)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Scrollable Items List -->
+    <div id="playlistItemsContainer" class="p-4 overflow-y-auto space-y-2 flex-1 max-h-[52vh] custom-scrollbar bg-surface-container-lowest">
+      <!-- Items dynamically injected here -->
+    </div>
+
+    <!-- Footer -->
+    <div class="p-4 border-t border-outline-variant/60 bg-surface-container-low flex items-center justify-between">
+      <div class="flex items-center gap-2 overflow-hidden text-[12px]">
+        <span class="material-symbols-outlined text-on-surface-variant text-[16px]">folder</span>
+        <span id="playlistSavePath" class="text-on-surface truncate font-mono text-[11px]">Downloads</span>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <button onclick="closePlaylistModal()" class="px-4 py-2 text-[12px] text-on-surface border border-outline-variant rounded hover:bg-surface-container transition-all active:scale-95" id="btnCancelPlaylist">Cancel</button>
+        <button onclick="startPlaylistBatchDownload()" id="btnStartPlaylistDL" class="px-5 py-2 text-[12px] text-background bg-primary-container hover:bg-primary-fixed rounded flex items-center gap-1.5 font-semibold transition-all active:scale-95 shadow-md">
+          <span class="material-symbols-outlined text-[16px]">rocket_launch</span>
+          <span id="btnStartPlaylistDLTxt">Download Selected</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- ══ IDM CLASSIC FLOATING PROGRESS DIALOG ══ -->
 <div id="idmDownloadModal" class="fixed inset-0 z-[96] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.78);backdrop-filter:blur(8px)">
   <div class="glass-panel w-full max-w-xl rounded-xl shadow-2xl flex flex-col modal-enter overflow-hidden border border-outline-variant/80">
@@ -1354,9 +1444,50 @@ function bindTauriEvents() {
               updateDLRowDOM(dl);
             }
           }
+          if (typeof currentIdmTaskId !== 'undefined' && String(currentIdmTaskId) === String(dl.id)) {
+            updateIdmModal(dl);
+          }
         }
         updStats();
         updBdg();
+      });
+
+      listenFn('download_error', (event) => {
+        const p = event.payload || event;
+        if (!p) return;
+        const msg = String(p.message || 'Download stream failed');
+        addLog('error', `[DOWNLOAD ERROR] ${msg}`);
+        const dl = p.id ? dls.find(d => String(d.id) === String(p.id)) : null;
+        if (dl) {
+          dl.lastError = msg;
+          dl.statusNote = '';
+          dl.status = 'error';
+          dl.speed = 0;
+          renderDLs();
+          if (typeof currentIdmTaskId !== 'undefined' && String(currentIdmTaskId) === String(dl.id)) {
+            updateIdmModal(dl);
+          }
+        }
+        showT('error', curLang === 'ar' ? 'فشل التنزيل' : 'Download Failed', msg);
+      });
+
+      listenFn('engine_notice', (event) => {
+        const p = event.payload || event;
+        if (!p) return;
+        if (p.stage === 'preparing_components' || p.code === 'preparing_components') {
+          const note = curLang === 'ar'
+            ? 'جارٍ تجهيز مكونات محرك الفيديو لأول مرة (قد يستغرق لحظات)...'
+            : 'Preparing video engine components for first use...';
+          addLog('info', `[ENGINE] ${p.message || note}`);
+          const dl = p.id ? dls.find(d => String(d.id) === String(p.id)) : null;
+          if (dl) {
+            dl.statusNote = note;
+            if (typeof currentIdmTaskId !== 'undefined' && String(currentIdmTaskId) === String(dl.id)) {
+              updateIdmModal(dl);
+            }
+          }
+          showT('info', curLang === 'ar' ? 'تجهيز محرك الفيديو' : 'Video Engine Setup', note);
+        }
       });
 
       listenFn('open-add-modal', () => {
@@ -1837,6 +1968,352 @@ async function sniffMediaStream() {
 }
 window.sniffMediaStream = sniffMediaStream;
 
+// ════════ BATCH PATTERN GENERATOR ════════
+function expandUrlPattern(inputPattern) {
+  if (!inputPattern || typeof inputPattern !== 'string') return [];
+  const pattern = inputPattern.trim();
+  if (!pattern) return [];
+
+  const bracketRegex = /\[([a-zA-Z0-9]+)\s*-\s*([a-zA-Z0-9]+)(?::([0-9]+))?\]/g;
+  const matches = [...pattern.matchAll(bracketRegex)];
+
+  if (matches.length === 0) {
+    return [pattern];
+  }
+
+  let results = [pattern];
+
+  for (const match of matches) {
+    const fullMatch = match[0];
+    const startStr = match[1];
+    const endStr = match[2];
+    const stepVal = match[3] ? parseInt(match[3], 10) : 1;
+    const step = Math.max(1, isNaN(stepVal) ? 1 : stepVal);
+
+    const isNumeric = /^[0-9]+$/.test(startStr) && /^[0-9]+$/.test(endStr);
+    const isAlpha = /^[a-zA-Z]$/.test(startStr) && /^[a-zA-Z]$/.test(endStr);
+
+    let tokens = [];
+
+    if (isNumeric) {
+      const startNum = parseInt(startStr, 10);
+      const endNum = parseInt(endStr, 10);
+      const padLen = (startStr.startsWith('0') && startStr.length > 1) || (endStr.startsWith('0') && endStr.length > 1)
+        ? Math.max(startStr.length, endStr.length)
+        : 0;
+
+      if (startNum <= endNum) {
+        for (let n = startNum; n <= endNum; n += step) {
+          tokens.push(padLen > 0 ? String(n).padStart(padLen, '0') : String(n));
+          if (tokens.length >= 2000) break;
+        }
+      } else {
+        for (let n = startNum; n >= endNum; n -= step) {
+          tokens.push(padLen > 0 ? String(n).padStart(padLen, '0') : String(n));
+          if (tokens.length >= 2000) break;
+        }
+      }
+    } else if (isAlpha) {
+      const startCode = startStr.charCodeAt(0);
+      const endCode = endStr.charCodeAt(0);
+      if (startCode <= endCode) {
+        for (let c = startCode; c <= endCode; c += step) {
+          tokens.push(String.fromCharCode(c));
+          if (tokens.length >= 2000) break;
+        }
+      } else {
+        for (let c = startCode; c >= endCode; c -= step) {
+          tokens.push(String.fromCharCode(c));
+          if (tokens.length >= 2000) break;
+        }
+      }
+    } else {
+      continue;
+    }
+
+    if (tokens.length === 0) continue;
+
+    const newResults = [];
+    for (const res of results) {
+      for (const tok of tokens) {
+        newResults.push(res.replace(fullMatch, tok));
+        if (newResults.length >= 2000) break;
+      }
+      if (newResults.length >= 2000) break;
+    }
+    results = newResults;
+  }
+
+  return results;
+}
+window.expandUrlPattern = expandUrlPattern;
+
+function generateFromPattern() {
+  const isAr = curLang === 'ar';
+  const pInp = document.getElementById('patternInp');
+  const bInp = document.getElementById('batchInp');
+  const val = (pInp?.value || '').trim();
+
+  if (!val) {
+    showT('warn', isAr ? 'حقل التسلسل فارغ' : 'Pattern Field Empty', isAr ? 'يرجى إدخال صيغة مثل: https://site.com/file[01-20].zip' : 'Please enter a pattern like: https://site.com/file[01-20].zip');
+    pInp?.focus();
+    return;
+  }
+
+  const generated = expandUrlPattern(val);
+  if (!generated.length || (generated.length === 1 && generated[0] === val && !val.includes('['))) {
+    showT('warn', isAr ? 'صيغة غير صالحة' : 'Invalid Pattern', isAr ? 'تأكد من استخدام أقواس التسلسل مثل [01-20] أو [a-z]' : 'Make sure to include range brackets like [01-20] or [a-z]');
+    return;
+  }
+
+  const currentBatch = bInp?.value ? bInp.value.trim() + '\n' : '';
+  if (bInp) {
+    bInp.value = currentBatch + generated.join('\n');
+    bInp.focus();
+  }
+
+  showT('success', isAr ? 'تم توليد الروابط' : 'Pattern Generated', isAr ? `تمت إضافة ${generated.length} رابط إلى قائمة التنزيل الدفعي` : `Added ${generated.length} URLs to batch list`);
+}
+window.generateFromPattern = generateFromPattern;
+
+// ════════ PLAYLIST EXTRACTION & BATCH ════════
+let currentPlaylistInfo = null;
+
+function isPlaylistUrl(url) {
+  if (!url) return false;
+  const u = String(url).toLowerCase();
+  return (
+    ((u.includes('youtube.com') || u.includes('youtu.be')) && (u.includes('list=') || u.includes('/playlist') || u.includes('/channel/') || u.includes('/c/') || u.includes('/@')))
+    || u.includes('dailymotion.com/playlist')
+    || (u.includes('soundcloud.com/') && (u.includes('/sets/') || u.includes('/albums/')))
+    || (u.includes('bilibili.com/video/') && u.includes('p='))
+  );
+}
+window.isPlaylistUrl = isPlaylistUrl;
+
+async function sniffPlaylist() {
+  const inp = document.getElementById('urlInp');
+  const raw = (inp?.value || '').trim();
+  const url = cleanTargetUrl(raw);
+  if (!url) return false;
+
+  const isAr = curLang === 'ar';
+  const btn = document.getElementById('extractPlaylistBtn');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.innerHTML = `<span class="material-symbols-outlined animate-spin text-[16px]">sync</span> <span>${isAr ? 'جارٍ السحب...' : 'Extracting...'}</span>`;
+    btn.disabled = true;
+  }
+
+  showT('info', isAr ? 'سحب قائمة التشغيل' : 'Playlist Extractor', isAr ? 'جارٍ استخراج عناصر القائمة عبر المحرك...' : 'Extracting playlist entries via engine...');
+  addLog('info', `[PLAYLIST] Extracting: ${url}`);
+
+  if (hasTauriIPC()) {
+    try {
+      const info = await tauriCall('extract_playlist', { url });
+      if (info && info.entries && info.entries.length > 0) {
+        currentPlaylistInfo = info;
+        openPlaylistModal(info);
+      } else {
+        showT('warn', isAr ? 'تنبيه' : 'Notice', isAr ? 'لم يتم العثور على فيديوهات داخل هذه القائمة' : 'No entries found in this playlist');
+      }
+    } catch (err) {
+      console.error('Playlist extract error:', err);
+      showT('error', isAr ? 'فشل استخراج القائمة' : 'Playlist Extraction Failed', String(err));
+      addLog('error', `[PLAYLIST ERROR] ${err}`);
+    } finally {
+      if (btn) {
+        btn.innerHTML = origHtml;
+        btn.disabled = false;
+      }
+    }
+  } else {
+    setTimeout(() => {
+      const mockInfo = {
+        title: 'Complete Web & Programming Masterclass',
+        uploader: 'SuperIDM Academy',
+        count: 5,
+        entries: [
+          { id: '1', title: 'Part 1: SuperIDM Download Acceleration Overview', url: 'https://example.com/part1.mp4', duration_string: '10:15', channel: 'SuperIDM' },
+          { id: '2', title: 'Part 2: Multi-Connection Engine & Chunking', url: 'https://example.com/part2.mp4', duration_string: '14:20', channel: 'SuperIDM' },
+          { id: '3', title: 'Part 3: Stream Grabbing & Auto-Muxing with FFmpeg', url: 'https://example.com/part3.mp4', duration_string: '08:45', channel: 'SuperIDM' },
+          { id: '4', title: 'Part 4: Batch Downloads & Pattern Wildcards', url: 'https://example.com/part4.mp4', duration_string: '12:00', channel: 'SuperIDM' },
+          { id: '5', title: 'Part 5: Browser Integration & Native Messaging', url: 'https://example.com/part5.mp4', duration_string: '15:30', channel: 'SuperIDM' }
+        ]
+      };
+      currentPlaylistInfo = mockInfo;
+      openPlaylistModal(mockInfo);
+      if (btn) {
+        btn.innerHTML = origHtml;
+        btn.disabled = false;
+      }
+    }, 600);
+  }
+}
+window.sniffPlaylist = sniffPlaylist;
+
+function openPlaylistModal(info) {
+  const modal = document.getElementById('playlistModal');
+  if (!modal) return;
+
+  const isAr = curLang === 'ar';
+  const titleEl = document.getElementById('playlistModalTitle');
+  if (titleEl) titleEl.textContent = info.title || (isAr ? 'سحب قائمة التشغيل' : 'Playlist Batch Extractor');
+
+  const subEl = document.getElementById('playlistModalSub');
+  if (subEl) subEl.textContent = `${info.uploader ? info.uploader + ' • ' : ''}${info.entries.length} ${isAr ? 'عنصر' : 'items'}`;
+
+  const savePathEl = document.getElementById('playlistSavePath');
+  if (savePathEl) savePathEl.textContent = savePth || 'Downloads';
+
+  renderPlaylistItems(info.entries);
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+window.openPlaylistModal = openPlaylistModal;
+
+function closePlaylistModal() {
+  const modal = document.getElementById('playlistModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+}
+window.closePlaylistModal = closePlaylistModal;
+
+function renderPlaylistItems(entries) {
+  const container = document.getElementById('playlistItemsContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const isAr = curLang === 'ar';
+
+  entries.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-3 p-2.5 rounded bg-surface-container-low hover:bg-surface-container border border-outline-variant/60 transition-colors';
+
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.checked = true;
+    chk.className = 'playlist-item-chk rounded accent-primary-container cursor-pointer w-4 h-4';
+    chk.dataset.index = String(idx);
+    chk.onchange = updatePlaylistSelectedCount;
+
+    const indexSpan = document.createElement('span');
+    indexSpan.className = 'text-[11px] font-mono text-on-surface-variant w-7 text-center flex-shrink-0';
+    indexSpan.textContent = `#${idx + 1}`;
+
+    const thumbDiv = document.createElement('div');
+    thumbDiv.className = 'w-14 h-9 rounded bg-surface-container-highest overflow-hidden flex-shrink-0 flex items-center justify-center';
+    if (item.thumbnail) {
+      const img = document.createElement('img');
+      img.src = item.thumbnail;
+      img.className = 'w-full h-full object-cover';
+      img.onerror = () => { img.remove(); thumbDiv.innerHTML = '<span class="material-symbols-outlined text-[16px] text-on-surface-variant">movie</span>'; };
+      thumbDiv.appendChild(img);
+    } else {
+      thumbDiv.innerHTML = '<span class="material-symbols-outlined text-[16px] text-on-surface-variant">movie</span>';
+    }
+
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'flex-1 min-w-0';
+    const titleP = document.createElement('p');
+    titleP.className = 'text-[12px] font-medium text-on-surface truncate';
+    titleP.textContent = item.title;
+    titleP.title = item.title;
+    infoDiv.appendChild(titleP);
+
+    if (item.uploader) {
+      const chP = document.createElement('p');
+      chP.className = 'text-[11px] text-on-surface-variant truncate font-mono';
+      chP.textContent = item.uploader;
+      infoDiv.appendChild(chP);
+    }
+
+    const durBadge = document.createElement('span');
+    durBadge.className = 'text-[11px] font-mono text-on-surface-variant bg-surface-container-highest px-2 py-0.5 rounded flex-shrink-0';
+    durBadge.textContent = item.duration_string || (item.duration_secs ? `${Math.floor(item.duration_secs/60)}:${item.duration_secs%60}` : '--:--');
+
+    row.appendChild(chk);
+    row.appendChild(indexSpan);
+    row.appendChild(thumbDiv);
+    row.appendChild(infoDiv);
+    row.appendChild(durBadge);
+
+    container.appendChild(row);
+  });
+
+  updatePlaylistSelectedCount();
+}
+
+function updatePlaylistSelectedCount() {
+  const isAr = curLang === 'ar';
+  const chks = document.querySelectorAll('.playlist-item-chk');
+  const checked = document.querySelectorAll('.playlist-item-chk:checked');
+  const countEl = document.getElementById('playlistSelectedCount');
+  if (countEl) {
+    countEl.textContent = `${checked.length} / ${chks.length} ${isAr ? 'محدد' : 'selected'}`;
+  }
+
+  const selectAll = document.getElementById('playlistSelectAll');
+  if (selectAll) {
+    selectAll.checked = chks.length > 0 && checked.length === chks.length;
+    selectAll.indeterminate = checked.length > 0 && checked.length < chks.length;
+  }
+
+  const btnDl = document.getElementById('btnStartPlaylistDLTxt');
+  if (btnDl) {
+    btnDl.textContent = isAr ? `تحميل العناصر المحددة (${checked.length})` : `Download Selected (${checked.length})`;
+  }
+}
+window.updatePlaylistSelectedCount = updatePlaylistSelectedCount;
+
+function toggleSelectAllPlaylist(state) {
+  const chks = document.querySelectorAll('.playlist-item-chk');
+  chks.forEach(c => c.checked = state);
+  updatePlaylistSelectedCount();
+}
+window.toggleSelectAllPlaylist = toggleSelectAllPlaylist;
+
+async function startPlaylistBatchDownload() {
+  if (!currentPlaylistInfo || !currentPlaylistInfo.entries) return;
+  const isAr = curLang === 'ar';
+  const checkedChks = [...document.querySelectorAll('.playlist-item-chk:checked')];
+  if (!checkedChks.length) {
+    showT('warn', isAr ? 'تنبيه' : 'Warning', isAr ? 'يرجى تحديد فيديو واحد على الأقل للتحميل' : 'Please select at least one item to download');
+    return;
+  }
+
+  const quality = document.getElementById('playlistQualitySel')?.value || 'best';
+  const isAudio = quality === 'audio';
+
+  const selectedEntries = checkedChks.map(c => {
+    const idx = parseInt(c.dataset.index, 10);
+    return currentPlaylistInfo.entries[idx];
+  }).filter(Boolean);
+
+  closePlaylistModal();
+  closeAddModal();
+
+  showT('info', isAr ? 'بدء تحميل الدفعة' : 'Batch Started', isAr ? `جارٍ جدولة ${selectedEntries.length} مهمة تنزيل...` : `Queuing ${selectedEntries.length} tasks...`);
+
+  for (const item of selectedEntries) {
+    const cleanTitle = (item.title || 'Video').replace(/[/\\?%*:|"<>]/g, '_').trim();
+    await addDL(item.url, {
+      name: cleanTitle,
+      filename: cleanTitle + (isAudio ? '.mp3' : '.mp4'),
+      format: isAudio ? 'bestaudio' : 'best',
+      cat: isAudio ? 'Music' : 'Videos',
+      pri: 'High'
+    });
+  }
+
+  showT('success', isAr ? 'تمت جدولة القائمة بالكامل' : 'Playlist Queued', isAr ? `تمت إضافة ${selectedEntries.length} ملف بنجاح إلى التنزيلات` : `Successfully added ${selectedEntries.length} items to downloads`);
+  setView('downloading');
+}
+window.startPlaylistBatchDownload = startPlaylistBatchDownload;
+
 async function pasteClipToInp() {
   const isAr = curLang === 'ar';
   try {
@@ -1933,7 +2410,15 @@ async function startDL() {
     const isAr = curLang === 'ar';
     if (batchMode) {
       const raw = document.getElementById('batchInp')?.value || '';
-      const urls = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+      const lines = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+      let urls = [];
+      for (const line of lines) {
+        if (/\[[a-zA-Z0-9]+-[a-zA-Z0-9]+(?::[0-9]+)?\]/.test(line)) {
+          urls.push(...expandUrlPattern(line));
+        } else {
+          urls.push(line);
+        }
+      }
       if (!urls.length) {
         showT('error', isAr ? 'حقل الدفعات فارغ' : 'Batch Input Empty', isAr ? 'يرجى إدخال رابط واحد على الأقل' : 'Please enter at least one download URL');
         document.getElementById('batchInp')?.focus();
@@ -1948,6 +2433,22 @@ async function startDL() {
         downloadUrl = 'https://proof.ovh.net/files/10Mb.dat';
         if (inp) inp.value = downloadUrl;
       }
+
+      // Check if single URL input contains a wildcard pattern e.g. [01-20] or [a-z]
+      if (/\[[a-zA-Z0-9]+-[a-zA-Z0-9]+(?::[0-9]+)?\]/.test(downloadUrl)) {
+        const generated = expandUrlPattern(downloadUrl);
+        if (generated.length > 1) {
+          showT('info', isAr ? 'اكتشاف تسلسل روابط' : 'Pattern Detected', isAr ? `جارٍ بدء تحميل دفعة من ${generated.length} رابط...` : `Starting batch download of ${generated.length} items...`);
+          for (const u of generated) {
+            await addDL(u, { conn, pri: curPri, cat, headers: finalHeaders });
+          }
+          showT('success', isAr ? 'تمت جدولة الدفعة' : 'Batch Queued', isAr ? `تم بدء ${generated.length} مهمة تنزيل` : `${generated.length} download task(s) started`);
+          closeAddModal();
+          setView('downloading');
+          return;
+        }
+      }
+
       await addDL(downloadUrl, {
         conn,
         pri: curPri,
@@ -2293,10 +2794,38 @@ function updateIdmModal(dl) {
         </button>
       `;
     }
+  } else if (dl.status === 'error' || dl.status === 'failed') {
+    if (dotEl) dotEl.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+    if (stTxtEl) {
+      const errDetail = dl.lastError ? ` — ${dl.lastError}` : '';
+      stTxtEl.textContent = isAr ? `فشل التنزيل${errDetail}` : `Download Failed${errDetail}`;
+    }
+    if (spdEl) spdEl.textContent = '0.0 B/s';
+    if (etaEl) etaEl.textContent = isAr ? 'فشل' : 'Failed';
+    if (barEl) barEl.className = 'h-full bg-red-500 rounded-full transition-all duration-300';
+
+    if (actEl) {
+      actEl.innerHTML = `
+        <button type="button" onclick="resumeIdmDL()" class="px-4 py-1.5 text-[12px] font-bold bg-primary-container text-on-primary-container rounded flex items-center gap-1.5 transition-all active:scale-95 shadow">
+          <span class="material-symbols-outlined text-[16px]">refresh</span>
+          <span>${isAr ? 'إعادة المحاولة' : 'Retry'}</span>
+        </button>
+        <button type="button" onclick="cancelIdmDL()" class="px-3.5 py-1.5 text-[12px] font-semibold bg-surface-container-highest hover:bg-red-500/20 text-red-400 rounded border border-outline-variant flex items-center gap-1.5 transition-all active:scale-95">
+          <span class="material-symbols-outlined text-[16px]">close</span>
+          <span>${isAr ? 'إلغاء' : 'Cancel'}</span>
+        </button>
+      `;
+    }
   } else {
     // downloading
     if (dotEl) dotEl.className = 'w-2.5 h-2.5 rounded-full bg-primary animate-pulse';
-    if (stTxtEl) stTxtEl.textContent = isAr ? `جارٍ التنزيل عبر ${connCount} خطوط اتصال...` : `Downloading (${connCount} connections)...`;
+    if (stTxtEl) {
+      if (downloaded === 0 && dl.statusNote) {
+        stTxtEl.textContent = dl.statusNote;
+      } else {
+        stTxtEl.textContent = isAr ? `جارٍ التنزيل عبر ${connCount} خطوط اتصال...` : `Downloading (${connCount} connections)...`;
+      }
+    }
     if (spdEl) spdEl.textContent = fmtSpd(dl.speed || 0);
     if (etaEl) etaEl.textContent = fmtEta(dl.eta_secs);
     if (barEl) barEl.className = 'h-full bg-gradient-to-r from-primary to-primary-container rounded-full transition-all duration-300';
@@ -2534,6 +3063,11 @@ function updateDLRowDOM(d) {
     : isErr ? 'bg-red-500/15 text-red-400 border-red-500/30'
     : 'bg-surface-container-highest text-on-surface-variant border-outline-variant';
 
+  const fnEl = document.getElementById(`dlfn-${d.id}`);
+  if (fnEl && (d.filename || d.name)) {
+    fnEl.textContent = d.filename || d.name;
+  }
+
   const stEl = document.getElementById(`dlst-${d.id}`);
   if (stEl) {
     stEl.textContent = stLbl;
@@ -2665,20 +3199,20 @@ function renderDLs() {
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
-            <span class="text-[13px] font-medium text-on-surface truncate" style="font-family:Inter">${safeName}</span>
+            <span id="dlfn-${safeId}" class="text-[13px] font-medium text-on-surface truncate" style="font-family:Inter">${safeName}</span>
             <span id="dlst-${safeId}" class="text-[10px] px-1.5 py-0.2 rounded border ${stBg}" style="font-family:'JetBrains Mono'">${stLbl}</span>
           </div>
           <div class="flex items-center gap-2 mt-1">
             <div id="dlseg-${safeId}" class="seg-bar">${segs.map(s => `<div class="seg ${s}"></div>`).join('')}</div>
-            <span id="dlsz-${safeId}" class="text-[11px] text-on-surface-variant flex-shrink-0" style="font-family:'JetBrains Mono'">${fmtSz(Math.min(d.downloaded_bytes, displayTotal))} / ${fmtSz(displayTotal)}</span>
+            <span id="dlsz-${safeId}" dir="ltr" class="text-[11px] text-on-surface-variant flex-shrink-0" style="font-family:'JetBrains Mono'">${fmtSz(Math.min(d.downloaded_bytes, displayTotal))} / ${fmtSz(displayTotal)}</span>
           </div>
         </div>
         <div class="w-28 text-right flex-shrink-0">
-          <div id="dlspd-${safeId}" class="text-[12px] font-semibold ${isAct ? 'text-primary' : 'text-on-surface-variant'}" style="font-family:'JetBrains Mono'">${isAct ? fmtSpd(d.speed) : '--'}</div>
+          <div id="dlspd-${safeId}" dir="ltr" class="text-[12px] font-semibold ${isAct ? 'text-primary' : 'text-on-surface-variant'}" style="font-family:'JetBrains Mono'">${isAct ? fmtSpd(d.speed) : '--'}</div>
           <div class="text-[10px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${d.connections || 16} ${isAr ? 'اتصال' : 'conns'}</div>
         </div>
         <div class="w-24 text-right flex-shrink-0">
-          <div id="dleta-${safeId}" class="text-[12px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${isAct ? fmtT(d.eta_secs) : isComp ? '0s' : '--'}</div>
+          <div id="dleta-${safeId}" dir="ltr" class="text-[12px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${isAct ? fmtT(d.eta_secs) : isComp ? '0s' : '--'}</div>
           <div class="text-[10px] text-on-surface-variant/70" style="font-family:'JetBrains Mono'">${priDisplay}</div>
         </div>
         <div class="w-36 flex items-center justify-end gap-1 flex-shrink-0">
@@ -2866,7 +3400,7 @@ function setTab(t) {
 }
 
 // ════════ MODAL CONTROLS ════════
-async function openAddModal() {
+async function openAddModal(skipClipboard = false) {
   const modal = document.getElementById('addModal');
   if (!modal) return;
   modal.classList.remove('hidden');
@@ -2878,16 +3412,19 @@ async function openAddModal() {
   }
   const inp = document.getElementById('urlInp');
   if (inp) {
-    if (!inp.value && navigator.clipboard && navigator.clipboard.readText) {
+    if (!skipClipboard && !inp.value && navigator.clipboard && navigator.clipboard.readText) {
       try {
         const text = await navigator.clipboard.readText();
         const cl = cleanTargetUrl(text);
-        if (cl && (cl.startsWith('http://') || cl.startsWith('https://') || cl.startsWith('ftp://'))) {
+        if (!inp.value && cl && (cl.startsWith('http://') || cl.startsWith('https://') || cl.startsWith('ftp://'))) {
           inp.value = cl;
         }
       } catch (e) {}
     }
     inp.focus();
+    if (inp.value) {
+      setTimeout(() => { try { inp.select(); } catch (e) {} }, 20);
+    }
     detectFT();
   }
 }
@@ -2908,6 +3445,10 @@ function closeAddModal() {
   if (card) card.classList.add('hidden');
   const yt = document.getElementById('ytNotice');
   if (yt) yt.classList.add('hidden');
+  const plNotice = document.getElementById('playlistNotice');
+  if (plNotice) plNotice.classList.add('hidden');
+  const pInp = document.getElementById('patternInp');
+  if (pInp) pInp.value = '';
   const hInp = document.getElementById('inpHeaders');
   if (hInp) hInp.value = '';
   const userInp = document.getElementById('inpUser');
@@ -2922,11 +3463,23 @@ function cleanTargetUrl(raw) {
   let clean = raw.trim();
   // 1. Markdown link format: [title](url)
   const mdMatch = clean.match(/\[.*?\]\((https?:\/\/[^\s\)]+)\)/i);
-  if (mdMatch) return mdMatch[1].trim();
+  if (mdMatch) clean = mdMatch[1].trim();
+  else {
+    // 2. Text containing URL
+    const urlMatch = clean.match(/https?:\/\/[^\s"'>\)]+/i);
+    if (urlMatch) clean = urlMatch[0].trim();
+  }
 
-  // 2. Text containing URL
-  const urlMatch = clean.match(/https?:\/\/[^\s"'>\)]+/i);
-  if (urlMatch) return urlMatch[0].trim();
+  // 3. Guard against accidental double-pasted concatenated URLs (e.g. "...&start_radio=1https://...")
+  const rest = clean.slice(8);
+  const secondMatch = rest.match(/https?:\/\//i);
+  if (secondMatch && secondMatch.index !== undefined) {
+    const cutIdx = 8 + secondMatch.index;
+    const prevChar = clean[cutIdx - 1];
+    if (prevChar !== '=') {
+      clean = clean.slice(0, cutIdx);
+    }
+  }
 
   return clean;
 }
@@ -3028,14 +3581,18 @@ function detectFT() {
   const url = cleaned || raw;
   const b = document.getElementById('ftBadge');
   const yt = document.getElementById('ytNotice');
+  const plNotice = document.getElementById('playlistNotice');
   if (!b) return;
   if (!url) {
     b.classList.add('hidden');
     if (yt) yt.classList.add('hidden');
+    if (plNotice) plNotice.classList.add('hidden');
     return;
   }
   const isVideo = isVideoPlatformUrl(url);
-  if (yt) yt.classList.toggle('hidden', !isVideo);
+  const isPlay = isPlaylistUrl(url);
+  if (plNotice) plNotice.classList.toggle('hidden', !isPlay);
+  if (yt) yt.classList.toggle('hidden', !isVideo || isPlay);
 
   const { l } = getFI(url);
   const ftText = document.getElementById('ftText');
@@ -3222,7 +3779,7 @@ function playCompletionChime() {
 let gLastTitle = '';
 function updateWindowTitle(activeCount, totSpeed, avgProg) {
   const en = document.getElementById('taskbarSpeedOpt')?.checked ?? true;
-  let title = 'SuperIDM — Download Engine v2.7.2';
+  let title = 'SuperIDM — Download Engine v2.7.5';
   if (en && activeCount > 0) {
     const spdStr = fmtSpd(totSpeed);
     const pct = Math.round(avgProg * 100);
@@ -3467,7 +4024,7 @@ const I18N = {
   ar: {
     // Header & Brand
     langBtn: 'English',
-    brandEngineVer: 'محرك v2.7.2 فائق السرعة',
+    brandEngineVer: 'محرك v2.7.5 فائق السرعة',
     txtAddLink: 'إضافة رابط جديد',
     txtDownloadsHdr: 'التنزيلات',
     txtNavDl: 'جارٍ التنزيل',
@@ -3643,6 +4200,20 @@ const I18N = {
     ytNoticeTitle: 'مستخرج الوسائط الشامل:',
     ytNoticeDesc: 'تم اكتشاف صفحة فيديو. يمكن لـ SuperIDM التقاط واستخراج البث المباشر بأعلى سرعة.',
     sniffBtnTxt: 'التقاط واستخراج',
+    playlistNoticeTitle: 'تم اكتشاف قائمة تشغيل:',
+    playlistNoticeDesc: 'يمكن لـ SuperIDM سحب جميع الفيديوهات في هذه القائمة وتحميلها كدفعة واحدة.',
+    extractPlaylistBtnTxt: 'سحب القائمة كاملة',
+    patternTitleTxt: 'مولد تسلسل الروابط (Pattern)',
+    patternSyntaxHint: 'مثال: file[01-20].zip أو [a-z]',
+    btnGenPatternTxt: 'توليد الروابط',
+    patternStatsTxt: 'يدعم التسلسل الرقمي [1-50] والتعبئة بالأصفار [001-100] والقفزات [0-50:5] والحروف [a-z].',
+    playlistModalTitle: 'سحب وتحميل قائمة التشغيل',
+    lblSelectAll: 'تحديد الكل',
+    lblPlaylistQuality: 'جودة التنزيل:',
+    optPlaylistBest: '🎬 فيديو (أفضل جودة MP4)',
+    optPlaylistAudio: '🎵 ملف صوتي فقط (MP3)',
+    btnCancelPlaylist: 'إلغاء',
+    btnStartPlaylistDLTxt: 'تحميل العناصر المحددة',
     modalLblPresets: 'نماذج سريعة:',
     modalPresetVid: '🎬 نموذج فيديو (.mp4)',
     modalPresetMus: '🎵 نموذج صوتي (.mp3)',
@@ -3719,7 +4290,7 @@ const I18N = {
   en: {
     // Header & Brand
     langBtn: 'العربية',
-    brandEngineVer: 'v2.7.2 Engine',
+    brandEngineVer: 'v2.7.5 Engine',
     txtAddLink: 'Add New Link',
     txtDownloadsHdr: 'Downloads',
     txtNavDl: 'Downloading',
@@ -3895,6 +4466,20 @@ const I18N = {
     ytNoticeTitle: 'Universal Media Extractor:',
     ytNoticeDesc: 'Video webpage detected. SuperIDM can sniff and extract the direct high-speed video stream.',
     sniffBtnTxt: 'Sniff & Extract',
+    playlistNoticeTitle: 'Media Playlist Detected:',
+    playlistNoticeDesc: 'SuperIDM can extract all videos in this playlist for batch download.',
+    extractPlaylistBtnTxt: 'Extract Full Playlist',
+    patternTitleTxt: 'Batch Pattern Generator',
+    patternSyntaxHint: 'e.g. file[01-20].zip or [a-z]',
+    btnGenPatternTxt: 'Generate URLs',
+    patternStatsTxt: 'Supports numeric [1-50], padded [001-100], steps [0-50:5], and letters [a-z].',
+    playlistModalTitle: 'Playlist Batch Extractor',
+    lblSelectAll: 'Select All',
+    lblPlaylistQuality: 'Download Quality:',
+    optPlaylistBest: '🎬 Video (Best MP4)',
+    optPlaylistAudio: '🎵 Audio Only (MP3)',
+    btnCancelPlaylist: 'Cancel',
+    btnStartPlaylistDLTxt: 'Download Selected',
     modalLblPresets: 'Quick presets:',
     modalPresetVid: '🎬 Sample Video (.mp4)',
     modalPresetMus: '🎵 Sample Music (.mp3)',
@@ -4282,6 +4867,13 @@ window.openBrowserExtensionsPage = openBrowserExtensionsPage;
 window.fillSample = fillSample;
 window.pasteClipToInp = pasteClipToInp;
 window.sniffMediaStream = sniffMediaStream;
+window.sniffPlaylist = sniffPlaylist;
+window.expandUrlPattern = expandUrlPattern;
+window.generateFromPattern = generateFromPattern;
+window.openPlaylistModal = openPlaylistModal;
+window.closePlaylistModal = closePlaylistModal;
+window.toggleSelectAllPlaylist = toggleSelectAllPlaylist;
+window.startPlaylistBatchDownload = startPlaylistBatchDownload;
 window.startDL = startDL;
 window.queueDL = queueDL;
 window.pauseDL = pauseDL;
@@ -4375,7 +4967,7 @@ setInterval(localTick, 350);
 setInterval(chkSched, 60000);
 clipInt = setInterval(chkClip, 2500);
 
-addLog('info', '[INIT] SuperIDM v2.7.2 Engine started');
+addLog('info', '[INIT] SuperIDM v2.7.5 Engine started');
 addLog('info', '[READY] All buttons, modals, and download engine are 100% active');
 setTimeout(() => {
   const isAr = curLang === 'ar';
@@ -4663,15 +5255,22 @@ async function promptDownloadFromBrowser(req) {
       format: isDirect ? undefined : req.format,
       cat: cat,
       pri: 'High',
-      conn: gMaxConn
+      conn: gMaxConn,
+      headers: req.headers || undefined
     });
   } else {
     addLog('info', `[BROWSER INTERCEPT] Captured link: ${filename || req.url}`);
-    openAddModal();
+    await openAddModal(true);
     const inp = document.getElementById('urlInp');
     if (inp) {
-      inp.value = req.url;
+      inp.value = cleanTargetUrl(req.url);
       detectFT();
+    }
+    if (req.headers && typeof req.headers === 'object') {
+      const hInp = document.getElementById('inpHeaders');
+      if (hInp) {
+        hInp.value = Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\n');
+      }
     }
     const catSel = document.getElementById('catSel');
     if (catSel && cat !== 'Auto-detect') {

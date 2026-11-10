@@ -68,6 +68,7 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             commands::open_download_folder,
             commands::open_file,
             commands::extract_media_info,
+            commands::extract_playlist,
             commands::start_stream_download,
             commands::refresh_task_link,
             commands::notify_download_complete,

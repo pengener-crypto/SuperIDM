@@ -24,13 +24,27 @@ $$('.popup-tab').forEach(tabBtn => {
 function updateStatus(connected) {
   const badge = $('#statusBadge');
   const text = $('#statusText');
+  const chip = $('#footerChip');
   if (connected) {
     badge.className = 'status-badge connected';
     text.textContent = 'Connected';
+    if (chip) chip.textContent = 'Engine Sync Ready';
   } else {
     badge.className = 'status-badge disconnected';
     text.textContent = 'Offline';
+    if (chip) chip.textContent = 'Open SuperIDM App';
   }
+}
+
+const statusBadgeEl = $('#statusBadge');
+if (statusBadgeEl) {
+  statusBadgeEl.addEventListener('click', () => {
+    const text = $('#statusText');
+    if (text) text.textContent = 'Connecting...';
+    chrome.runtime.sendMessage({ type: 'get_status', force: true }, (resp) => {
+      updateStatus(Boolean(resp && resp.connected));
+    });
+  });
 }
 
 // ═══════ Settings Management ═══════
@@ -250,3 +264,11 @@ chrome.runtime.sendMessage({ type: 'get_tab_media' }, (resp) => {
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'status') updateStatus(msg.connected);
 });
+
+if (chrome.storage && chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.superidm_rpc_token && changes.superidm_rpc_token.newValue && $('#tokenInput')) {
+      $('#tokenInput').value = changes.superidm_rpc_token.newValue;
+    }
+  });
+}

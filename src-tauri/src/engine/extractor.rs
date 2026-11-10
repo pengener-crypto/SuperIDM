@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde_json::Value;
 
 use super::session::DEFAULT_USER_AGENT;
-use super::types::{MediaExtractionInfo, MediaFormat};
+use super::types::{MediaExtractionInfo, MediaFormat, PlaylistItem, PlaylistExtractionInfo};
 
 /// Universal Media Extractor Pipeline.
 pub struct MediaExtractor;
@@ -22,53 +22,247 @@ impl MediaExtractor {
         u.contains(".m3u8") || u.contains(".mpd")
     }
 
+    /// Global async mutex serializing all component bootstrap and update operations
+    /// (yt-dlp, qjs/deno, ffmpeg) so concurrent tasks never clobber temp files or download
+    /// the same binary simultaneously.
+    fn component_lock() -> &'static tokio::sync::Mutex<()> {
+        static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+    }
+
+    /// Locate a bundled helper executable (`yt-dlp.exe`, `qjs.exe`, `ffmpeg.exe`) across
+    /// MSIX, NSIS, Portable, and development directory layouts.
+    fn find_bundled_file(filename: &str, min_size: u64) -> Option<PathBuf> {
+        let exe = std::env::current_exe().ok()?;
+        let app_dir = exe.parent()?;
+        let mut candidates = vec![
+            app_dir.join(filename),
+            app_dir.join("bin").join(filename),
+            app_dir.join("resources").join(filename),
+            app_dir.join("_up_").join("msix_build").join(filename),
+        ];
+        if let Some(parent) = app_dir.parent() {
+            candidates.push(parent.join("msix_build").join(filename));
+            if let Some(grand) = parent.parent() {
+                candidates.push(grand.join("msix_build").join(filename));
+            }
+        }
+        for p in candidates {
+            if let Ok(meta) = std::fs::metadata(&p) {
+                if meta.len() >= min_size {
+                    return Some(p);
+                }
+            }
+        }
+        None
+    }
+
+    /// Verify that a candidate `yt-dlp.exe` is a genuine, non-corrupted standalone binary
+    /// of version `>= 2026.10.01` (supports `--js-runtimes` and current YouTube challenges).
+    /// Cached in memory by `(path, size, mtime)` to avoid repeated process spawns.
+    pub fn verify_ytdlp_binary(path: &std::path::Path) -> Option<String> {
+        type CacheMap = std::collections::HashMap<
+            PathBuf,
+            (u64, Option<std::time::SystemTime>, Option<String>),
+        >;
+        static CACHE: std::sync::OnceLock<parking_lot::Mutex<CacheMap>> =
+            std::sync::OnceLock::new();
+
+        let meta = std::fs::metadata(path).ok()?;
+        let len = meta.len();
+        // Standalone PyInstaller yt-dlp.exe is ~22 MB; reject tiny pip shims or truncated downloads
+        if len < 15_000_000 {
+            return None;
+        }
+        let mtime = meta.modified().ok();
+        let pb = path.to_path_buf();
+
+        let cache = CACHE.get_or_init(|| parking_lot::Mutex::new(std::collections::HashMap::new()));
+        {
+            let guard = cache.lock();
+            if let Some((c_len, c_mtime, c_ver)) = guard.get(&pb) {
+                if *c_len == len && *c_mtime == mtime {
+                    return c_ver.clone();
+                }
+            }
+        }
+
+        let mut cmd = Command::new(path);
+        cmd.arg("--version");
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+
+        let ver_opt = cmd
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .filter(|v| v.len() >= 10 && v.as_str() >= "2026.10.01");
+
+        cache.lock().insert(pb, (len, mtime, ver_opt.clone()));
+        ver_opt
+    }
+
     /// Return path to AppData/Local/SuperIDM/bin/yt-dlp.exe
     pub fn get_local_ytdlp_path() -> Option<PathBuf> {
         dirs::data_local_dir().map(|d| d.join("SuperIDM").join("bin").join("yt-dlp.exe"))
     }
 
+    /// Official sources for the standalone yt-dlp executable (stable first, nightly as fallback).
+    const YTDLP_URLS: [&'static str; 2] = [
+        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
+        "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe",
+    ];
+
+    /// Query GitHub API for latest yt-dlp release tag and ordered download URLs.
+    async fn resolve_ytdlp_release(client: &Client) -> (Option<String>, Vec<String>) {
+        let mut urls = Vec::new();
+        let mut latest_tag: Option<String> = None;
+        let api_req = client
+            .get("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest")
+            .header("User-Agent", format!("SuperIDM-Core/{}", env!("CARGO_PKG_VERSION")))
+            .header("Accept", "application/vnd.github+json")
+            .send();
+        if let Ok(Ok(resp)) = tokio::time::timeout(std::time::Duration::from_secs(8), api_req).await {
+            if resp.status().is_success() {
+                if let Ok(json) = resp.json::<Value>().await {
+                    if let Some(tag) = json.get("tag_name").and_then(|t| t.as_str()) {
+                        latest_tag = Some(tag.trim().to_string());
+                    }
+                    if let Some(assets) = json.get("assets").and_then(|v| v.as_array()) {
+                        for asset in assets {
+                            if asset.get("name").and_then(|n| n.as_str()) == Some("yt-dlp.exe") {
+                                if let Some(dl) = asset.get("browser_download_url").and_then(|u| u.as_str()) {
+                                    urls.push(dl.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for fallback in Self::YTDLP_URLS {
+            urls.push(fallback.to_string());
+        }
+        (latest_tag, urls)
+    }
+
+    /// Robust component downloader used for yt-dlp / FFmpeg / QuickJS / Deno bootstrap.
+    ///
+    /// Iterates across all mirror URLs first before sleeping and retrying, so if GitHub returns
+    /// 502/504 in the user's region, it switches to the alternate mirror immediately.
+    pub async fn fetch_component(
+        client: &Client,
+        urls: &[String],
+        dest: &std::path::Path,
+        min_size: u64,
+    ) -> Result<(), String> {
+        use futures_util::StreamExt;
+        use std::time::Duration;
+        use tokio::io::AsyncWriteExt;
+
+        let mut last_err = "no download source available".to_string();
+        for round in 1..=2u64 {
+            if round > 1 {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            }
+            for url in urls {
+                let host = url.split('/').nth(2).unwrap_or(url).to_string();
+                let send = client
+                    .get(url)
+                    .header("User-Agent", format!("SuperIDM-Core/{}", env!("CARGO_PKG_VERSION")))
+                    .send();
+                let resp = match tokio::time::timeout(Duration::from_secs(25), send).await {
+                    Ok(Ok(r)) if r.status().is_success() => r,
+                    Ok(Ok(r)) => {
+                        last_err = format!("{} returned HTTP {}", host, r.status());
+                        continue;
+                    }
+                    Ok(Err(e)) => {
+                        last_err = format!("cannot reach {} ({})", host, e);
+                        continue;
+                    }
+                    Err(_) => {
+                        last_err = format!("{} did not respond within 25s", host);
+                        continue;
+                    }
+                };
+
+                let mut file = match tokio::fs::File::create(dest).await {
+                    Ok(f) => f,
+                    Err(e) => return Err(format!("cannot write {:?}: {}", dest, e)),
+                };
+                let mut stream = resp.bytes_stream();
+                let mut written = 0u64;
+                let mut ok = true;
+                loop {
+                    match tokio::time::timeout(Duration::from_secs(45), stream.next()).await {
+                        Ok(Some(Ok(chunk))) => {
+                            if let Err(e) = file.write_all(&chunk).await {
+                                last_err = format!("disk write failed: {}", e);
+                                ok = false;
+                                break;
+                            }
+                            written += chunk.len() as u64;
+                        }
+                        Ok(Some(Err(e))) => {
+                            last_err = format!("transfer from {} interrupted ({})", host, e);
+                            ok = false;
+                            break;
+                        }
+                        Ok(None) => break,
+                        Err(_) => {
+                            last_err = format!("transfer from {} stalled (no data for 45s)", host);
+                            ok = false;
+                            break;
+                        }
+                    }
+                }
+                let _ = file.flush().await;
+                drop(file);
+
+                if ok && written >= min_size {
+                    return Ok(());
+                }
+                if ok {
+                    last_err = format!("{} sent a truncated file ({} bytes)", host, written);
+                }
+                let _ = tokio::fs::remove_file(dest).await;
+            }
+        }
+        Err(last_err)
+    }
+
     /// Locate or auto-download standalone yt-dlp binary so that any clean Windows machine works out-of-the-box.
     pub async fn ensure_ytdlp_binary(client: &Client) -> Result<PathBuf, String> {
-        // 1. Check system and standard paths first
         if let Some(p) = Self::find_ytdlp_binary() {
             return Ok(p);
         }
 
-        // 2. Check LocalAppData SuperIDM bin
-        if let Some(local_bin) = Self::get_local_ytdlp_path() {
-            if local_bin.exists() {
-                if let Ok(meta) = tokio::fs::metadata(&local_bin).await {
-                    if meta.len() > 1_000_000 {
-                        return Ok(local_bin);
-                    }
-                }
-            }
+        let _guard = Self::component_lock().lock().await;
+        if let Some(p) = Self::find_ytdlp_binary() {
+            return Ok(p);
+        }
 
-            // 3. Auto-download official standalone yt-dlp.exe (runs on clean Windows without Python)
+        if let Some(local_bin) = Self::get_local_ytdlp_path() {
             if let Some(parent) = local_bin.parent() {
                 let _ = tokio::fs::create_dir_all(parent).await;
             }
 
-            eprintln!("[SuperIDM] Clean machine detected. Downloading standalone media extractor core to: {:?}", local_bin);
-            let resp = client
-                .get("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
-                .header("User-Agent", DEFAULT_USER_AGENT)
-                .send()
+            eprintln!("[SuperIDM] Downloading standalone media extractor core to: {:?}", local_bin);
+            let tmp_bin = local_bin.with_extension(format!("exe.{}.tmp", uuid::Uuid::new_v4()));
+            let (_, urls) = Self::resolve_ytdlp_release(client).await;
+            Self::fetch_component(client, &urls, &tmp_bin, 15_000_000)
                 .await
                 .map_err(|e| format!("Failed to download video extractor core: {}", e))?;
-
-            if !resp.status().is_success() {
-                return Err(format!("Server returned HTTP {} downloading extractor core", resp.status()));
-            }
-
-            let bytes = resp.bytes().await.map_err(|e| format!("Failed reading extractor bytes: {}", e))?;
-            if bytes.len() < 1_000_000 {
-                return Err("Downloaded extractor binary is too small or truncated".to_string());
-            }
-
-            let tmp_bin = local_bin.with_extension("exe.tmp");
-            tokio::fs::write(&tmp_bin, &bytes).await.map_err(|e| format!("Failed writing extractor: {}", e))?;
-            tokio::fs::rename(&tmp_bin, &local_bin).await.map_err(|e| format!("Failed activating extractor: {}", e))?;
+            let _ = tokio::fs::remove_file(&local_bin).await;
+            tokio::fs::rename(&tmp_bin, &local_bin)
+                .await
+                .map_err(|e| format!("Failed activating extractor: {}", e))?;
 
             return Ok(local_bin);
         }
@@ -76,11 +270,18 @@ impl MediaExtractor {
         Err("Unable to locate or bootstrap media extractor".to_string())
     }
 
-    /// Force-update or download the latest standalone yt-dlp binary to `%LOCALAPPDATA%/SuperIDM/bin/yt-dlp.exe`.
+    /// Force-update or verify the latest standalone yt-dlp binary in `%LOCALAPPDATA%/SuperIDM/bin/yt-dlp.exe`.
     ///
-    /// This decouples the extractor engine from the application installer,
-    /// allowing instant recovery when platforms (YouTube, TikTok, Facebook) update their layouts.
+    /// Fast-paths in < 1 second when the installed/bundled binary already matches the latest
+    /// GitHub release tag, avoiding unnecessary 22 MB re-downloads or `yt-dlp -U` hangs.
     pub async fn update_ytdlp_core(client: &Client) -> Result<String, String> {
+        // Ensure JS runtime is present as part of engine health check
+        if Self::js_runtime_arg().is_none() {
+            let _ = Self::ensure_deno_binary(client).await;
+        }
+
+        let _guard = Self::component_lock().lock().await;
+
         let local_bin = Self::get_local_ytdlp_path()
             .ok_or_else(|| "Local AppData directory not found".to_string())?;
 
@@ -88,55 +289,41 @@ impl MediaExtractor {
             let _ = tokio::fs::create_dir_all(parent).await;
         }
 
-        // Try yt-dlp's built-in self-update command first if binary exists
-        if local_bin.exists() {
-            if let Ok(output) = std::process::Command::new(&local_bin).arg("-U").output() {
-                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                if output.status.success() {
-                    let msg = if !stdout.is_empty() { stdout } else { stderr };
-                    return Ok(format!("yt-dlp: {}", msg));
-                }
+        let current_ver = Self::find_ytdlp_binary().and_then(|p| Self::verify_ytdlp_binary(&p));
+        let (latest_tag, urls) = Self::resolve_ytdlp_release(client).await;
+
+        if let (Some(ref cur), Some(ref latest)) = (&current_ver, &latest_tag) {
+            if cur >= latest {
+                return Ok(format!("Video extractor core is up to date (v{})", cur));
             }
         }
 
-        // Download directly from official GitHub releases (atomic update)
-        let tmp_bin = local_bin.with_extension("exe.tmp");
-        eprintln!("[SuperIDM] Fetching latest standalone extractor core to: {:?}", tmp_bin);
+        let tmp_bin = local_bin.with_extension(format!("exe.{}.tmp", uuid::Uuid::new_v4()));
+        eprintln!("[SuperIDM] Updating standalone extractor core to: {:?}", tmp_bin);
 
-        let resp = client
-            .get("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
-            .header("User-Agent", format!("SuperIDM-Core/{}", env!("CARGO_PKG_VERSION")))
-            .send()
-            .await
-            .map_err(|e| format!("Network error checking for extractor updates: {}", e))?;
+        match Self::fetch_component(client, &urls, &tmp_bin, 15_000_000).await {
+            Ok(()) => {
+                let _ = tokio::fs::remove_file(&local_bin).await;
+                tokio::fs::rename(&tmp_bin, &local_bin)
+                    .await
+                    .map_err(|e| format!("Failed committing updated extractor binary: {}", e))?;
 
-        if !resp.status().is_success() {
-            return Err(format!("Server returned HTTP {} when fetching extractor", resp.status()));
+                let version = Self::verify_ytdlp_binary(&local_bin)
+                    .or(latest_tag)
+                    .unwrap_or_else(|| "latest".to_string());
+
+                Ok(format!("Video extractor core updated to version {}", version))
+            }
+            Err(e) => {
+                let _ = tokio::fs::remove_file(&tmp_bin).await;
+                // If we already have a verified working modern binary (e.g. bundled v2026.10.26)
+                // and GitHub is unreachable, report the active version instead of failing.
+                if let Some(cur) = current_ver {
+                    return Ok(format!("Video extractor core active (v{})", cur));
+                }
+                Err(format!("Could not update extractor core: {}", e))
+            }
         }
-
-        let bytes = resp.bytes().await.map_err(|e| format!("Failed reading extractor binary bytes: {}", e))?;
-        if bytes.len() < 1_000_000 {
-            return Err("Received corrupted or truncated binary from update server".to_string());
-        }
-
-        tokio::fs::write(&tmp_bin, &bytes).await
-            .map_err(|e| format!("Failed writing temp extractor: {}", e))?;
-
-        // Atomic rename
-        tokio::fs::rename(&tmp_bin, &local_bin).await
-            .map_err(|e| format!("Failed committing updated extractor binary: {}", e))?;
-
-        // Query new version
-        let version = std::process::Command::new(&local_bin)
-            .arg("--version")
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| "latest".to_string());
-
-        Ok(format!("Video extractor core updated to version {}", version))
     }
 
     /// Return path to AppData/Local/SuperIDM/bin/ffmpeg.exe
@@ -144,106 +331,78 @@ impl MediaExtractor {
         dirs::data_local_dir().map(|d| d.join("SuperIDM").join("bin").join("ffmpeg.exe"))
     }
 
-    /// Locate or auto-download standalone FFmpeg binary on-demand from yt-dlp/FFmpeg-Builds.
-    ///
-    /// Downloaded and unpacked in the background once when high-resolution media (1080p / 4K)
-    /// is requested. This avoids bloating the initial installer size.
+    /// Locate or auto-download standalone FFmpeg binary on-demand.
     pub async fn ensure_ffmpeg_binary(client: &Client) -> Result<PathBuf, String> {
-        // 1. Check existing system and candidate paths
         if let Some(p) = Self::find_ffmpeg_binary() {
             return Ok(p);
         }
 
-        // 2. Check LocalAppData SuperIDM bin
+        let _guard = Self::component_lock().lock().await;
+        if let Some(p) = Self::find_ffmpeg_binary() {
+            return Ok(p);
+        }
+
         let local_bin = Self::get_local_ffmpeg_path()
             .ok_or_else(|| "Local AppData directory not found".to_string())?;
+        let bin_dir = local_bin.parent().ok_or_else(|| "Invalid bin dir".to_string())?.to_path_buf();
+        let _ = tokio::fs::create_dir_all(&bin_dir).await;
 
-        if local_bin.exists() {
-            if let Ok(meta) = tokio::fs::metadata(&local_bin).await {
-                if meta.len() > 5_000_000 {
-                    return Ok(local_bin);
-                }
-            }
-        }
+        eprintln!("[SuperIDM FFmpeg-Bootstrap] Downloading compact FFmpeg static binary (28 MB gz)...");
 
-        let bin_dir = local_bin.parent().ok_or_else(|| "Invalid bin dir".to_string())?;
-        let _ = tokio::fs::create_dir_all(bin_dir).await;
-
-        eprintln!("[SuperIDM FFmpeg-Bootstrap] Starting on-demand FFmpeg core download from yt-dlp/FFmpeg-Builds...");
-
-        let download_urls = [
-            "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
-            "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+        let gz_urls = vec![
+            "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-win32-x64.gz".to_string(),
         ];
-
-        let tmp_zip = bin_dir.join("ffmpeg_bootstrap_temp.zip");
-        let mut download_success = false;
-
-        for url in download_urls {
-            eprintln!("[SuperIDM FFmpeg-Bootstrap] Attempting download from: {}", url);
-            let resp = match client
-                .get(url)
-                .header("User-Agent", format!("SuperIDM-Core/{}", env!("CARGO_PKG_VERSION")))
-                .send()
-                .await
-            {
-                Ok(r) if r.status().is_success() => r,
-                _ => continue,
-            };
-
-            use tokio::io::AsyncWriteExt;
-            let mut file = match tokio::fs::File::create(&tmp_zip).await {
-                Ok(f) => f,
-                Err(_) => continue,
-            };
-
-            let mut stream = resp.bytes_stream();
-            let mut write_ok = true;
-            use futures_util::StreamExt;
-            while let Some(chunk_res) = stream.next().await {
-                match chunk_res {
-                    Ok(chunk) => {
-                        if file.write_all(&chunk).await.is_err() {
-                            write_ok = false;
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        write_ok = false;
-                        break;
-                    }
+        let tmp_gz = bin_dir.join(format!("ffmpeg_{}.gz.tmp", uuid::Uuid::new_v4()));
+        if Self::fetch_component(client, &gz_urls, &tmp_gz, 10_000_000).await.is_ok() {
+            let gz_c = tmp_gz.clone();
+            let local_c = local_bin.clone();
+            let unpack_res = tokio::task::spawn_blocking(move || -> Result<PathBuf, String> {
+                let gz_file = std::fs::File::open(&gz_c)
+                    .map_err(|e| format!("Failed to open FFmpeg gz: {}", e))?;
+                let mut decoder = flate2::read::GzDecoder::new(gz_file);
+                let tmp_exe = local_c.with_extension(format!("exe.{}.tmp", uuid::Uuid::new_v4()));
+                let mut out_file = std::fs::File::create(&tmp_exe)
+                    .map_err(|e| format!("Failed to create ffmpeg.exe: {}", e))?;
+                let bytes = std::io::copy(&mut decoder, &mut out_file)
+                    .map_err(|e| format!("Failed to decompress ffmpeg.exe: {}", e))?;
+                drop(out_file);
+                if bytes < 20_000_000 {
+                    let _ = std::fs::remove_file(&tmp_exe);
+                    return Err("Decompressed ffmpeg.exe is truncated".to_string());
                 }
-            }
-            let _ = file.flush().await;
-            drop(file);
+                let _ = std::fs::remove_file(&local_c);
+                std::fs::rename(&tmp_exe, &local_c)
+                    .map_err(|e| format!("Failed to activate ffmpeg.exe: {}", e))?;
+                Ok(local_c)
+            })
+            .await
+            .map_err(|e| format!("FFmpeg decompression thread failed: {}", e));
 
-            if write_ok {
-                if let Ok(meta) = tokio::fs::metadata(&tmp_zip).await {
-                    if meta.len() > 10_000_000 {
-                        download_success = true;
-                        break;
-                    }
-                }
+            let _ = tokio::fs::remove_file(&tmp_gz).await;
+            if let Ok(Ok(p)) = unpack_res {
+                return Ok(p);
             }
-            let _ = tokio::fs::remove_file(&tmp_zip).await;
+        }
+        let _ = tokio::fs::remove_file(&tmp_gz).await;
+
+        // Fallback to Gyan essentials zip if gz mirror failed
+        let download_urls = vec![
+            "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip".to_string(),
+        ];
+        let tmp_zip = bin_dir.join(format!("ffmpeg_{}.zip.tmp", uuid::Uuid::new_v4()));
+        if let Err(e) = Self::fetch_component(client, &download_urls, &tmp_zip, 10_000_000).await {
+            return Err(format!("Failed downloading FFmpeg: {}", e));
         }
 
-        if !download_success {
-            return Err("Failed downloading FFmpeg archive from official yt-dlp release repositories".to_string());
-        }
-
-        eprintln!("[SuperIDM FFmpeg-Bootstrap] Archive downloaded. Extracting ffmpeg.exe & ffprobe.exe...");
-
-        let bin_dir_clone = bin_dir.to_path_buf();
+        let bin_dir_clone = bin_dir.clone();
         let tmp_zip_clone = tmp_zip.clone();
-
         let extract_res = tokio::task::spawn_blocking(move || {
             Self::extract_ffmpeg_from_zip(&tmp_zip_clone, &bin_dir_clone)
-        }).await.map_err(|e| format!("Extraction thread failed: {}", e))??;
+        })
+        .await
+        .map_err(|e| format!("Extraction thread failed: {}", e))??;
 
         let _ = tokio::fs::remove_file(&tmp_zip).await;
-
-        eprintln!("[SuperIDM FFmpeg-Bootstrap] Extraction complete! FFmpeg is ready at: {:?}", extract_res);
         Ok(extract_res)
     }
 
@@ -267,7 +426,7 @@ impl MediaExtractor {
             if is_ffmpeg || is_ffprobe {
                 let fname = if is_ffmpeg { "ffmpeg.exe" } else { "ffprobe.exe" };
                 let out_path = target_dir.join(fname);
-                let tmp_path = target_dir.join(format!("{}.tmp", fname));
+                let tmp_path = target_dir.join(format!("{}.{}.tmp", fname, uuid::Uuid::new_v4()));
 
                 let mut out_file = std::fs::File::create(&tmp_path)
                     .map_err(|e| format!("Failed to create {}: {}", fname, e))?;
@@ -276,6 +435,7 @@ impl MediaExtractor {
                     .map_err(|e| format!("Failed to extract {}: {}", fname, e))?;
 
                 drop(out_file);
+                let _ = std::fs::remove_file(&out_path);
                 let _ = std::fs::rename(&tmp_path, &out_path);
 
                 if is_ffmpeg {
@@ -285,6 +445,146 @@ impl MediaExtractor {
         }
 
         ffmpeg_target.ok_or_else(|| "ffmpeg.exe not found in downloaded archive".to_string())
+    }
+
+    /// Return path to AppData/Local/SuperIDM/bin/qjs.exe
+    pub fn get_local_qjs_path() -> Option<PathBuf> {
+        dirs::data_local_dir().map(|d| d.join("SuperIDM").join("bin").join("qjs.exe"))
+    }
+
+    /// Locate QuickJS-ng (`qjs.exe`) runtime (bundled, self-downloaded, or on PATH).
+    pub fn find_qjs_binary() -> Option<PathBuf> {
+        if let Some(b) = Self::find_bundled_file("qjs.exe", 500_000) {
+            return Some(b);
+        }
+        if let Some(local) = Self::get_local_qjs_path() {
+            if std::fs::metadata(&local).map(|m| m.len() >= 500_000).unwrap_or(false) {
+                return Some(local);
+            }
+        }
+        Self::find_executable("qjs")
+    }
+
+    /// Return path to AppData/Local/SuperIDM/bin/deno.exe
+    pub fn get_local_deno_path() -> Option<PathBuf> {
+        dirs::data_local_dir().map(|d| d.join("SuperIDM").join("bin").join("deno.exe"))
+    }
+
+    /// Locate a Deno runtime (bundled, self-downloaded, or on PATH).
+    pub fn find_deno_binary() -> Option<PathBuf> {
+        if let Some(b) = Self::find_bundled_file("deno.exe", 10_000_000) {
+            return Some(b);
+        }
+        if let Some(local) = Self::get_local_deno_path() {
+            if std::fs::metadata(&local).map(|m| m.len() > 10_000_000).unwrap_or(false) {
+                return Some(local);
+            }
+        }
+        Self::find_executable("deno")
+    }
+
+    /// Ensure an external JavaScript runtime is available for solving YouTube signature / "n"
+    /// challenges. Prefers QuickJS-ng (`qjs.exe`, only 1.8 MB direct binary) and falls back to Deno.
+    pub async fn ensure_deno_binary(client: &Client) -> Result<PathBuf, String> {
+        if let Some(q) = Self::find_qjs_binary() {
+            return Ok(q);
+        }
+        if let Some(d) = Self::find_deno_binary() {
+            return Ok(d);
+        }
+
+        let _guard = Self::component_lock().lock().await;
+        if let Some(q) = Self::find_qjs_binary() {
+            return Ok(q);
+        }
+        if let Some(d) = Self::find_deno_binary() {
+            return Ok(d);
+        }
+
+        let qjs_local = Self::get_local_qjs_path()
+            .ok_or_else(|| "Local AppData directory not found".to_string())?;
+        let bin_dir = qjs_local.parent().ok_or_else(|| "Invalid bin dir".to_string())?.to_path_buf();
+        let _ = tokio::fs::create_dir_all(&bin_dir).await;
+
+        let qjs_urls = vec![
+            "https://github.com/quickjs-ng/quickjs/releases/download/v0.18.0/qjs-windows-x86_64.exe".to_string(),
+            "https://github.com/quickjs-ng/quickjs/releases/latest/download/qjs-windows-x86_64.exe".to_string(),
+        ];
+        let tmp_qjs = qjs_local.with_extension(format!("exe.{}.tmp", uuid::Uuid::new_v4()));
+        if Self::fetch_component(client, &qjs_urls, &tmp_qjs, 500_000).await.is_ok() {
+            let _ = tokio::fs::remove_file(&qjs_local).await;
+            if tokio::fs::rename(&tmp_qjs, &qjs_local).await.is_ok() {
+                return Ok(qjs_local);
+            }
+        }
+        let _ = tokio::fs::remove_file(&tmp_qjs).await;
+
+        // Fallback to Deno if QuickJS mirror failed
+        let local = Self::get_local_deno_path()
+            .ok_or_else(|| "Local AppData directory not found".to_string())?;
+        let mut urls = Vec::new();
+        if let Ok(Ok(r)) = tokio::time::timeout(
+            std::time::Duration::from_secs(8),
+            client.get("https://dl.deno.land/release-latest.txt").send(),
+        ).await {
+            if r.status().is_success() {
+                if let Ok(tag) = r.text().await {
+                    let tag = tag.trim();
+                    if tag.starts_with('v') && tag.len() < 24 && !tag.contains('/') {
+                        urls.push(format!("https://dl.deno.land/release/{}/deno-x86_64-pc-windows-msvc.zip", tag));
+                    }
+                }
+            }
+        }
+        urls.push("https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip".to_string());
+
+        let tmp_zip = bin_dir.join(format!("deno_{}.zip.tmp", uuid::Uuid::new_v4()));
+        Self::fetch_component(client, &urls, &tmp_zip, 10_000_000)
+            .await
+            .map_err(|e| format!("Failed downloading JavaScript runtime: {}", e))?;
+
+        let zip_c = tmp_zip.clone();
+        let local_c = local.clone();
+        let res = tokio::task::spawn_blocking(move || -> Result<PathBuf, String> {
+            let file = std::fs::File::open(&zip_c).map_err(|e| format!("Failed to open Deno archive: {}", e))?;
+            let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid Deno archive: {}", e))?;
+            for i in 0..archive.len() {
+                let mut entry = match archive.by_index(i) { Ok(e) => e, Err(_) => continue };
+                if entry.name().ends_with("deno.exe") {
+                    let tmp = local_c.with_extension(format!("exe.{}.tmp", uuid::Uuid::new_v4()));
+                    let mut out = std::fs::File::create(&tmp).map_err(|e| format!("Failed to create deno.exe: {}", e))?;
+                    std::io::copy(&mut entry, &mut out).map_err(|e| format!("Failed to extract deno.exe: {}", e))?;
+                    drop(out);
+                    let _ = std::fs::remove_file(&local_c);
+                    std::fs::rename(&tmp, &local_c).map_err(|e| format!("Failed to activate deno.exe: {}", e))?;
+                    return Ok(local_c.clone());
+                }
+            }
+            Err("deno.exe not found in downloaded archive".to_string())
+        }).await.map_err(|e| format!("Deno extraction thread failed: {}", e))?;
+
+        let _ = tokio::fs::remove_file(&tmp_zip).await;
+        res
+    }
+
+    /// Build the `--js-runtimes` value for yt-dlp, preferring QuickJS-ng (`qjs.exe`), then Deno, then Node.
+    pub fn js_runtime_arg() -> Option<String> {
+        if let Some(q) = Self::find_qjs_binary() {
+            return Some(format!("quickjs:{}", q.to_string_lossy()));
+        }
+        if let Some(d) = Self::find_deno_binary() {
+            return Some(format!("deno:{}", d.to_string_lossy()));
+        }
+        if let Some(n) = Self::find_executable("node") {
+            return Some(format!("node:{}", n.to_string_lossy()));
+        }
+        None
+    }
+
+    /// True for YouTube page / short links (these require the JS runtime).
+    pub fn is_youtube_url(url: &str) -> bool {
+        let u = url.to_lowercase();
+        u.contains("youtube.com") || u.contains("youtu.be") || u.contains("youtube-nocookie.com")
     }
 
     /// Check if an executable exists on PATH or common tools
@@ -327,50 +627,51 @@ impl MediaExtractor {
         None
     }
 
-    /// Locate the yt-dlp binary across App Dir, SuperIDM bin, PATH, and standard directories.
+    /// Locate a verified modern yt-dlp binary across App Dir, SuperIDM bin, and PATH.
+    /// Automatically purges corrupted or outdated copies in `%LOCALAPPDATA%/SuperIDM/bin/yt-dlp.exe`.
     pub fn find_ytdlp_binary() -> Option<PathBuf> {
-        // 1. Prefer the self-updated copy in AppData/Local/SuperIDM/bin (written by the
-        //    "Update engine" button). The bundled copy next to the exe is read-only inside
-        //    MSIX and quickly becomes outdated when YouTube changes its player.
+        let bundled = Self::find_bundled_file("yt-dlp.exe", 15_000_000);
+
         if let Some(local_bin) = Self::get_local_ytdlp_path() {
-            if let Ok(meta) = std::fs::metadata(&local_bin) {
-                if meta.len() > 1_000_000 {
+            if local_bin.exists() {
+                if let Some(local_ver) = Self::verify_ytdlp_binary(&local_bin) {
+                    if let Some(ref b_path) = bundled {
+                        if let Some(b_ver) = Self::verify_ytdlp_binary(b_path) {
+                            if b_ver > local_ver {
+                                let _ = std::fs::copy(b_path, &local_bin);
+                                return Some(b_path.clone());
+                            }
+                        }
+                    }
                     return Some(local_bin);
+                } else {
+                    // Corrupted, truncated, or outdated (< 2026.10.01) local binary — delete it!
+                    eprintln!("[SuperIDM] Purging invalid/outdated local yt-dlp binary: {:?}", local_bin);
+                    let _ = std::fs::remove_file(&local_bin);
                 }
             }
         }
 
-        // 2. Bundled binary next to running application
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(app_dir) = exe.parent() {
-                let p1 = app_dir.join("yt-dlp.exe");
-                if p1.exists() { return Some(p1); }
-                let p2 = app_dir.join("bin").join("yt-dlp.exe");
-                if p2.exists() { return Some(p2); }
+        if let Some(b_path) = bundled {
+            if Self::verify_ytdlp_binary(&b_path).is_some() {
+                return Some(b_path);
             }
         }
 
-        // 3. Check system PATH via 'where yt-dlp'
         if let Some(p) = Self::find_executable("yt-dlp") {
-            return Some(p);
+            if Self::verify_ytdlp_binary(&p).is_some() {
+                return Some(p);
+            }
         }
 
-        // 4. Common standard candidate locations
         if let Some(home) = dirs::home_dir() {
             let candidates = vec![
-                home.join(r"AppData\Local\SuperIDM\bin\yt-dlp.exe"),
-                home.join(r"AppData\Local\Programs\Python\Python314\Scripts\yt-dlp.exe"),
-                home.join(r"AppData\Local\Programs\Python\Python313\Scripts\yt-dlp.exe"),
-                home.join(r"AppData\Local\Programs\Python\Python312\Scripts\yt-dlp.exe"),
-                home.join(r"AppData\Local\Programs\Python\Python311\Scripts\yt-dlp.exe"),
-                home.join(r"AppData\Local\Programs\Python\Python310\Scripts\yt-dlp.exe"),
-                home.join(r"AppData\Roaming\Python\Scripts\yt-dlp.exe"),
                 home.join(r"AppData\Local\Microsoft\WinGet\Links\yt-dlp.exe"),
                 home.join(r"AppData\Local\bin\yt-dlp.exe"),
                 home.join(r".local\bin\yt-dlp.exe"),
             ];
             for path in candidates {
-                if path.exists() {
+                if path.exists() && Self::verify_ytdlp_binary(&path).is_some() {
                     return Some(path);
                 }
             }
@@ -380,29 +681,24 @@ impl MediaExtractor {
 
     /// Locate ffmpeg binary on the system across App Dir, SuperIDM bin, and system candidates.
     pub fn find_ffmpeg_binary() -> Option<PathBuf> {
-        // 1. Check next to running application (bundled binary in app dir)
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(app_dir) = exe.parent() {
-                let p1 = app_dir.join("ffmpeg.exe");
-                if p1.exists() { return Some(p1); }
-                let p2 = app_dir.join("bin").join("ffmpeg.exe");
-                if p2.exists() { return Some(p2); }
-            }
+        if let Some(b) = Self::find_bundled_file("ffmpeg.exe", 10_000_000) {
+            return Some(b);
         }
 
-        // 2. Check AppData/Local/SuperIDM/bin/ffmpeg.exe
-        if let Some(local_bin) = Self::get_local_ytdlp_path().and_then(|p| p.parent().map(|d| d.join("ffmpeg.exe"))) {
+        if let Some(local_bin) = Self::get_local_ffmpeg_path() {
             if local_bin.exists() {
-                return Some(local_bin);
+                if std::fs::metadata(&local_bin).map(|m| m.len() >= 10_000_000).unwrap_or(false) {
+                    return Some(local_bin);
+                } else {
+                    let _ = std::fs::remove_file(&local_bin);
+                }
             }
         }
 
-        // 3. Check system PATH via 'where ffmpeg'
         if let Some(p) = Self::find_executable("ffmpeg") {
             return Some(p);
         }
 
-        // 4. Candidate locations
         if let Some(home) = dirs::home_dir() {
             let candidates = vec![
                 home.join(r"AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe"),
@@ -439,7 +735,24 @@ impl MediaExtractor {
         // 2. Text containing URL
         if let Some(pos) = trimmed.find("https://").or_else(|| trimmed.find("http://")) {
             let after = &trimmed[pos..];
-            let end_pos = after.find(|c: char| c.is_whitespace() || c == ')' || c == ']' || c == '"' || c == '\'').unwrap_or(after.len());
+            let mut end_pos = after
+                .find(|c: char| c.is_whitespace() || c == ')' || c == ']' || c == '"' || c == '\'')
+                .unwrap_or(after.len());
+            // Guard against accidental double-paste (e.g. "https://...start_radio=1https://...")
+            // where the second scheme is not an embedded `=https://` query parameter value.
+            let scheme_skip = if after.starts_with("https://") { 8 } else { 7 };
+            if end_pos > scheme_skip {
+                let tail = &after[scheme_skip..end_pos];
+                for marker in ["https://", "http://"] {
+                    if let Some(dup_rel) = tail.find(marker) {
+                        let dup_idx = scheme_skip + dup_rel;
+                        let prev = after[..dup_idx].chars().last().unwrap_or(' ');
+                        if prev != '=' {
+                            end_pos = end_pos.min(dup_idx);
+                        }
+                    }
+                }
+            }
             return after[..end_pos].to_string();
         }
         trimmed.to_string()
@@ -538,6 +851,10 @@ impl MediaExtractor {
     }
 
     /// Download video/audio via the extraction engine with real-time progress callbacks.
+    ///
+    /// If the first attempt fails (most often because YouTube changed something and the local
+    /// yt-dlp is outdated), the extractor core is updated automatically and the download is
+    /// retried once — the user no longer has to find and press "Update engine" manually.
     pub async fn download_media_stream(
         client: &Client,
         url: &str,
@@ -546,11 +863,48 @@ impl MediaExtractor {
         progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>, // (progress 0..1, speed bps, downloaded bytes, total bytes, eta_secs, is_completed, final_filename)
         cancel_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<std::path::PathBuf, String> {
+        // YouTube needs a JavaScript runtime for its stream-URL challenges. Bootstrap Deno once if neither Deno nor Node is present.
+        if Self::is_youtube_url(url) && Self::js_runtime_arg().is_none() {
+            if let Err(e) = Self::ensure_deno_binary(client).await {
+                eprintln!("[SuperIDM] Deno bootstrap failed ({}); continuing without JS runtime.", e);
+            }
+        }
+
+        let first = Self::run_ytdlp_download(client, url, dest_dir, format_id, progress_tx.clone(), cancel_rx.clone()).await;
+        let first_err = match first {
+            Ok(p) => return Ok(p),
+            Err(e) => e,
+        };
+        if *cancel_rx.borrow() || first_err.contains("cancelled") {
+            return Err(first_err);
+        }
+
+        eprintln!("[SuperIDM] Media download failed ({}). Auto-updating extractor core and retrying once...", first_err);
+        match Self::update_ytdlp_core(client).await {
+            Ok(msg) => eprintln!("[SuperIDM] {}", msg),
+            Err(e) => {
+                eprintln!("[SuperIDM] Extractor auto-update failed: {}", e);
+                return Err(first_err);
+            }
+        }
+        Self::run_ytdlp_download(client, url, dest_dir, format_id, progress_tx, cancel_rx)
+            .await
+            .map_err(|e| if e == first_err { e } else { format!("{} (after engine update; first attempt: {})", e, first_err) })
+    }
+
+    async fn run_ytdlp_download(
+        client: &Client,
+        url: &str,
+        dest_dir: &std::path::Path,
+        format_id: Option<&str>,
+        progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>,
+        cancel_rx: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<std::path::PathBuf, String> {
         use tokio::io::AsyncBufReadExt;
 
         let bin = match Self::ensure_ytdlp_binary(client).await {
             Ok(b) => b,
-            Err(_) => Self::find_ytdlp_binary().ok_or_else(|| "Media extractor core not available".to_string())?,
+            Err(e) => Self::find_ytdlp_binary().ok_or_else(|| format!("Media extractor core not available: {}", e))?,
         };
 
         // YouTube (and most platforms) serve video and audio as SEPARATE streams for anything
@@ -607,17 +961,19 @@ impl MediaExtractor {
             .arg(&output_template)
             .arg("--no-playlist")
             .arg("--newline")
-            .arg("--force-overwrites");
+            .arg("--force-overwrites")
+            // Never hang forever on a dead socket; retry transient network errors instead.
+            .arg("--socket-timeout").arg("30")
+            .arg("--retries").arg("10")
+            .arg("--fragment-retries").arg("10");
 
         if has_ffmpeg {
             cmd.arg("--merge-output-format").arg("mp4");
         }
 
-        // Only specify JS runtime if the executable is actually present on system
-        if Self::find_executable("node").is_some() {
-            cmd.arg("--js-runtimes").arg("node");
-        } else if Self::find_executable("deno").is_some() {
-            cmd.arg("--js-runtimes").arg("deno");
+        // JS runtime for YouTube challenges (Deno preferred, explicit path so PATH is irrelevant)
+        if let Some(rt) = Self::js_runtime_arg() {
+            cmd.arg("--js-runtimes").arg(rt);
         }
 
         if let Some(ffmpeg_bin) = Self::find_ffmpeg_binary() {
@@ -661,6 +1017,7 @@ impl MediaExtractor {
         }
 
         let mut is_audio_pass = false;
+        let mut dest_count = 0usize;
         let mut final_path: Option<std::path::PathBuf> = None;
         let mut total_bytes = 0u64;
         let mut video_bytes = 0u64;
@@ -691,17 +1048,52 @@ impl MediaExtractor {
                 continue;
             }
 
-            // Detect stream destination
-            if raw_line.contains("Destination:") {
-                let dest = raw_line["Destination:".len()..].trim();
+            // Detect already-downloaded file notice: "[download] <path> has already been downloaded"
+            if let Some(before) = raw_line.strip_suffix("has already been downloaded") {
+                let path_part = before.trim().strip_prefix("[download]").unwrap_or(before).trim();
+                if !path_part.is_empty() {
+                    final_path = Some(std::path::PathBuf::from(path_part));
+                }
+                continue;
+            }
+
+            // Detect stream destination: "[download] Destination: C:\...\Title.f313.webm"
+            if let Some((_, dest_raw)) = raw_line.split_once("Destination:") {
+                let dest = dest_raw.trim();
                 let p = std::path::PathBuf::from(dest);
-                if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                dest_count += 1;
+                if dest_count >= 2 {
+                    is_audio_pass = true;
+                } else if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                    // NOTE: Do NOT include "webm" here — 2K/4K YouTube video streams use .webm (VP9/AV1).
                     let ext_low = ext.to_lowercase();
-                    if ext_low == "m4a" || ext_low == "webm" || ext_low == "opus" || ext_low == "mp3" || ext_low == "aac" {
+                    if matches!(ext_low.as_str(), "m4a" | "opus" | "mp3" | "aac" | "ogg" | "flac" | "wav") {
                         is_audio_pass = true;
                     }
                 }
-                if final_path.is_none() {
+                let is_temp_part = p.file_name()
+                    .and_then(|n| n.to_str())
+                    .and_then(|n| n.rsplit_once('.').map(|(stem, _)| stem))
+                    .and_then(|stem| stem.rfind(".f").map(|i| &stem[i + 2..]))
+                    .map(|digits| !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit() || c == '-'))
+                    .unwrap_or(false);
+
+                // Extract clean display filename so UI replaces "Video_Stream.mp4" immediately
+                let clean_display_name = p.file_name().and_then(|n| n.to_str()).map(|fname| {
+                    if is_temp_part {
+                        if let Some((stem, _)) = fname.rsplit_once('.') {
+                            if let Some(f_idx) = stem.rfind(".f") {
+                                return format!("{}.mp4", &stem[..f_idx]);
+                            }
+                        }
+                    }
+                    fname.to_string()
+                });
+                if dest_count == 1 && clean_display_name.is_some() {
+                    let _ = progress_tx.send((max_progress.max(0.01), 0.0, 0, total_bytes, 0.0, false, clean_display_name)).await;
+                }
+
+                if !is_temp_part && final_path.is_none() {
                     final_path = Some(p);
                 }
                 continue;
@@ -790,10 +1182,9 @@ impl MediaExtractor {
                 final_path = Some(merged_file);
             }
 
-            let final_pb = if let Some(fp) = final_path {
-                fp
-            } else {
-                Self::find_newest_media_file(dest_dir).await.unwrap_or_else(|| dest_dir.to_path_buf())
+            let final_pb = match final_path {
+                Some(fp) if fp.exists() => fp,
+                _ => Self::find_newest_media_file(dest_dir).await.unwrap_or_else(|| dest_dir.to_path_buf()),
             };
             let disk_bytes = if let Ok(meta) = tokio::fs::metadata(&final_pb).await {
                 meta.len()
@@ -849,9 +1240,19 @@ impl MediaExtractor {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name.contains(".f") && name.ends_with(".mp4") {
+                    // Only genuine yt-dlp format parts: "<title>.f<digits>.<ext>"
+                    let is_part = |exts: &[&str]| -> bool {
+                        let lower = name.to_lowercase();
+                        exts.iter().any(|ext| {
+                            lower.strip_suffix(&format!(".{}", ext))
+                                .and_then(|stem| stem.rfind(".f").map(|i| &stem[i + 2..]))
+                                .map(|digits| !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit() || c == '-'))
+                                .unwrap_or(false)
+                        })
+                    };
+                    if is_part(&["mp4"]) {
                         video_parts.push(path);
-                    } else if name.contains(".f") && (name.ends_with(".m4a") || name.ends_with(".webm") || name.ends_with(".opus")) {
+                    } else if is_part(&["m4a", "webm", "opus"]) {
                         audio_parts.push(path);
                     }
                 }
@@ -978,6 +1379,9 @@ impl MediaExtractor {
 
         // 2. Ensure yt-dlp binary is available on machine (auto-bootstrapping for clean Windows)
         let _ = Self::ensure_ytdlp_binary(client).await;
+        if Self::is_youtube_url(clean_url) && Self::js_runtime_arg().is_none() {
+            let _ = Self::ensure_deno_binary(client).await;
+        }
 
         // 3. Try yt-dlp if available (supports 1000+ complex platforms including YouTube, TikTok, Vimeo)
         match Self::extract_with_ytdlp(clean_url) {
@@ -992,6 +1396,156 @@ impl MediaExtractor {
 
         // 3. Native HTML & Media Sniffer Fallback
         Self::extract_with_native_sniffer(client, clean_url).await
+    }
+
+    /// Extract items in a video/media playlist (e.g. YouTube playlist, channel, course, album)
+    pub async fn extract_playlist_info(client: &Client, url: &str) -> Result<PlaylistExtractionInfo, String> {
+        let clean_url_str = Self::clean_target_url(url);
+        let clean_url = clean_url_str.as_str();
+
+        let _ = Self::ensure_ytdlp_binary(client).await;
+        if Self::is_youtube_url(clean_url) && Self::js_runtime_arg().is_none() {
+            let _ = Self::ensure_deno_binary(client).await;
+        }
+        let bin = Self::find_ytdlp_binary().ok_or_else(|| "yt-dlp binary not found on system".to_string())?;
+
+        let mut cmd = Command::new(bin);
+        cmd.arg("-J")
+            .arg("--flat-playlist")
+            .arg("--no-warnings");
+        if !Self::is_youtube_url(clean_url) {
+            cmd.arg("--user-agent").arg(DEFAULT_USER_AGENT);
+        }
+        if let Some(rt) = Self::js_runtime_arg() {
+            cmd.arg("--js-runtimes").arg(rt);
+        }
+        cmd.arg(&clean_url);
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to launch yt-dlp: {}", e))?;
+
+        if !output.status.success() {
+            let err_msg = String::from_utf8_lossy(&output.stderr);
+            let first_line = err_msg
+                .lines()
+                .rev()
+                .find(|l| {
+                    let low = l.to_lowercase();
+                    low.contains("error:") || low.contains("error ") || low.contains("[pyi-")
+                })
+                .or_else(|| err_msg.lines().rev().find(|l| !l.trim().is_empty()))
+                .unwrap_or("Playlist unavailable or invalid URL")
+                .trim();
+            return Err(first_line.to_string());
+        }
+
+        let json_str = String::from_utf8_lossy(&output.stdout);
+        let val: Value = serde_json::from_str(&json_str)
+            .map_err(|e| format!("Invalid yt-dlp playlist JSON: {}", e))?;
+
+        let id = val.get("id").and_then(|v| v.as_str()).unwrap_or("playlist").to_string();
+        let title = val.get("title").and_then(|v| v.as_str()).unwrap_or("Playlist").to_string();
+        let uploader = val.get("uploader").or_else(|| val.get("channel")).and_then(|v| v.as_str()).map(|s| s.to_string());
+
+        let mut entries = Vec::new();
+        if let Some(arr) = val.get("entries").and_then(|v| v.as_array()) {
+            for (idx, item) in arr.iter().enumerate() {
+                let item_id = item.get("id").and_then(|v| v.as_str()).unwrap_or(&format!("item_{}", idx + 1)).to_string();
+                let item_title = item.get("title").and_then(|v| v.as_str()).unwrap_or(&format!("Video {}", idx + 1)).to_string();
+                
+                let raw_item_url = item.get("url").and_then(|v| v.as_str());
+                let item_url = if let Some(u) = raw_item_url {
+                    if u.starts_with("http") {
+                        u.to_string()
+                    } else if u.len() == 11 && !u.contains('/') {
+                        format!("https://www.youtube.com/watch?v={}", u)
+                    } else {
+                        format!("https://www.youtube.com/watch?v={}", item_id)
+                    }
+                } else if !item_id.is_empty() {
+                    format!("https://www.youtube.com/watch?v={}", item_id)
+                } else {
+                    continue;
+                };
+
+                let duration_secs = item.get("duration").and_then(|v| v.as_u64());
+                let duration_string = duration_secs.map(|d| {
+                    let hrs = d / 3600;
+                    let mins = (d % 3600) / 60;
+                    let secs = d % 60;
+                    if hrs > 0 {
+                        format!("{:02}:{:02}:{:02}", hrs, mins, secs)
+                    } else {
+                        format!("{:02}:{:02}", mins, secs)
+                    }
+                });
+
+                let thumbnail = item.get("thumbnails")
+                    .and_then(|t| t.as_array())
+                    .and_then(|arr| arr.last())
+                    .and_then(|t| t.get("url"))
+                    .and_then(|u| u.as_str())
+                    .or_else(|| item.get("thumbnail").and_then(|u| u.as_str()))
+                    .map(|s| s.to_string());
+
+                let channel = item.get("channel")
+                    .or_else(|| item.get("uploader"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
+                entries.push(PlaylistItem {
+                    id: item_id,
+                    title: item_title,
+                    url: item_url,
+                    duration_secs,
+                    duration_string,
+                    thumbnail,
+                    uploader: channel,
+                });
+            }
+        } else if val.get("_type").and_then(|v| v.as_str()) != Some("playlist") {
+            let duration_secs = val.get("duration").and_then(|v| v.as_u64());
+            let duration_string = duration_secs.map(|d| {
+                let hrs = d / 3600;
+                let mins = (d % 3600) / 60;
+                let secs = d % 60;
+                if hrs > 0 {
+                    format!("{:02}:{:02}:{:02}", hrs, mins, secs)
+                } else {
+                    format!("{:02}:{:02}", mins, secs)
+                }
+            });
+            let thumbnail = val.get("thumbnail").and_then(|v| v.as_str()).map(|s| s.to_string());
+            entries.push(PlaylistItem {
+                id: id.clone(),
+                title: title.clone(),
+                url: clean_url.to_string(),
+                duration_secs,
+                duration_string,
+                thumbnail,
+                uploader: uploader.clone(),
+            });
+        }
+
+        let count = entries.len();
+        if count == 0 {
+            return Err("No playable videos found in this playlist or URL".to_string());
+        }
+
+        Ok(PlaylistExtractionInfo {
+            id,
+            title,
+            uploader,
+            count,
+            entries,
+        })
     }
 
     /// Cinemana Shabakaty direct API video file extractor
@@ -1082,28 +1636,58 @@ impl MediaExtractor {
     fn extract_with_ytdlp(url: &str) -> Result<MediaExtractionInfo, String> {
         let clean_url = Self::clean_target_url(url);
         let bin = Self::find_ytdlp_binary().ok_or_else(|| "yt-dlp binary not found on system".to_string())?;
+        let rt_arg = Self::js_runtime_arg();
 
-        let mut cmd = Command::new(bin);
-        cmd.arg("-J")
-            .arg("--no-playlist")
-            .arg("--no-warnings")
-            .arg("--user-agent")
-            .arg(DEFAULT_USER_AGENT)
-            .arg(&clean_url);
+        let run_once = |exe: &std::path::Path, js_rt: Option<&str>| -> Result<std::process::Output, String> {
+            let mut cmd = Command::new(exe);
+            cmd.arg("-J")
+                .arg("--no-playlist")
+                .arg("--no-warnings")
+                .arg("--socket-timeout")
+                .arg("15");
+            if !Self::is_youtube_url(&clean_url) {
+                cmd.arg("--user-agent").arg(DEFAULT_USER_AGENT);
+            }
+            if let Some(rt) = js_rt {
+                cmd.arg("--js-runtimes").arg(rt);
+            }
+            cmd.arg(&clean_url);
 
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+
+            cmd.output().map_err(|e| format!("Failed to launch yt-dlp: {}", e))
+        };
+
+        let mut output = run_once(&bin, rt_arg.as_deref())?;
+
+        // If first attempt failed, retry once without --js-runtimes (or with bundled binary if local failed)
+        if !output.status.success() {
+            let fallback_bin = Self::find_bundled_file("yt-dlp.exe", 15_000_000).unwrap_or_else(|| bin.clone());
+            if rt_arg.is_some() || fallback_bin != bin {
+                if let Ok(retry_out) = run_once(&fallback_bin, None) {
+                    if retry_out.status.success() {
+                        output = retry_out;
+                    }
+                }
+            }
         }
-
-        let output = cmd
-            .output()
-            .map_err(|e| format!("Failed to launch yt-dlp: {}", e))?;
 
         if !output.status.success() {
             let err_msg = String::from_utf8_lossy(&output.stderr);
-            let first_line = err_msg.lines().find(|l| l.contains("ERROR:")).unwrap_or("Video unavailable or invalid URL");
+            let first_line = err_msg
+                .lines()
+                .rev()
+                .find(|l| {
+                    let low = l.to_lowercase();
+                    low.contains("error:") || low.contains("error ") || low.contains("[pyi-")
+                })
+                .or_else(|| err_msg.lines().rev().find(|l| !l.trim().is_empty()))
+                .unwrap_or("Video unavailable or invalid URL")
+                .trim();
             return Err(first_line.to_string());
         }
 
@@ -1459,5 +2043,29 @@ mod tests {
             MediaExtractor::clean_target_url(input),
             "https://www.youtube.com/watch?v=ew0RSjgDgH8"
         );
+    }
+
+    #[test]
+    fn test_clean_target_url_double_pasted() {
+        let input = "https://www.youtube.com/watch?v=yd8jh9QYFEs&list=RDyd8jh9QYFEs&start_radio=1https://www.youtube.com/watch?v=yd8jh9QYFEs&list=RDyd8jh9QYFEs&start_radio=1";
+        assert_eq!(
+            MediaExtractor::clean_target_url(input),
+            "https://www.youtube.com/watch?v=yd8jh9QYFEs&list=RDyd8jh9QYFEs&start_radio=1"
+        );
+    }
+
+    #[test]
+    fn test_verify_bundled_binaries() {
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let msix_dir = manifest_dir.parent().unwrap().join("msix_build");
+        let ytdlp = msix_dir.join("yt-dlp.exe");
+        if ytdlp.exists() {
+            let ver = MediaExtractor::verify_ytdlp_binary(&ytdlp);
+            assert!(ver.is_some(), "Bundled yt-dlp.exe should pass verification");
+            assert!(ver.unwrap().as_str() >= "2026.10.01");
+        }
+        // Small file should be rejected by verify_ytdlp_binary
+        let cargo_toml = manifest_dir.join("Cargo.toml");
+        assert!(MediaExtractor::verify_ytdlp_binary(&cargo_toml).is_none());
     }
 }

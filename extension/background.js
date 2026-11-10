@@ -75,7 +75,7 @@ async function initAuthAndSettings() {
     } catch (e) { /* ignore */ }
   }
 }
-initAuthAndSettings();
+const authInitPromise = initAuthAndSettings();
 
 function saveSettings() {
   chrome.storage.local.set({ superidm_settings: settings, superidm_rpc_token: rpcToken });
@@ -87,11 +87,34 @@ function saveSettings() {
 let paired = false;
 let pairingPromise = null;
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 2500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function pairWithApp() {
   if (pairingPromise) return pairingPromise;
   pairingPromise = (async () => {
     try {
-      const res = await fetch(RPC_HTTP_URL + '/api/pair', { method: 'GET', cache: 'no-store' });
+      // POST always carries the extension Origin header; Chrome omits Origin on simple GETs
+      // from a service worker with host_permissions, which older desktop builds rejected.
+      let res = null;
+      try {
+        res = await fetchWithTimeout(RPC_HTTP_URL + '/api/pair', {
+          method: 'POST',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        }, 2500);
+      } catch (e) { res = null; }
+      if (!res || !res.ok) {
+        res = await fetchWithTimeout(RPC_HTTP_URL + '/api/pair', { method: 'GET', cache: 'no-store' }, 2500);
+      }
       if (!res.ok) return false;
       const json = await res.json();
       if (json && typeof json.token === 'string' && json.token) {
@@ -117,10 +140,10 @@ async function pairWithApp() {
 // ═══════ WebSocket Connection ═══════
 async function isServerOnline() {
   try {
-    const res = await fetch(RPC_HTTP_URL + '/api/ping', {
+    const res = await fetchWithTimeout(RPC_HTTP_URL + '/api/ping', {
       method: 'GET',
       cache: 'no-store'
-    });
+    }, 2000);
     return res.ok;
   } catch (e) {
     return false;
@@ -143,8 +166,9 @@ async function connectWS() {
     ws = new WebSocket(RPC_WS_URL);
 
     ws.onopen = async () => {
+      try { await authInitPromise; } catch (e) {}
       if (!paired) await pairWithApp();
-      wsConnected = paired;
+      wsConnected = paired || Boolean(rpcToken);
       // Send authentication handshake if token available
       if (rpcToken) {
         ws.send(JSON.stringify({
@@ -218,7 +242,8 @@ function broadcastStatus() {
 async function sendToSuperIDM(url, filename, format, headers, cookies) {
   // If token not loaded yet, try loading it
   if (!rpcToken) {
-    await initAuthAndSettings();
+    try { await authInitPromise; } catch (e) {}
+    if (!rpcToken) await initAuthAndSettings();
   }
 
   // If URL is an Instagram/Facebook CDN chunk, prefer routing active tab's page URL ONLY if it contains an actual post/reel shortcode
@@ -484,15 +509,16 @@ if (onDeterminingEvent && typeof onDeterminingEvent.addListener === 'function') 
       }
     }
 
-    try {
-      chrome.downloads.cancel(item.id, () => {
-        if (chrome.runtime.lastError) {}
-        chrome.downloads.erase({ id: item.id }, () => {});
-      });
-    } catch (e) {}
-
     const reqHeaders = item.referrer ? { 'Referer': item.referrer } : undefined;
-    sendToSuperIDM(dlUrl, item.filename, null, reqHeaders);
+    const result = await sendToSuperIDM(dlUrl, item.filename, null, reqHeaders);
+    if (result && result.ok) {
+      try {
+        chrome.downloads.cancel(item.id, () => {
+          if (chrome.runtime.lastError) {}
+          chrome.downloads.erase({ id: item.id }, () => {});
+        });
+      } catch (e) {}
+    }
   });
 }
 
@@ -568,10 +594,40 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   delete tabMedia[tabId];
 });
 
+// Refresh connection + auto-pair immediately (critical when MV3 service worker wakes from idle)
+async function refreshConnectionState() {
+  try { await authInitPromise; } catch (e) {}
+  const online = await isServerOnline();
+  if (!online) {
+    paired = false;
+  } else if (!paired) {
+    await pairWithApp();
+  }
+  const ready = online && (paired || Boolean(rpcToken));
+  if (ready !== wsConnected) {
+    wsConnected = ready;
+    if (!online && ws) {
+      try { ws.close(); } catch (e) {}
+      ws = null;
+    }
+    broadcastStatus();
+    if (online && (!ws || ws.readyState !== WebSocket.OPEN)) {
+      connectWS();
+    }
+  }
+  return wsConnected;
+}
+
 // ═══════ Message Handler (from popup & content scripts) ═══════
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'get_status') {
-    sendResponse({ connected: wsConnected, settings });
+    if (wsConnected && !msg.force) {
+      sendResponse({ connected: true, settings });
+    } else {
+      refreshConnectionState().then((connected) => {
+        sendResponse({ connected, settings });
+      });
+    }
     return true;
   }
 
@@ -635,29 +691,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // ═══════ Init & Active Health Poller ═══════
+refreshConnectionState();
 connectWS();
 
-setInterval(async () => {
-  const online = await isServerOnline();
-  if (!online) paired = false;
-
-  // Pair automatically as soon as the desktop app is reachable
-  if (online && !paired) {
-    await pairWithApp();
-  }
-
-  // "Connected" means the app is running AND this extension is paired with it
-  const ready = online && paired;
-  if (ready !== wsConnected) {
-    wsConnected = ready;
-    if (!online && ws) {
-      try { ws.close(); } catch(e) {}
-      ws = null;
-    }
-    broadcastStatus();
-    if (online && (!ws || ws.readyState !== WebSocket.OPEN)) {
-      connectWS();
-    }
-  }
+setInterval(() => {
+  refreshConnectionState();
 }, 1500);
+
+if (chrome.runtime && chrome.runtime.onStartup) {
+  chrome.runtime.onStartup.addListener(() => { refreshConnectionState(); });
+}
+if (chrome.tabs && chrome.tabs.onActivated) {
+  chrome.tabs.onActivated.addListener(() => {
+    if (!wsConnected) refreshConnectionState();
+  });
+}
 

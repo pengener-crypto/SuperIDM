@@ -190,6 +190,26 @@ pub async fn start_download(
         let dest_dir_watch = dest_dir.clone();
         let cancel_c = cancel_rx.clone();
         let format_id_c = format_id.clone();
+        let app_err = app.clone();
+        let task_id_err = task_id.clone();
+
+        // First-run component setup can take a while on slow connections; tell the user instead
+        // of showing a silent "0% · 0 B/s" row.
+        {
+            use crate::engine::extractor::MediaExtractor as MX;
+            let mut missing: Vec<&str> = Vec::new();
+            if MX::find_ytdlp_binary().is_none() { missing.push("yt-dlp"); }
+            if MX::find_ffmpeg_binary().is_none() { missing.push("FFmpeg"); }
+            if MX::is_youtube_url(&url) && MX::js_runtime_arg().is_none() { missing.push("JS Runtime"); }
+            if !missing.is_empty() {
+                let _ = app.emit("engine_notice", serde_json::json!({
+                    "id": task_id,
+                    "stage": "preparing_components",
+                    "code": "preparing_components",
+                    "components": missing,
+                }));
+            }
+        }
 
         // Spawn platform stream extractor
         tokio::spawn(async move {
@@ -203,6 +223,12 @@ pub async fn start_download(
             ).await;
             if let Err(e) = res {
                 eprintln!("[MediaExtractor Error] {}", e);
+                // Previously this error was only printed to a hidden console, so users just saw
+                // "Failed" with no reason. Send it to the UI.
+                let _ = app_err.emit("download_error", serde_json::json!({
+                    "id": task_id_err,
+                    "message": e,
+                }));
             }
         });
 
@@ -213,12 +239,26 @@ pub async fn start_download(
 
         tokio::spawn(async move {
             let mut completed = false;
+            let mut prev_downloaded = 0u64;
             while let Some((progress, speed, downloaded, total, eta_secs, is_comp, final_name_opt)) = prog_rx.recv().await {
+                let raw_total = if total > 0 { total } else { 100_000 };
+                let eff_downloaded = if downloaded > 0 { downloaded } else { (progress * 100_000.0) as u64 };
+                // During multi-pass (video then audio), keep total_bytes scaled to `progress` so
+                // `meta.progress()` never prematurely reports 100% (99% in UI) at the end of Pass 1.
+                let eff_total = if is_comp {
+                    raw_total.max(eff_downloaded)
+                } else if progress > 0.01 {
+                    raw_total.max(((eff_downloaded as f64) / progress.min(0.98)) as u64)
+                } else {
+                    raw_total
+                };
                 {
                     let mut mgr = mgr_arc.write();
                     if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
-                        let eff_total = if total > 0 { total } else { 100_000 };
-                        let eff_downloaded = if downloaded > 0 { downloaded } else { (progress * 100_000.0) as u64 };
+                        if eff_downloaded > prev_downloaded {
+                            h.speed_meter.record(eff_downloaded - prev_downloaded);
+                            prev_downloaded = eff_downloaded;
+                        }
                         h.metadata.total_bytes = eff_total;
                         if let Some(ref fname) = final_name_opt {
                             h.metadata.filename = fname.clone();
@@ -242,13 +282,11 @@ pub async fn start_download(
                         }
                         if is_comp {
                             h.metadata.status = TaskStatus::Completed;
+                            h.speed_meter.reset();
                             completed = true;
                         }
                     }
                 }
-
-                let eff_total = if total > 0 { total } else { 100_000 };
-                let eff_downloaded = if downloaded > 0 { downloaded } else { (progress * 100_000.0) as u64 };
 
                 let payload = ProgressPayload {
                     id: task_id_c.clone(),
@@ -855,15 +893,23 @@ pub async fn resume_download(
         let cancel_c = cancel_rx.clone();
 
         let client_c = state.manager.read().http_client.clone();
+        let app_err = app.clone();
+        let task_id_err = id.clone();
         tokio::spawn(async move {
-            let _ = crate::engine::extractor::MediaExtractor::download_media_stream(
+            if let Err(e) = crate::engine::extractor::MediaExtractor::download_media_stream(
                 &client_c,
                 &url_c,
                 &dest_dir_ext,
                 None,
                 prog_tx,
                 cancel_c,
-            ).await;
+            ).await {
+                eprintln!("[MediaExtractor Resume Error] {}", e);
+                let _ = app_err.emit("download_error", serde_json::json!({
+                    "id": task_id_err,
+                    "message": e,
+                }));
+            }
         });
 
         let app_handle = app.clone();
@@ -871,11 +917,26 @@ pub async fn resume_download(
         let mgr_arc = state.manager.clone();
 
         tokio::spawn(async move {
+            let mut completed = false;
+            let mut prev_downloaded = 0u64;
             while let Some((progress, speed, downloaded, total, eta_secs, is_comp, final_name_opt)) = prog_rx.recv().await {
+                let raw_total = if total > 0 { total } else { 100_000 };
+                let eff_downloaded = if downloaded > 0 { downloaded } else { (progress * 100_000.0) as u64 };
+                let eff_total = if is_comp {
+                    raw_total.max(eff_downloaded)
+                } else if progress > 0.01 {
+                    raw_total.max(((eff_downloaded as f64) / progress.min(0.98)) as u64)
+                } else {
+                    raw_total
+                };
                 {
                     let mut mgr = mgr_arc.write();
                     if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
-                        h.metadata.total_bytes = total;
+                        if eff_downloaded > prev_downloaded {
+                            h.speed_meter.record(eff_downloaded - prev_downloaded);
+                            prev_downloaded = eff_downloaded;
+                        }
+                        h.metadata.total_bytes = eff_total;
                         if let Some(ref fname) = final_name_opt {
                             h.metadata.filename = fname.clone();
                             let new_dest = dest_dir_watch.join(fname);
@@ -885,18 +946,20 @@ pub async fn resume_download(
                             h.metadata.chunks.push(ChunkInfo {
                                 index: 0,
                                 start_byte: 0,
-                                end_byte: total,
-                                current_byte: downloaded,
+                                end_byte: eff_total,
+                                current_byte: eff_downloaded,
                                 completed: is_comp,
                                 retry_count: 0,
                             });
                         } else {
-                            h.metadata.chunks[0].current_byte = downloaded;
-                            h.metadata.chunks[0].end_byte = total;
+                            h.metadata.chunks[0].current_byte = eff_downloaded;
+                            h.metadata.chunks[0].end_byte = eff_total;
                             h.metadata.chunks[0].completed = is_comp;
                         }
                         if is_comp {
                             h.metadata.status = TaskStatus::Completed;
+                            h.speed_meter.reset();
+                            completed = true;
                         }
                     }
                 }
@@ -904,8 +967,8 @@ pub async fn resume_download(
                 let payload = ProgressPayload {
                     id: task_id_c.clone(),
                     status: if is_comp { TaskStatus::Completed } else { TaskStatus::Downloading },
-                    downloaded_bytes: downloaded,
-                    total_bytes: total,
+                    downloaded_bytes: eff_downloaded,
+                    total_bytes: eff_total,
                     progress,
                     speed: if is_comp { 0.0 } else { speed },
                     chunks: vec![],
@@ -916,6 +979,26 @@ pub async fn resume_download(
 
                 if is_comp {
                     break;
+                }
+            }
+
+            if !completed {
+                let mut mgr = mgr_arc.write();
+                if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
+                    if h.metadata.status != TaskStatus::Completed && h.metadata.status != TaskStatus::Paused {
+                        h.metadata.status = TaskStatus::Failed;
+                        let payload = ProgressPayload {
+                            id: task_id_c.clone(),
+                            status: TaskStatus::Failed,
+                            downloaded_bytes: 0,
+                            total_bytes: 0,
+                            progress: 0.0,
+                            speed: 0.0,
+                            chunks: vec![],
+                            eta_secs: 0.0,
+                        };
+                        let _ = app_handle.emit("download_progress", &payload);
+                    }
                 }
             }
         });
@@ -1163,6 +1246,20 @@ pub async fn extract_media_info(
     };
 
     crate::engine::extractor::MediaExtractor::extract_info(&client, &url).await
+}
+
+/// Extract all items and metadata from a video/media playlist (YouTube playlist, channel, etc.).
+#[tauri::command]
+pub async fn extract_playlist(
+    state: State<'_, AppState>,
+    url: String,
+) -> Result<PlaylistExtractionInfo, String> {
+    let client = {
+        let mgr = state.manager.read();
+        mgr.http_client.clone()
+    };
+
+    crate::engine::extractor::MediaExtractor::extract_playlist_info(&client, &url).await
 }
 
 /// Start an adaptive HLS/DASH streaming download with auto-muxing.
@@ -1525,8 +1622,13 @@ pub async fn update_extractor_core(state: State<'_, AppState>) -> Result<String,
     let ytdlp_msg = MediaExtractor::update_ytdlp_core(&client).await?;
 
     let ffmpeg_msg = match MediaExtractor::ensure_ffmpeg_binary(&client).await {
-        Ok(_) => "FFmpeg merger ready".to_string(),
+        Ok(_) => "FFmpeg ready".to_string(),
         Err(e) => return Err(format!("{} | FFmpeg install failed: {}", ytdlp_msg, e)),
+    };
+
+    let deno_msg = match MediaExtractor::ensure_deno_binary(&client).await {
+        Ok(_) => "YouTube JS runtime ready".to_string(),
+        Err(e) => format!("JS runtime skipped ({})", e),
     };
 
     // Repair leftovers (loop: one pair merged per call)
@@ -1539,9 +1641,9 @@ pub async fn update_extractor_core(state: State<'_, AppState>) -> Result<String,
     }
 
     if repaired > 0 {
-        Ok(format!("{} | {} | Merged {} leftover file(s)", ytdlp_msg, ffmpeg_msg, repaired))
+        Ok(format!("{} | {} | {} | Merged {} leftover file(s)", ytdlp_msg, ffmpeg_msg, deno_msg, repaired))
     } else {
-        Ok(format!("{} | {}", ytdlp_msg, ffmpeg_msg))
+        Ok(format!("{} | {} | {}", ytdlp_msg, ffmpeg_msg, deno_msg))
     }
 }
 

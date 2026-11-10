@@ -188,6 +188,22 @@ fn is_origin_safe(origin: &str) -> bool {
     o.starts_with("chrome-extension://") || o.starts_with("moz-extension://") || o.starts_with("edge-extension://")
 }
 
+/// Only accept requests addressed to the loopback interface (defeats DNS rebinding).
+fn is_loopback_host(host: &str) -> bool {
+    if host.is_empty() {
+        // HTTP/1.0-style clients may omit Host; they are not browsers, allow.
+        return true;
+    }
+    let h = host.trim();
+    let name = if let Some(rest) = h.strip_prefix('[') {
+        // IPv6 literal: [::1]:6801
+        rest.split(']').next().unwrap_or("")
+    } else {
+        h.rsplit_once(':').map(|(n, _)| n).unwrap_or(h)
+    };
+    matches!(name, "127.0.0.1" | "localhost" | "::1")
+}
+
 /// Generate or load the persistent RPC secret token.
 pub fn get_or_create_rpc_token() -> String {
     let config_dir = dirs::config_dir()
@@ -354,6 +370,23 @@ async fn handle_http_request(
         .map(|(_, v)| v.trim())
         .unwrap_or("");
 
+    // Extract Host header (DNS-rebinding defense: a malicious site resolving its own domain to
+    // 127.0.0.1 would make "same-origin" requests that carry no Origin header at all).
+    let host = lines.iter()
+        .find(|l| l.to_lowercase().starts_with("host:"))
+        .and_then(|l| l.split_once(':'))
+        .map(|(_, v)| v.trim().to_lowercase())
+        .unwrap_or_default();
+
+    if !is_loopback_host(&host) {
+        eprintln!("[RPC Security] Blocked request with non-loopback Host '{}' ({})", host, peer);
+        let err_body = r#"{"error":"Forbidden: invalid Host"}"#;
+        return format!(
+            "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            err_body.len(), err_body
+        );
+    }
+
     // ── Origin Validation ──
     if !is_origin_safe(origin) {
         eprintln!("[RPC Security] Blocked cross-origin HTTP request from origin '{}' ({})", origin, peer);
@@ -391,20 +424,24 @@ async fn handle_http_request(
         );
     }
 
-    // GET /api/pair (automatic extension pairing)
+    // GET|POST /api/pair (automatic extension pairing)
     // Store-installed extensions cannot know the per-machine token, so they request it here.
-    // Only a real browser-extension Origin is accepted. Web pages are already rejected above,
-    // and browsers never let a page forge a chrome-extension:// / moz-extension:// Origin.
-    if method == "GET" && path == "/api/pair" {
-        if origin.is_empty() {
-            eprintln!("[RPC Security] Rejected pairing request without extension Origin from {}", peer);
-            let err_body = r#"{"error":"Forbidden: pairing requires a browser extension origin"}"#;
-            return format!(
-                "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-                err_body.len(), err_body
-            );
-        }
-        println!("[RPC Security] Paired browser extension: {}", origin);
+    //
+    // IMPORTANT: Chrome/Edge do NOT send an Origin header on simple GET requests made by an
+    // extension service worker that holds host_permissions for the target. Rejecting empty
+    // Origins here meant store-installed extensions could never pair (stuck on "OFFLINE").
+    //
+    // Why accepting an empty Origin is still safe:
+    //   * Any cross-origin web page request in CORS mode always carries an http(s) Origin and is
+    //     rejected above; no-cors requests get an opaque response the page cannot read.
+    //   * DNS-rebinding (the only way a page gets a same-origin, Origin-less request) is blocked
+    //     by the loopback Host check above.
+    //   * A local process could already read the token file from the user profile directly.
+    if (method == "GET" || method == "POST") && path == "/api/pair" {
+        println!(
+            "[RPC Security] Paired browser extension: {}",
+            if origin.is_empty() { "(extension, no Origin header)" } else { origin }
+        );
         let b = serde_json::json!({
             "status": "ok",
             "token": expected_token,
@@ -519,6 +556,25 @@ async fn dispatch_method(
                     .replace("..", "_")
             });
 
+            // Extract optional Referer/Cookie headers for authenticated direct file downloads
+            let mut merged_headers = std::collections::HashMap::new();
+            if let Some(hdr_obj) = params.get("headers").and_then(|v| v.as_object()) {
+                for (k, v) in hdr_obj {
+                    if let Some(vs) = v.as_str() {
+                        if !vs.contains('\r') && !vs.contains('\n') {
+                            merged_headers.insert(k.clone(), vs.to_string());
+                        }
+                    }
+                }
+            }
+            if !crate::engine::extractor::MediaExtractor::is_platform_url(url) {
+                if let Some(cookies) = params.get("cookies").and_then(|v| v.as_str()) {
+                    if !cookies.is_empty() && !cookies.contains('\r') && !cookies.contains('\n') {
+                        merged_headers.entry("Cookie".to_string()).or_insert_with(|| cookies.to_string());
+                    }
+                }
+            }
+
             let task_id = Uuid::new_v4().to_string();
             {
                 let mut mgr = manager.write();
@@ -527,6 +583,7 @@ async fn dispatch_method(
                     url: url.to_string(),
                     filename: safe_filename,
                     format: format.map(|s| s.to_string()),
+                    headers: if merged_headers.is_empty() { None } else { Some(merged_headers) },
                 });
             }
 
@@ -560,4 +617,65 @@ pub struct RpcDownloadRequest {
     pub url: String,
     pub filename: Option<String>,
     pub format: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headers: Option<std::collections::HashMap<String, String>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    fn dummy_peer() -> SocketAddr {
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 54321)
+    }
+
+    fn dummy_manager() -> Arc<RwLock<DownloadManager>> {
+        let dir = std::env::temp_dir().join("superidm_rpc_test");
+        Arc::new(RwLock::new(DownloadManager::new(dir)))
+    }
+
+    #[tokio::test]
+    async fn test_pair_allows_mv3_service_worker_get_without_origin() {
+        let mgr = dummy_manager();
+        let secret = "sidm_test_secret_token_123456";
+        let raw = "GET /api/pair HTTP/1.1\r\nHost: 127.0.0.1:6801\r\nAccept: */*\r\n\r\n";
+        let resp = handle_http_request(raw, &mgr, secret, dummy_peer()).await;
+        assert!(resp.starts_with("HTTP/1.1 200 OK"), "Expected 200 OK, got: {}", resp);
+        let body = resp.split("\r\n\r\n").nth(1).unwrap_or("");
+        let json: serde_json::Value = serde_json::from_str(body).expect("valid json");
+        assert_eq!(json["token"], secret);
+    }
+
+    #[tokio::test]
+    async fn test_pair_allows_post_from_chrome_extension_origin() {
+        let mgr = dummy_manager();
+        let secret = "sidm_test_secret_token_123456";
+        let raw = "POST /api/pair HTTP/1.1\r\nHost: 127.0.0.1:6801\r\nOrigin: chrome-extension://abcdefghijklmnopabcdefghijklmnop\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}";
+        let resp = handle_http_request(raw, &mgr, secret, dummy_peer()).await;
+        assert!(resp.starts_with("HTTP/1.1 200 OK"), "Expected 200 OK, got: {}", resp);
+        let body = resp.split("\r\n\r\n").nth(1).unwrap_or("");
+        let json: serde_json::Value = serde_json::from_str(body).expect("valid json");
+        assert_eq!(json["token"], secret);
+    }
+
+    #[tokio::test]
+    async fn test_pair_blocks_malicious_web_origin() {
+        let mgr = dummy_manager();
+        let secret = "sidm_test_secret_token_123456";
+        let raw = "POST /api/pair HTTP/1.1\r\nHost: 127.0.0.1:6801\r\nOrigin: https://evil.example.com\r\n\r\n";
+        let resp = handle_http_request(raw, &mgr, secret, dummy_peer()).await;
+        assert!(resp.starts_with("HTTP/1.1 403 Forbidden"), "Expected 403, got: {}", resp);
+        assert!(!resp.contains(secret));
+    }
+
+    #[tokio::test]
+    async fn test_pair_blocks_dns_rebinding_host() {
+        let mgr = dummy_manager();
+        let secret = "sidm_test_secret_token_123456";
+        let raw = "GET /api/pair HTTP/1.1\r\nHost: attacker-rebind.com:6801\r\n\r\n";
+        let resp = handle_http_request(raw, &mgr, secret, dummy_peer()).await;
+        assert!(resp.starts_with("HTTP/1.1 403 Forbidden"), "Expected 403, got: {}", resp);
+        assert!(!resp.contains(secret));
+    }
 }

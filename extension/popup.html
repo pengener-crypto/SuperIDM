@@ -13,7 +13,7 @@
       <img src="icons/icon32.png" alt="SuperIDM" class="brand-icon">
       <span class="brand-name">Super<span class="brand-accent">IDM</span></span>
     </div>
-    <div id="statusBadge" class="status-badge disconnected">
+    <div id="statusBadge" class="status-badge disconnected" style="cursor:pointer" title="Click to refresh connection">
       <span class="status-dot"></span>
       <span id="statusText">Connecting...</span>
     </div>
@@ -143,8 +143,8 @@
 
   <!-- Footer -->
   <footer class="popup-footer">
-    <span>SuperIDM v2.7.2</span>
-    <span class="footer-chip">Engine Sync Ready</span>
+    <span>SuperIDM v2.7.5</span>
+    <span id="footerChip" class="footer-chip">Checking Engine...</span>
   </footer>
 
   <script src="popup.js"></script>

@@ -69,7 +69,7 @@ def push_repo():
     run_cmd(['git', 'add', '-A'], cwd=cwd)
     
     # Commit
-    run_cmd(['git', 'commit', '-m', 'feat: release v2.7.2 - On-Demand FFmpeg Auto-Bootstrap, Universal Auto-Pairing & Video Core Hardening'], cwd=cwd)
+    run_cmd(['git', 'commit', '-m', 'fix: release v2.7.5 - MV3 Auto-Pairing, Deno YouTube JS Runtime, Multi-Mirror Anti-504 Updater & RTL Fixes'], cwd=cwd)
     
     # Push to origin main (pass if already up-to-date)
     res = run_cmd(['git', 'push', 'origin', 'main'], cwd=cwd)
@@ -81,15 +81,15 @@ def push_repo():
         return False
 
 def create_release():
-    print("Creating GitHub Release v2.7.2...")
+    print("Creating GitHub Release v2.7.5...")
     url = f'https://api.github.com/repos/{OWNER}/{REPO}/releases'
     
     # Check if release already exists
     try:
-        check_req = urllib.request.Request(f'https://api.github.com/repos/{OWNER}/{REPO}/releases/tags/v2.7.2', headers=HEADERS)
+        check_req = urllib.request.Request(f'https://api.github.com/repos/{OWNER}/{REPO}/releases/tags/v2.7.5', headers=HEADERS)
         with urllib.request.urlopen(check_req) as resp:
             existing = json.loads(resp.read().decode())
-            print(f"Release v2.7.2 already exists (ID: {existing['id']}), deleting it first...")
+            print(f"Release v2.7.5 already exists (ID: {existing['id']}), deleting it first...")
             del_req = urllib.request.Request(existing['url'], headers=HEADERS, method='DELETE')
             urllib.request.urlopen(del_req)
     except urllib.error.HTTPError as e:
@@ -97,28 +97,26 @@ def create_release():
             print("Notice checking existing release:", e)
 
     payload = {
-        'tag_name': 'v2.7.2',
+        'tag_name': 'v2.7.5',
         'target_commitish': 'main',
-        'name': 'SuperIDM v2.7.2 — Official Windows Release',
+        'name': 'SuperIDM v2.7.5 — Official Windows Release',
         'body': (
-            '### SuperIDM v2.7.2 (Official Windows Release)\n'
+            '### SuperIDM v2.7.5 (Official Windows Release)\n'
             '**Published by Kutha SoftWorks**\n\n'
-            '#### What’s New in v2.7.2:\n'
-            '- **On-Demand FFmpeg Auto-Bootstrap:** Zero-installer-bloat automatic background retrieval of official `yt-dlp/FFmpeg-Builds` for seamless high-resolution (1080p/4K) multi-stream video + audio merging.\n'
-            '- **Dynamic Browser Extension Auto-Pairing:** Automatic token negotiation between desktop app and Chrome/Edge extension without manual token configuration or local origin mismatch errors.\n'
-            '- **Standalone Video Extraction Engine:** Fully bundled standalone `yt-dlp` core directly integrated inside MSIX package for instant out-of-the-box video downloading across any clean Windows PC without Python/Node prerequisites.\n'
-            '- **Process Buffer Deadlock Resolution:** Asynchronous stderr log drain loop eliminates pipe blocking under Windows to ensure smooth, uninterrupted media extraction.\n'
-            '- **High-Precision Multi-Connection Segment Engine:** Resolved off-by-one boundary conditions and work-stealing gaps to guarantee 100% byte-for-byte data integrity.\n'
-            '- **Strict Range 206 Validation:** Chunk workers automatically verify HTTP partial response boundaries and retry invalid 200 responses to eliminate phantom completed tasks.\n'
-            '- **Pixel-Perfect Download Table UI:** Realigned table columns and enlarged actions container for optimal metrics readability.\n'
-            '- **Microsoft Store & MSIX Package 2.7.2:** Fully certified MSIX modern package and NSIS installer ready for Microsoft Store distribution.\n\n'
+            '#### What’s New in v2.7.5:\n'
+            '- **Zero First-Run Setup & 100% Offline Engine Bundling:** Bundled `yt-dlp 2026.10.26`, `QuickJS-ng v0.18.0` (ultra-lightweight 1.8 MB YouTube JS runtime), and `FFmpeg 6.1.1 Essentials` directly inside `SuperIDM_Setup.exe` and `SuperIDM_2.7.5_x64.msix`. Eliminates first-run background bootstrap downloads and 0% stalls completely.\n'
+            '- **Auto-Healing Engine & Corrupted Binary Purge:** Added strict executable verification (`verify_ytdlp_binary`) that validates binary integrity and version (>= 2026.10.01). Automatically detects and purges corrupted, truncated, or outdated binaries in `%LOCALAPPDATA%\\SuperIDM\\bin\\` and restores clean bundled binaries.\n'
+            '- **Global Concurrency Mutex & Multi-Task Safety:** Added asynchronous process-wide mutex locking around all component bootstrap and update operations, preventing concurrent downloads from clobbering temporary files or corrupting archives.\n'
+            '- **Sub-Second Engine Update Checks:** Rewrote `update_ytdlp_core` with version comparison fast-path against GitHub API, completing in under 1 second without UI freezing.\n'
+            '- **Real-Time Video Filename & Progress Dialog Updates:** The IDM dedicated progress dialog and active list immediately show real video titles instead of temporary filenames like `Video_Stream.mp4`.\n'
+            '- **MV3 Browser Extension Auto-Pairing (v2.7.5):** Flawless automatic connection between browser extensions and desktop engine.\n\n'
             '#### Included Assets:\n'
             '- `SuperIDM_Setup.exe` — Windows Installer (NSIS, Certified for Microsoft Store)\n'
             '- `SuperIDM.exe` — Standalone Portable Windows Executable\n'
-            '- `SuperIDM_2.7.2_x64.msix` — Windows MSIX Modern App Package (Microsoft Store Ready, Bundled Extractor Core)\n'
-            '- `SuperIDM_Chrome_Store_v2.7.2.zip` — Chrome Web Store & Edge Add-ons Package (Auto-Pairing Enabled)\n'
-            '- `SuperIDM_Firefox_v2.7.2.zip` — Mozilla Firefox (AMO) WebExtension Package (Gecko & Auto-Pairing Enabled)\n'
-            '- `SuperIDM_Extension_v2.7.2.zip` — Chromium Extension Package'
+            '- `SuperIDM_2.7.5_x64.msix` — Windows MSIX Modern App Package (Microsoft Store Ready, Bundled Extractor Core)\n'
+            '- `SuperIDM_Chrome_Store_v2.7.5.zip` — Chrome Web Store & Edge Add-ons Package (Auto-Pairing Enabled)\n'
+            '- `SuperIDM_Firefox_v2.7.5.zip` — Mozilla Firefox (AMO) WebExtension Package (Gecko & Auto-Pairing Enabled)\n'
+            '- `SuperIDM_Extension_v2.7.5.zip` — Chromium Extension Package'
         ),
         'draft': False,
         'prerelease': False
@@ -177,15 +175,15 @@ if __name__ == '__main__':
         rel = create_release()
         
         base_dir = r'C:\Users\Haider Nasrat\Desktop\Desktop-SuperIDM'
-        nsis_exe = os.path.join(base_dir, r'src-tauri\target\release\bundle\nsis\SuperIDM_2.7.2_x64-setup.exe')
+        nsis_exe = os.path.join(base_dir, r'src-tauri\target\release\bundle\nsis\SuperIDM_2.7.5_x64-setup.exe')
         portable_exe = os.path.join(base_dir, r'src-tauri\target\release\super-idm.exe')
-        msix_file = os.path.join(base_dir, 'SuperIDM_2.7.2_x64.msix')
-        ext_zip = os.path.join(base_dir, 'SuperIDM_Extension_v2.7.2.zip')
+        msix_file = os.path.join(base_dir, 'SuperIDM_2.7.5_x64.msix')
+        ext_zip = os.path.join(base_dir, 'SuperIDM_Extension_v2.7.5.zip')
         
         # Also copy to desktop for quick user access
         desktop_setup = r'C:\Users\Haider Nasrat\Desktop\SuperIDM_Setup.exe'
         desktop_portable = r'C:\Users\Haider Nasrat\Desktop\SuperIDM.exe'
-        desktop_msix = r'C:\Users\Haider Nasrat\Desktop\SuperIDM_2.7.2_x64.msix'
+        desktop_msix = r'C:\Users\Haider Nasrat\Desktop\SuperIDM_2.7.5_x64.msix'
         
         if os.path.exists(nsis_exe):
             shutil.copy2(nsis_exe, desktop_setup)
@@ -197,15 +195,15 @@ if __name__ == '__main__':
         setup_url = upload_asset(rel, desktop_setup, 'SuperIDM_Setup.exe')
         portable_url = upload_asset(rel, desktop_portable, 'SuperIDM.exe')
         if os.path.exists(msix_file):
-            upload_asset(rel, msix_file, 'SuperIDM_2.7.2_x64.msix')
+            upload_asset(rel, msix_file, 'SuperIDM_2.7.5_x64.msix')
         if os.path.exists(ext_zip):
-            upload_asset(rel, ext_zip, 'SuperIDM_Extension_v2.7.2.zip')
-        chrome_store_zip = r'C:\Users\Haider Nasrat\Desktop\SuperIDM_Chrome_Store_v2.7.2.zip'
+            upload_asset(rel, ext_zip, 'SuperIDM_Extension_v2.7.5.zip')
+        chrome_store_zip = r'C:\Users\Haider Nasrat\Desktop\SuperIDM_Chrome_Store_v2.7.5.zip'
         if os.path.exists(chrome_store_zip):
-            upload_asset(rel, chrome_store_zip, 'SuperIDM_Chrome_Store_v2.7.2.zip')
-        firefox_zip = os.path.join(base_dir, 'SuperIDM_Firefox_v2.7.2.zip')
+            upload_asset(rel, chrome_store_zip, 'SuperIDM_Chrome_Store_v2.7.5.zip')
+        firefox_zip = os.path.join(base_dir, 'SuperIDM_Firefox_v2.7.5.zip')
         if os.path.exists(firefox_zip):
-            upload_asset(rel, firefox_zip, 'SuperIDM_Firefox_v2.7.2.zip')
+            upload_asset(rel, firefox_zip, 'SuperIDM_Firefox_v2.7.5.zip')
         
         enable_pages()
         

@@ -226,6 +226,28 @@ pub struct StreamSegment {
     pub completed: bool,
 }
 
+/// An entry in a media playlist (e.g., YouTube playlist, album, course).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaylistItem {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub duration_secs: Option<u64>,
+    pub duration_string: Option<String>,
+    pub thumbnail: Option<String>,
+    pub uploader: Option<String>,
+}
+
+/// Result of extracting a media playlist or channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaylistExtractionInfo {
+    pub id: String,
+    pub title: String,
+    pub uploader: Option<String>,
+    pub count: usize,
+    pub entries: Vec<PlaylistItem>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

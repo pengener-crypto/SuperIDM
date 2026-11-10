@@ -22,8 +22,8 @@ upload_installer.py
 SuperIDM_Setup.exe
 SuperIDM.exe
 *.msix
-msix_build/yt-dlp.exe
-msix_build/super-idm.exe
+*.zip
+msix_build/*.exe
 
 # Operating System Files
 Thumbs.db
