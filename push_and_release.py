@@ -186,14 +186,23 @@ if __name__ == '__main__':
         desktop_msix = r'C:\Users\Haider Nasrat\Desktop\SuperIDM_2.7.5_x64.msix'
         
         if os.path.exists(nsis_exe):
-            shutil.copy2(nsis_exe, desktop_setup)
+            try:
+                shutil.copy2(nsis_exe, desktop_setup)
+            except PermissionError:
+                print("Notice: Desktop SuperIDM_Setup.exe is in use; uploading from build target.")
         if os.path.exists(portable_exe):
-            shutil.copy2(portable_exe, desktop_portable)
+            try:
+                shutil.copy2(portable_exe, desktop_portable)
+            except PermissionError:
+                print("Notice: Desktop SuperIDM.exe is currently running; uploading from build target.")
         if os.path.exists(msix_file):
-            shutil.copy2(msix_file, desktop_msix)
+            try:
+                shutil.copy2(msix_file, desktop_msix)
+            except PermissionError:
+                pass
         
-        setup_url = upload_asset(rel, desktop_setup, 'SuperIDM_Setup.exe')
-        portable_url = upload_asset(rel, desktop_portable, 'SuperIDM.exe')
+        setup_url = upload_asset(rel, nsis_exe if os.path.exists(nsis_exe) else desktop_setup, 'SuperIDM_Setup.exe')
+        portable_url = upload_asset(rel, portable_exe if os.path.exists(portable_exe) else desktop_portable, 'SuperIDM.exe')
         if os.path.exists(msix_file):
             upload_asset(rel, msix_file, 'SuperIDM_2.7.5_x64.msix')
         if os.path.exists(ext_zip):
