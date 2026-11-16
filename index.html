@@ -3143,7 +3143,7 @@ function updateDLRowDOM(d) {
 
   const segEl = document.getElementById(`dlseg-${d.id}`);
   if (segEl) {
-    const connN = d.connections || 16;
+    const connN = Math.max(8, d.connections || 16);
     const segHtml = Array(connN).fill(0).map((_, i) => {
       const sp = (i + 1) / connN * 100;
       if (pct >= sp) return '<div class="seg done"></div>';
@@ -3207,7 +3207,7 @@ function renderDLs() {
 
   el.innerHTML = list.map(d => {
     const pct = Math.min(100, Math.max(0, Math.round((d.progress || (d.total_bytes > 0 ? d.downloaded_bytes / d.total_bytes : 0)) * 100)));
-    const connN = d.connections || 16;
+    const connN = Math.max(8, d.connections || 16);
     const segs = Array(connN).fill(0).map((_, i) => {
       const sp = (i + 1) / connN * 100;
       if (pct >= sp) return 'done';

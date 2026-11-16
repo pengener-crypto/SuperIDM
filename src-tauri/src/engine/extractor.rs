@@ -1061,6 +1061,8 @@ impl MediaExtractor {
             .arg("--no-playlist")
             .arg("--newline")
             .arg("--force-overwrites")
+            // Parallel fragment downloading for DASH/HLS/fragmented streams
+            .arg("--concurrent-fragments").arg("8")
             // Never hang forever on a dead socket; retry transient network errors instead.
             .arg("--socket-timeout").arg("30")
             .arg("--retries").arg("10")
