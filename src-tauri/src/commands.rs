@@ -418,8 +418,18 @@ pub async fn start_download(
         1
     };
 
-    let chunk_span = if total_bytes > 0 { total_bytes } else { u64::MAX / 2 };
-    let chunks = chunker::calculate_chunks(chunk_span, effective_conns);
+    let chunks = if total_bytes > 0 {
+        chunker::calculate_chunks(total_bytes, effective_conns)
+    } else {
+        vec![ChunkInfo {
+            index: 0,
+            start_byte: 0,
+            end_byte: 0,
+            current_byte: 0,
+            completed: false,
+            retry_count: 0,
+        }]
+    };
 
     // Pre-allocate file only when server reported an exact Content-Length
     if total_bytes > 0 {

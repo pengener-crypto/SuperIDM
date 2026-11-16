@@ -113,7 +113,7 @@ pub async fn probe_url(client: &Client, raw_url: &str) -> Result<ProbeResult, St
         .header("User-Agent", DEFAULT_USER_AGENT)
         .send();
 
-    if let Ok(Ok(resp)) = tokio::time::timeout(Duration::from_secs(5), head_fut).await {
+    if let Ok(Ok(resp)) = tokio::time::timeout(Duration::from_secs(12), head_fut).await {
         let final_url = resp.url().to_string();
         if resp.status().is_success() || resp.status().as_u16() == 405 {
             let headers = resp.headers();
@@ -161,7 +161,7 @@ pub async fn probe_url(client: &Client, raw_url: &str) -> Result<ProbeResult, St
             .header("Range", "bytes=0-0")
             .send();
 
-        if let Ok(Ok(range_resp)) = tokio::time::timeout(Duration::from_secs(6), get_fut).await {
+        if let Ok(Ok(range_resp)) = tokio::time::timeout(Duration::from_secs(12), get_fut).await {
             let final_url = range_resp.url().to_string();
             let headers = range_resp.headers();
             if range_resp.status().as_u16() == 206 {
@@ -278,7 +278,7 @@ pub async fn download_chunk_with_retry(
         let cur_limit = chunk_limit.load(Ordering::SeqCst);
         let target_end = if cur_limit > 0 { cur_limit } else { end_byte };
         // Chunk range is inclusive: done only once every byte up to target_end is written.
-        if current_byte > target_end {
+        if target_end > 0 && current_byte > target_end {
             let _ = event_tx
                 .send(WorkerEvent::ChunkDone { chunk_index })
                 .await;
@@ -310,7 +310,7 @@ pub async fn download_chunk_with_retry(
                 current_byte = outcome.next_offset;
                 let cur_limit = chunk_limit.load(Ordering::SeqCst);
                 let target_end = if cur_limit > 0 { cur_limit } else { end_byte };
-                if outcome.full_body_eof || current_byte > target_end {
+                if outcome.full_body_eof || (target_end > 0 && current_byte > target_end) {
                     let _ = event_tx
                         .send(WorkerEvent::ChunkDone { chunk_index })
                         .await;

@@ -1030,12 +1030,15 @@ impl MediaExtractor {
         let format_arg_str = match format_id {
             Some(fid) if !fid.is_empty() && fid != "best" && fid != "auto" => {
                 if is_audio_only_req {
-                    "bestaudio[ext=m4a]/bestaudio/best".to_string()
+                    "bestaudio[ext=m4a][protocol^=http]/bestaudio[ext=m4a]/bestaudio/best".to_string()
                 } else if has_ffmpeg {
                     if fid.contains('+') {
                         fid.to_string()
                     } else {
-                        format!("{}+bestaudio[ext=m4a]/{}+bestaudio/best", fid, fid)
+                        format!(
+                            "{}+bestaudio[ext=m4a][protocol^=http]/{}+bestaudio[ext=m4a]/{}+bestaudio/best",
+                            fid, fid, fid
+                        )
                     }
                 } else {
                     SINGLE_STREAM_ONLY.to_string()
@@ -1043,7 +1046,7 @@ impl MediaExtractor {
             }
             _ => {
                 if has_ffmpeg {
-                    "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best".to_string()
+                    "bestvideo[ext=mp4][protocol^=http]+bestaudio[ext=m4a][protocol^=http]/bestvideo[protocol^=http]+bestaudio[protocol^=http]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best".to_string()
                 } else {
                     SINGLE_STREAM_ONLY.to_string()
                 }
@@ -1060,6 +1063,10 @@ impl MediaExtractor {
             .arg(&output_template)
             .arg("--no-playlist")
             .arg("--newline")
+            .arg("--no-quiet")
+            .arg("--no-simulate")
+            .arg("--print")
+            .arg("before_dl:SUPERIDM_SIZES:%(requested_formats.0.filesize,requested_formats.0.filesize_approx,filesize,filesize_approx)s:%(requested_formats.1.filesize,requested_formats.1.filesize_approx)s")
             .arg("--force-overwrites")
             // Parallel fragment downloading for DASH/HLS/fragmented streams
             .arg("--concurrent-fragments").arg("8")
@@ -1124,11 +1131,13 @@ impl MediaExtractor {
         }
 
         let mut is_audio_pass = false;
+        let mut in_format_test = false;
         let mut dest_count = 0usize;
         let mut final_path: Option<std::path::PathBuf> = None;
         let mut total_bytes = 0u64;
         let mut video_bytes = 0u64;
         let mut audio_bytes = 0u64;
+        let mut preknown_audio_bytes = 0u64;
         let mut max_progress = 0.0f64;
         let mut last_raw_percent = 0.0f64;
 
@@ -1139,6 +1148,35 @@ impl MediaExtractor {
             }
 
             let raw_line = line.trim();
+
+            // Pre-flight exact combined size printed by --print before_dl:SUPERIDM_SIZES:<v>:<a>
+            if let Some(rest) = raw_line.strip_prefix("SUPERIDM_SIZES:") {
+                let mut parts = rest.split(':');
+                let v_pre = parts.next().and_then(|s| s.trim().parse::<u64>().ok()).unwrap_or(0);
+                let a_pre = parts.next().and_then(|s| s.trim().parse::<u64>().ok()).unwrap_or(0);
+                if v_pre > 0 {
+                    video_bytes = v_pre;
+                }
+                if a_pre > 0 {
+                    audio_bytes = a_pre;
+                    preknown_audio_bytes = a_pre;
+                }
+                total_bytes = video_bytes + audio_bytes;
+                if total_bytes > 0 {
+                    let _ = progress_tx.send((0.0, 0.0, 0, total_bytes, 0.0, false, None)).await;
+                }
+                continue;
+            }
+
+            // Ignore yt-dlp's internal 1-fragment HLS format test ("[info] Testing format ...")
+            if raw_line.contains("[info] Testing format") {
+                in_format_test = true;
+                continue;
+            }
+            if raw_line.contains("Downloading 1 format(s):") {
+                in_format_test = false;
+                continue;
+            }
 
             // Detect FFmpeg format merger or audio extraction destination
             if raw_line.contains("[Merger]") || raw_line.contains("Merging formats into") {
@@ -1178,6 +1216,16 @@ impl MediaExtractor {
             if let Some((_, dest_raw)) = raw_line.split_once("Destination:") {
                 let dest = dest_raw.trim();
                 let p = std::path::PathBuf::from(dest);
+                // Skip yt-dlp's temporary format-test files (e.g. tmp0lusll5c.tmp)
+                let is_probe_tmp = p.extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.eq_ignore_ascii_case("tmp"))
+                    .unwrap_or(false);
+                if is_probe_tmp {
+                    in_format_test = true;
+                    continue;
+                }
+                in_format_test = false;
                 dest_count += 1;
                 if dest_count >= 2 {
                     is_audio_pass = true;
@@ -1214,7 +1262,7 @@ impl MediaExtractor {
                     fname.to_string()
                 });
                 if dest_count == 1 && clean_display_name.is_some() {
-                    let _ = progress_tx.send((max_progress.max(0.01), 0.0, 0, total_bytes, 0.0, false, clean_display_name)).await;
+                    let _ = progress_tx.send((max_progress, 0.0, 0, total_bytes, 0.0, false, clean_display_name)).await;
                 }
 
                 if !is_temp_part && final_path.is_none() {
@@ -1223,11 +1271,11 @@ impl MediaExtractor {
                 continue;
             }
 
-            let sub_lines: Vec<&str> = if raw_line.contains("[download]") {
-                raw_line.split("[download]").collect()
-            } else {
-                vec![raw_line]
-            };
+            if in_format_test || !raw_line.contains("[download]") {
+                continue;
+            }
+
+            let sub_lines: Vec<&str> = raw_line.split("[download]").collect();
 
             for sub in sub_lines {
                 let l = sub.trim();
@@ -1235,7 +1283,7 @@ impl MediaExtractor {
                     continue;
                 }
 
-                if l.contains('%') {
+                if l.contains('%') && l.contains("of") {
                     let tokens: Vec<&str> = l.split_whitespace().collect();
                     let mut raw_percent = 0.0f64;
                     let mut speed = 0.0f64;
@@ -1247,6 +1295,7 @@ impl MediaExtractor {
                             raw_percent = p_str.parse::<f64>().unwrap_or(0.0) / 100.0;
                         }
                         if *tok == "of" && i + 1 < tokens.len() {
+                            let is_approx = tokens[i + 1] == "~" || tokens[i + 1].starts_with('~');
                             let raw_size_tok = if tokens[i + 1] == "~" && i + 2 < tokens.len() {
                                 tokens[i + 2]
                             } else {
@@ -1254,11 +1303,13 @@ impl MediaExtractor {
                             };
                             if let Some(tb) = Self::parse_bytes_str(raw_size_tok) {
                                 if is_audio_pass {
-                                    audio_bytes = tb;
-                                } else {
+                                    if audio_bytes == 0 || !is_approx {
+                                        audio_bytes = tb;
+                                    }
+                                } else if video_bytes == 0 || !is_approx {
                                     video_bytes = tb;
                                 }
-                                total_bytes = video_bytes + audio_bytes;
+                                total_bytes = video_bytes + audio_bytes.max(preknown_audio_bytes);
                             }
                         }
                         if *tok == "at" && i + 1 < tokens.len() {
@@ -1275,12 +1326,20 @@ impl MediaExtractor {
                     }
                     last_raw_percent = raw_percent;
 
-                    let mut normalized_progress = if is_audio_only_req {
-                        raw_percent.min(1.0) * 0.95 // Single audio pass 0% -> 95%, then ExtractAudio -> 98%
-                    } else if is_audio_pass {
-                        0.88 + (raw_percent.min(1.0) * 0.10) // 88% -> 98%
+                    let current_dld = if is_audio_pass {
+                        video_bytes + (audio_bytes.max(preknown_audio_bytes) as f64 * raw_percent.min(1.0)) as u64
                     } else {
-                        raw_percent.min(1.0) * 0.88 // 0% -> 88% (video is ~88-90% of total bytes)
+                        (video_bytes as f64 * raw_percent.min(1.0)) as u64
+                    };
+
+                    let mut normalized_progress = if total_bytes > 0 && (is_audio_only_req || audio_bytes.max(preknown_audio_bytes) > 0) {
+                        ((current_dld as f64) / (total_bytes as f64)).min(1.0) * 0.98
+                    } else if is_audio_only_req {
+                        raw_percent.min(1.0) * 0.95
+                    } else if is_audio_pass {
+                        0.88 + (raw_percent.min(1.0) * 0.10)
+                    } else {
+                        raw_percent.min(1.0) * 0.88
                     };
 
                     // Guarantee progress never retreats backwards
@@ -1289,12 +1348,6 @@ impl MediaExtractor {
                     } else {
                         max_progress = normalized_progress;
                     }
-
-                    let current_dld = if is_audio_pass {
-                        video_bytes + (audio_bytes as f64 * raw_percent.min(1.0)) as u64
-                    } else {
-                        (video_bytes as f64 * raw_percent.min(1.0)) as u64
-                    };
 
                     let _ = progress_tx.send((normalized_progress, speed, current_dld, total_bytes, eta, false, None)).await;
                 }
