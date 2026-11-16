@@ -69,6 +69,9 @@ pub struct DownloadMetadata {
     pub priority: u8,
     /// Category tag (e.g., "video", "music", "document").
     pub category: String,
+    /// Optional extractor format ID (e.g., "bestaudio", "137") preserved for resume.
+    #[serde(default)]
+    pub format_id: Option<String>,
     /// Per-chunk state for segmented resume.
     pub chunks: Vec<ChunkInfo>,
     /// Timestamp of task creation (Unix millis).

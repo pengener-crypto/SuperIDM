@@ -982,13 +982,31 @@ impl MediaExtractor {
             .map_err(|e| if e == first_err { e } else { format!("{} (after engine update; first attempt: {})", e, first_err) })
     }
 
+    async fn kill_process_tree(child: &mut tokio::process::Child) {
+        if let Some(pid) = child.id() {
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                let mut tk = Command::new("taskkill");
+                tk.args(["/F", "/T", "/PID", &pid.to_string()]);
+                tk.creation_flags(0x08000000);
+                let _ = tokio::task::spawn_blocking(move || {
+                    let _ = tk.output();
+                })
+                .await;
+            }
+        }
+        let _ = child.kill().await;
+        let _ = child.wait().await;
+    }
+
     async fn run_ytdlp_download(
         client: &Client,
         url: &str,
         dest_dir: &std::path::Path,
         format_id: Option<&str>,
         progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>,
-        cancel_rx: tokio::sync::watch::Receiver<bool>,
+        mut cancel_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<std::path::PathBuf, String> {
         use tokio::io::AsyncBufReadExt;
 
@@ -1067,7 +1085,7 @@ impl MediaExtractor {
             .arg("--no-simulate")
             .arg("--print")
             .arg("before_dl:SUPERIDM_SIZES:%(requested_formats.0.filesize,requested_formats.0.filesize_approx,filesize,filesize_approx)s:%(requested_formats.1.filesize,requested_formats.1.filesize_approx)s")
-            .arg("--force-overwrites")
+            .arg("--continue")
             // Parallel fragment downloading for DASH/HLS/fragmented streams
             .arg("--concurrent-fragments").arg("8")
             // Never hang forever on a dead socket; retry transient network errors instead.
@@ -1141,11 +1159,27 @@ impl MediaExtractor {
         let mut max_progress = 0.0f64;
         let mut last_raw_percent = 0.0f64;
 
-        while let Ok(Some(line)) = reader.next_line().await {
+        loop {
             if *cancel_rx.borrow() {
-                let _ = child.kill().await;
+                Self::kill_process_tree(&mut child).await;
                 return Err("Download cancelled".into());
             }
+
+            let line = tokio::select! {
+                _ = cancel_rx.changed() => {
+                    if *cancel_rx.borrow() {
+                        Self::kill_process_tree(&mut child).await;
+                        return Err("Download cancelled".into());
+                    }
+                    continue;
+                }
+                next = reader.next_line() => {
+                    match next {
+                        Ok(Some(l)) => l,
+                        _ => break,
+                    }
+                }
+            };
 
             let raw_line = line.trim();
 
@@ -1354,7 +1388,19 @@ impl MediaExtractor {
             }
         }
 
-        let status = child.wait().await.map_err(|e| format!("Child wait failed: {}", e))?;
+        let status = tokio::select! {
+            _ = cancel_rx.changed() => {
+                if *cancel_rx.borrow() {
+                    Self::kill_process_tree(&mut child).await;
+                    return Err("Download cancelled".into());
+                }
+                child.wait().await.map_err(|e| format!("Child wait failed: {}", e))?
+            }
+            res = child.wait() => res.map_err(|e| format!("Child wait failed: {}", e))?,
+        };
+        if *cancel_rx.borrow() {
+            return Err("Download cancelled".into());
+        }
         if status.success() {
             // Auto-recovery: If split .f*.mp4 and .f*.m4a files exist, merge them directly with FFmpeg
             if let Some(merged_file) = Self::auto_merge_unmerged_parts(client, dest_dir).await {

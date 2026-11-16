@@ -1250,6 +1250,41 @@ html[dir="rtl"] .flex.items-baseline {
     </div>
   </div>
 </div>
+
+<!-- ══ DELETE CONFIRMATION MODAL ══ -->
+<div id="deleteConfirmModal" class="fixed inset-0 z-[105] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.78);backdrop-filter:blur(8px)" onclick="if(event.target===this) closeDeleteConfirmModal()">
+  <div class="w-full max-w-md bg-surface-container border border-outline-variant rounded-lg shadow-2xl overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-outline-variant/60 bg-surface-container-low">
+      <div class="flex items-center gap-2.5">
+        <span class="material-symbols-outlined text-[20px] text-red-400">delete_forever</span>
+        <h3 id="delConfirmTitle" class="text-sm font-semibold text-on-surface">حذف التنزيل والملف</h3>
+      </div>
+      <button type="button" onclick="closeDeleteConfirmModal()" class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors">
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
+    </div>
+    <div class="p-4 space-y-3">
+      <p id="delConfirmSubtitle" class="text-xs text-on-surface-variant leading-relaxed">هل تريد حذف هذه المهمة نهائياً مع الملف المرتبط بها على القرص؟</p>
+      <div class="p-3 rounded bg-surface-container-lowest border border-outline-variant/60 space-y-1.5">
+        <div id="delConfirmFilename" class="text-xs font-medium text-on-surface break-all"></div>
+        <div id="delConfirmPath" class="text-[11px] font-mono text-on-surface-variant break-all"></div>
+      </div>
+      <label class="flex items-start gap-2.5 p-2.5 rounded bg-red-500/10 border border-red-500/25 cursor-pointer select-none">
+        <input id="delConfirmDiskChk" type="checkbox" checked class="mt-0.5 accent-red-500" onchange="updateDeleteModalBtnLabel()">
+        <span id="delConfirmDiskLbl" class="text-xs text-red-200 leading-relaxed">حذف الملف المرتبط من القرص أيضاً (الفيديو، البرنامج، أو الملفات المؤقتة)</span>
+      </label>
+    </div>
+    <div class="flex items-center justify-end gap-2 px-4 py-3 border-t border-outline-variant/60 bg-surface-container-low">
+      <button type="button" id="delConfirmCancelBtn" onclick="closeDeleteConfirmModal()" class="px-3 py-1.5 rounded text-xs font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest border border-outline-variant/60 transition-colors">إلغاء</button>
+      <button type="button" id="delConfirmListOnlyBtn" onclick="confirmDeleteDL(false)" class="px-3 py-1.5 rounded text-xs font-medium text-on-surface bg-surface-container-highest hover:bg-surface-container border border-outline-variant transition-colors">إزالة من القائمة فقط</button>
+      <button type="button" id="delConfirmPrimaryBtn" onclick="confirmDeleteDL()" class="px-3.5 py-1.5 rounded text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow transition-colors">حذف الملف والمهمة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ROW CONTEXT MENU ══ -->
+<div id="rowCtxMenu" class="fixed z-[115] hidden min-w-[220px] bg-surface-container border border-outline-variant rounded-md shadow-2xl py-1.5 text-xs select-none" onclick="event.stopPropagation()"></div>
+
 <!-- ══ IDM CLASSIC FLOATING PROGRESS DIALOG ══ -->
 <div id="idmDownloadModal" class="fixed inset-0 z-[96] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.78);backdrop-filter:blur(8px)">
   <div class="glass-panel w-full max-w-xl rounded-xl shadow-2xl flex flex-col modal-enter overflow-hidden border border-outline-variant/80">
@@ -1432,7 +1467,15 @@ function bindTauriEvents() {
         }
         if (dl) {
           const st = mapStatus(p.status);
+          if (dl._userPausedAt && (Date.now() - dl._userPausedAt) < 1500 && st === 'downloading') {
+            return;
+          }
           const isComp = st === 'complete';
+          if (p.destination) dl.destination = p.destination;
+          if (p.filename) {
+            dl.filename = p.filename;
+            dl.name = p.filename;
+          }
           if (p.total_bytes !== undefined && p.total_bytes > 0) {
             dl.total_bytes = p.total_bytes;
           }
@@ -1450,8 +1493,10 @@ function bindTauriEvents() {
           if (isComp) {
             dl.status = 'complete';
             dl.progress = 1.0;
-            dl.downloaded_bytes = dl.total_bytes;
+            if (dl.total_bytes > 0) dl.downloaded_bytes = dl.total_bytes;
+            else if (dl.downloaded_bytes > 0) dl.total_bytes = dl.downloaded_bytes;
             dl.speed = 0;
+            persistLocalDls();
             addLog('success', `[COMPLETED] ${dl.filename || dl.name} — ${fmtSz(dl.total_bytes)}`);
             playCompletionChime();
             if (document.getElementById('showToastOpt')?.checked) showCompT(dl);
@@ -1689,8 +1734,12 @@ async function syncFromBackend() {
             processQueue();
           }
         }
+        const prevFname = dl.filename;
+        const prevDest = dl.destination;
         dl.filename = fname;
         dl.name = fname;
+        if (t.destination) dl.destination = t.destination;
+        if (t.url) dl.url = t.url;
         if (t.num_connections) dl.connections = t.num_connections;
         if (t.supports_range !== undefined) dl.supports_range = t.supports_range;
         if (t.total_bytes !== undefined && t.total_bytes > 0) {
@@ -1698,6 +1747,9 @@ async function syncFromBackend() {
         }
         if (t.downloaded_bytes !== undefined) {
           dl.downloaded_bytes = Math.max(dl.downloaded_bytes || 0, t.downloaded_bytes);
+        }
+        if (dl.filename !== prevFname || dl.destination !== prevDest) {
+          persistLocalDls();
         }
         dl.speed = t.speed !== undefined ? t.speed : dl.speed;
         dl.eta_secs = t.eta_secs || 0;
@@ -2533,10 +2585,136 @@ async function queueDL() {
   setView('queued');
 }
 
-async function pauseDL(id) {
+let pendingDeleteTaskId = null;
+
+function updateDeleteModalBtnLabel() {
+  const isAr = (curLang === 'ar');
+  const chk = document.getElementById('delConfirmDiskChk');
+  const btn = document.getElementById('delConfirmPrimaryBtn');
+  if (!chk || !btn) return;
+  if (chk.checked) {
+    btn.textContent = isAr ? 'حذف الملف والمهمة' : 'Delete File & Task';
+    btn.className = 'px-3.5 py-1.5 rounded text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow transition-colors';
+  } else {
+    btn.textContent = isAr ? 'إزالة من القائمة فقط' : 'Remove from List Only';
+    btn.className = 'px-3.5 py-1.5 rounded text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow transition-colors';
+  }
+}
+
+function openDeleteConfirmModal(dl) {
+  const isAr = (curLang === 'ar');
+  pendingDeleteTaskId = String(dl.id);
+  const modal = document.getElementById('deleteConfirmModal');
+  if (!modal) {
+    performDeleteDL(dl.id, true);
+    return;
+  }
+  const titleEl = document.getElementById('delConfirmTitle');
+  const subEl = document.getElementById('delConfirmSubtitle');
+  const nameEl = document.getElementById('delConfirmFilename');
+  const pathEl = document.getElementById('delConfirmPath');
+  const chk = document.getElementById('delConfirmDiskChk');
+  const chkLbl = document.getElementById('delConfirmDiskLbl');
+  const cancelBtn = document.getElementById('delConfirmCancelBtn');
+  const listOnlyBtn = document.getElementById('delConfirmListOnlyBtn');
+
+  if (titleEl) titleEl.textContent = isAr ? 'حذف التنزيل والملف' : 'Delete Download & File';
+  if (subEl) subEl.textContent = isAr
+    ? 'هل تريد حذف هذه المهمة نهائياً مع الملف المرتبط بها على القرص؟'
+    : 'Permanently delete this download task and its associated file from disk?';
+  if (nameEl) nameEl.textContent = dl.filename || dl.name || 'Download';
+  if (pathEl) pathEl.textContent = dl.destination || savePth || 'Downloads';
+  if (chk) chk.checked = true;
+  if (chkLbl) chkLbl.textContent = isAr
+    ? 'حذف الملف المرتبط من القرص أيضاً (الفيديو، البرنامج، أو الملفات المؤقتة)'
+    : 'Also delete the associated file from disk (video, program, archive, or temp .part files)';
+  if (cancelBtn) cancelBtn.textContent = isAr ? 'إلغاء' : 'Cancel';
+  if (listOnlyBtn) listOnlyBtn.textContent = isAr ? 'إزالة من القائمة فقط' : 'Keep File';
+  updateDeleteModalBtnLabel();
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => document.getElementById('delConfirmPrimaryBtn')?.focus(), 40);
+}
+
+function closeDeleteConfirmModal() {
+  pendingDeleteTaskId = null;
+  const modal = document.getElementById('deleteConfirmModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+async function confirmDeleteDL(explicitDeleteFile) {
+  const id = pendingDeleteTaskId;
+  if (!id) {
+    closeDeleteConfirmModal();
+    return;
+  }
+  const chk = document.getElementById('delConfirmDiskChk');
+  const deleteFile = (typeof explicitDeleteFile === 'boolean') ? explicitDeleteFile : (chk ? chk.checked : true);
+  closeDeleteConfirmModal();
+  await performDeleteDL(id, deleteFile);
+}
+
+async function performDeleteDL(id, deleteFile = true) {
   const dl = dls.find(d => String(d.id) === String(id));
   if (!dl) return;
+  const isAr = (curLang === 'ar');
+  const label = dl.filename || dl.name || String(id);
+  const dest = dl.destination || null;
+  const fname = dl.filename || dl.name || null;
+
+  dl._userPausedAt = Date.now();
+  dls = dls.filter(d => String(d.id) !== String(id));
+  if (typeof currentIdmTaskId !== 'undefined' && String(currentIdmTaskId) === String(id)) {
+    if (typeof hideIdmModal === 'function') hideIdmModal();
+  }
+  renderDLs();
+  updBdg();
+  updStats();
+  persistLocalDls();
+
+  if (hasTauriIPC()) {
+    try {
+      const res = await tauriCall('cancel_download', {
+        taskId: String(id),
+        task_id: String(id),
+        destination: dest,
+        filename: fname,
+        deleteFile: Boolean(deleteFile),
+        delete_file: Boolean(deleteFile)
+      });
+      if (deleteFile && res && res.deleted_file) {
+        const deletedList = (res.deleted_paths || []).join(', ');
+        addLog('warn', `[DELETED FILE] ${label}${deletedList ? ' — ' + deletedList : ''}`);
+        showT('info', isAr ? 'تم حذف المهمة والملف من الجهاز' : 'Task & File Deleted', label);
+      } else if (deleteFile) {
+        addLog('warn', `[REMOVED TASK] ${label} (no disk file matched)`);
+        showT('info', isAr ? 'تمت إزالة المهمة (لم يُعثر على ملف بالقرص)' : 'Task Removed (No File Found on Disk)', label);
+      } else {
+        addLog('info', `[REMOVED FROM LIST] ${label} (disk file kept)`);
+        showT('info', isAr ? 'تمت إزالة المهمة من القائمة' : 'Removed from List (File Kept)', label);
+      }
+    } catch (e) {
+      console.warn('cancel_download failed:', e);
+      addLog('error', `[DELETE ERROR] ${label}: ${String(e)}`);
+      showT('error', isAr ? 'تعذر حذف الملف من القرص' : 'Failed to Delete File', String(e));
+    }
+  } else {
+    addLog('warn', `[CANCELLED] ${label}`);
+    showT('info', isAr ? 'تم حذف المهمة' : 'Download Removed', label);
+  }
+  setTimeout(processQueue, 100);
+}
+
+async function pauseDL(id, opts) {
+  const dl = dls.find(d => String(d.id) === String(id));
+  if (!dl) return;
+  const silent = opts && opts.silent;
+  const isAr = (curLang === 'ar');
   addLog('warn', `[PAUSE] ${dl.filename || dl.name}`);
+  dl._userPausedAt = Date.now();
   dl.status = 'paused';
   dl.speed = 0;
   renderDLs();
@@ -2547,64 +2725,209 @@ async function pauseDL(id) {
     try {
       await tauriCall('pause_download', { taskId: String(id), task_id: String(id) });
     } catch (e) {
-      console.warn(e);
+      console.warn('pause_download:', e);
+      addLog('warn', `[PAUSE IPC] ${String(e)}`);
     }
   }
-  showT('info', curLang === 'ar' ? 'تم الإيقاف المؤقت' : 'Download Paused', dl.filename || dl.name);
+  if (!silent) {
+    showT('info', isAr ? 'تم الإيقاف المؤقت' : 'Download Paused', dl.filename || dl.name);
+  }
   setTimeout(processQueue, 100);
 }
 
-async function resumeDL(id) {
+async function resumeDL(id, opts) {
   const dl = dls.find(d => String(d.id) === String(id));
-  if (!dl) return;
+  if (!dl) return false;
+  const silent = opts && opts.silent;
+  const isAr = (curLang === 'ar');
+  const prevStatus = dl.status;
+  delete dl._userPausedAt;
   addLog('info', `[RESUME] ${dl.filename || dl.name}`);
   dl.status = 'downloading';
   renderDLs();
   updBdg();
   updStats();
   persistLocalDls();
+
+  const startFreshFromLocal = async () => {
+    if (!dl.url) {
+      throw new Error(isAr ? 'رابط التنزيل غير متوفر للاستئناف' : 'Source URL unavailable for resume');
+    }
+    let destFolder = savePth || '';
+    if (dl.destination && dl.filename && dl.destination.endsWith(dl.filename)) {
+      destFolder = dl.destination.slice(0, dl.destination.length - dl.filename.length).replace(/[\\/]+$/, '') || savePth || '';
+    }
+    const newId = await tauriCall('start_download', {
+      request: {
+        url: dl.url,
+        destination: destFolder,
+        filename: dl.filename || dl.name || null,
+        format: dl.format || null,
+        numConnections: Number(dl.connections || gMaxConn || 8),
+        num_connections: Number(dl.connections || gMaxConn || 8),
+        priority: dl.priority || 'Normal',
+        category: dl.category || 'Auto-detect',
+        headers: dl.headers || null
+      }
+    });
+    if (newId) {
+      if (typeof currentIdmTaskId !== 'undefined' && String(currentIdmTaskId) === String(dl.id)) {
+        currentIdmTaskId = String(newId);
+      }
+      dl.id = String(newId);
+      persistLocalDls();
+      renderDLs();
+    }
+  };
+
   if (hasTauriIPC()) {
     try {
-      await tauriCall('resume_download', { taskId: String(id), task_id: String(id) });
+      if (String(id).startsWith('task-')) {
+        await startFreshFromLocal();
+      } else {
+        await tauriCall('resume_download', { taskId: String(id), task_id: String(id) });
+      }
     } catch (e) {
-      console.warn(e);
+      const msg = String(e || '');
+      if (msg.toLowerCase().includes('not found') && dl.url) {
+        try {
+          await startFreshFromLocal();
+        } catch (startErr) {
+          dl.status = prevStatus === 'downloading' ? 'error' : prevStatus;
+          dl.speed = 0;
+          persistLocalDls();
+          renderDLs();
+          updBdg();
+          updStats();
+          addLog('error', `[RESUME ERROR] ${dl.filename || dl.name}: ${String(startErr)}`);
+          if (!silent) showT('error', isAr ? 'تعذر الاستئناف' : 'Resume Failed', String(startErr));
+          return false;
+        }
+      } else {
+        dl.status = prevStatus === 'downloading' ? 'error' : prevStatus;
+        dl.speed = 0;
+        persistLocalDls();
+        renderDLs();
+        updBdg();
+        updStats();
+        addLog('error', `[RESUME ERROR] ${dl.filename || dl.name}: ${msg}`);
+        if (!silent) showT('error', isAr ? 'تعذر الاستئناف' : 'Resume Failed', msg);
+        return false;
+      }
     }
   }
-  showT('success', curLang === 'ar' ? 'تم استئناف التنزيل' : 'Download Resumed', dl.filename || dl.name);
+  if (!silent) {
+    showT('success', isAr ? 'تم استئناف التنزيل' : 'Download Resumed', dl.filename || dl.name);
+  }
+  return true;
 }
 
-async function cancelDL(id) {
+async function cancelDL(id, forceImmediate = false) {
   const dl = dls.find(d => String(d.id) === String(id));
   if (!dl) return;
-  addLog('warn', `[CANCELLED] ${dl.filename || dl.name}`);
-  dls = dls.filter(d => String(d.id) !== String(id));
-  renderDLs();
-  updBdg();
-  updStats();
-  persistLocalDls();
-  if (hasTauriIPC()) {
-    try {
-      await tauriCall('cancel_download', { taskId: String(id), task_id: String(id) });
-    } catch (e) {
-      console.warn(e);
-    }
+  if (!forceImmediate && (dl.status === 'complete' || (dl.downloaded_bytes || 0) > 0)) {
+    openDeleteConfirmModal(dl);
+    return;
   }
-  showT('info', curLang === 'ar' ? 'تم حذف المهمة' : 'Download Removed', dl.filename || dl.name);
-  setTimeout(processQueue, 100);
+  await performDeleteDL(id, true);
 }
 
 async function openFolder(id, path) {
   const dl = dls.find(d => String(d.id) === String(id));
   const p = path || dl?.destination || savePth || '';
+  const fname = dl?.filename || dl?.name || null;
+  const isAr = (curLang === 'ar');
   if (hasTauriIPC()) {
     try {
-      await tauriCall('open_download_folder', { path: p, folderPath: p });
+      await tauriCall('open_download_folder', {
+        path: p,
+        folderPath: p,
+        filename: fname
+      });
+      showT('info', isAr ? 'فتح المجلد' : 'Opening Explorer', fname || p || 'Downloads');
+      addLog('info', `[EXPLORER] Opened folder: ${p || fname}`);
     } catch (e) {
-      console.warn(e);
+      console.warn('open_download_folder failed:', e);
+      addLog('error', `[EXPLORER ERROR] ${String(e)}`);
+      showT('error', isAr ? 'تعذر فتح المجلد' : 'Cannot Open Folder', String(e));
     }
+  } else {
+    showT('info', isAr ? 'فتح المجلد' : 'Opening Explorer', p || 'Downloads');
   }
-  showT('info', curLang === 'ar' ? 'فتح المجلد' : 'Opening Explorer', p || 'Downloads');
-  addLog('info', `[EXPLORER] Opened folder: ${p}`);
+}
+
+async function copyTaskUrl(id) {
+  const dl = dls.find(d => String(d.id) === String(id));
+  if (!dl || !dl.url) return;
+  const isAr = (curLang === 'ar');
+  try {
+    await navigator.clipboard.writeText(dl.url);
+    showT('success', isAr ? 'تم نسخ الرابط' : 'URL Copied', dl.url.slice(0, 70));
+  } catch (e) {
+    showT('info', isAr ? 'الرابط' : 'Download URL', dl.url);
+  }
+}
+
+function hideRowCtxMenu() {
+  const m = document.getElementById('rowCtxMenu');
+  if (!m) return;
+  m.classList.add('hidden');
+}
+
+function showRowCtxMenu(ev, id) {
+  if (ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  const dl = dls.find(d => String(d.id) === String(id));
+  const menu = document.getElementById('rowCtxMenu');
+  if (!dl || !menu) return;
+
+  const isAr = (curLang === 'ar');
+  const safeId = String(dl.id).replace(/'/g, "\\'");
+  const isAct = dl.status === 'downloading';
+  const isComp = dl.status === 'complete';
+  const isPsd = dl.status === 'paused';
+  const isQ = dl.status === 'queued';
+  const isErr = dl.status === 'error' || dl.status === 'failed';
+
+  const item = (icon, label, cls, onclickStr) =>
+    `<button type="button" class="w-full flex items-center gap-2.5 px-3 py-1.5 text-left ${cls} hover:bg-surface-container-highest transition-colors" onclick="hideRowCtxMenu(); ${onclickStr}">
+       <span class="material-symbols-outlined text-[16px]">${icon}</span>
+       <span class="truncate">${label}</span>
+     </button>`;
+
+  const parts = [];
+  if (isAct) {
+    parts.push(item('pause', isAr ? 'إيقاف مؤقت' : 'Pause', 'text-amber-400', `pauseDL('${safeId}')`));
+  }
+  if (isPsd || isQ || isErr) {
+    parts.push(item('play_arrow', isAr ? (isErr ? 'إعادة المحاولة' : 'استئناف') : (isErr ? 'Retry' : 'Resume'), 'text-primary', `resumeDL('${safeId}')`));
+  }
+  if (isPsd || isErr) {
+    parts.push(item('link', isAr ? 'تحديث رابط التحميل' : 'Refresh Link', 'text-cyan-400', `openRefreshLinkModal('${safeId}')`));
+  }
+  if (isComp) {
+    parts.push(item('launch', isAr ? 'فتح الملف' : 'Open File', 'text-emerald-400', `openFileById('${safeId}')`));
+  }
+  parts.push(item('folder_open', isAr ? 'فتح المجلد في Explorer' : 'Open Folder', 'text-on-surface', `openFolder('${safeId}')`));
+  if (dl.url) {
+    parts.push(item('content_copy', isAr ? 'نسخ رابط التحميل' : 'Copy Download URL', 'text-on-surface-variant', `copyTaskUrl('${safeId}')`));
+  }
+  parts.push(`<div class="my-1 border-t border-outline-variant/50"></div>`);
+  parts.push(item('remove_circle_outline', isAr ? 'إزالة من القائمة فقط' : 'Remove from List Only', 'text-on-surface-variant', `performDeleteDL('${safeId}', false)`));
+  parts.push(item('delete_forever', isAr ? 'حذف الملف والمهمة' : 'Delete File & Task', 'text-red-400', `performDeleteDL('${safeId}', true)`));
+
+  menu.innerHTML = parts.join('');
+  menu.classList.remove('hidden');
+
+  const pad = 12;
+  const mw = 230;
+  const mh = Math.min(340, parts.length * 34 + 16);
+  const x = Math.min((ev?.clientX || 120), window.innerWidth - mw - pad);
+  const y = Math.min((ev?.clientY || 120), window.innerHeight - mh - pad);
+  menu.style.left = Math.max(pad, x) + 'px';
+  menu.style.top = Math.max(pad, y) + 'px';
 }
 
 let curRefTaskId = null;
@@ -2956,22 +3279,35 @@ async function openIdmFile() {
 async function openFileById(id) {
   const dl = dls.find(d => String(d.id) === String(id));
   if (!dl) return;
-  await openFile(dl.destination, dl.filename || dl.name);
+  await openFile(dl.destination || savePth || '', dl.filename || dl.name);
 }
 window.openFileById = openFileById;
 
 async function openFile(destination, filename) {
   const p = destination || '';
+  const isAr = (curLang === 'ar');
   if (hasTauriIPC()) {
     try {
-      await tauriCall('open_file', { path: p, filePath: p });
-      const isAr = (curLang === 'ar');
+      await tauriCall('open_file', {
+        path: p,
+        filePath: p,
+        filename: filename || null
+      });
       showT('success', isAr ? 'فتح الملف' : 'Opening File', filename || p);
-      addLog('success', `[OPEN FILE] Launched: ${p}`);
+      addLog('success', `[OPEN FILE] Launched: ${p || filename}`);
       return;
     } catch (e) {
-      console.warn('open_file failed, falling back to folder:', e);
-      await tauriCall('open_download_folder', { path: p, folderPath: p });
+      const msg = String(e || '');
+      console.warn('open_file failed:', msg);
+      addLog('error', `[OPEN FILE ERROR] ${msg}`);
+      const notFound = msg.toLowerCase().includes('not found');
+      showT(
+        'error',
+        notFound
+          ? (isAr ? 'الملف غير موجود على القرص' : 'File Not Found on Disk')
+          : (isAr ? 'تعذر فتح الملف' : 'Cannot Open File'),
+        filename || p || msg
+      );
     }
   } else {
     showT('info', 'File Path', p || filename);
@@ -2988,53 +3324,58 @@ function handleRowDblClick(id) {
   }
 }
 
-function pauseAll() {
+async function pauseAll() {
   const isAr = curLang === 'ar';
-  dls.forEach(d => {
-    if (d.status === 'downloading') {
-      d.status = 'paused';
-      d.speed = 0;
-      if (hasTauriIPC()) tauriCall('pause_download', { taskId: String(d.id), task_id: String(d.id) }).catch(e => console.warn(e));
-    }
-  });
-  showT('info', isAr ? 'إيقاف جميع التنزيلات' : 'All Downloads Paused', isAr ? 'تم إيقاف جميع المهام النشطة مؤقتاً' : 'Paused all active tasks');
-  addLog('warn', '[PAUSE ALL] All active downloads paused');
-  renderDLs();
-  updBdg();
-  updStats();
+  const targets = dls.filter(d => d.status === 'downloading');
+  if (targets.length === 0) {
+    showT('info', isAr ? 'إيقاف جميع التنزيلات' : 'Pause All', isAr ? 'لا توجد تنزيلات نشطة حالياً' : 'No active downloads to pause');
+    return;
+  }
+  await Promise.all(targets.map(d => pauseDL(d.id, { silent: true })));
+  showT('info', isAr ? 'إيقاف جميع التنزيلات' : 'All Downloads Paused', isAr ? `تم إيقاف ${targets.length} مهمة مؤقتاً` : `Paused ${targets.length} active task(s)`);
+  addLog('warn', `[PAUSE ALL] Paused ${targets.length} active downloads`);
 }
 
-function resumeAll() {
+async function resumeAll() {
   const isAr = curLang === 'ar';
-  dls.forEach(d => {
-    if (d.status === 'paused' || d.status === 'queued') {
-      d.status = 'downloading';
-      d.speed = 0;
-      if (hasTauriIPC()) tauriCall('resume_download', { taskId: String(d.id), task_id: String(d.id) }).catch(e => console.warn(e));
-    }
-  });
-  showT('success', isAr ? 'استئناف جميع التنزيلات' : 'All Downloads Resumed', isAr ? 'تم استئناف جميع المهام المتوقفة' : 'Resumed all paused tasks');
-  addLog('info', '[RESUME ALL] All paused downloads resumed');
-  renderDLs();
-  updBdg();
-  updStats();
+  const targets = dls.filter(d => d.status === 'paused' || d.status === 'queued' || d.status === 'error' || d.status === 'failed');
+  if (targets.length === 0) {
+    showT('info', isAr ? 'استئناف جميع التنزيلات' : 'Resume All', isAr ? 'لا توجد مهام متوقفة للاستئناف' : 'No paused or failed tasks to resume');
+    return;
+  }
+  let okCount = 0;
+  for (const d of targets) {
+    const ok = await resumeDL(d.id, { silent: true });
+    if (ok) okCount++;
+  }
+  showT(
+    okCount > 0 ? 'success' : 'error',
+    isAr ? 'استئناف جميع التنزيلات' : 'Resume All',
+    isAr ? `تم استئناف ${okCount} من أصل ${targets.length} مهمة` : `Resumed ${okCount} of ${targets.length} task(s)`
+  );
+  addLog('info', `[RESUME ALL] Resumed ${okCount}/${targets.length} tasks`);
 }
 
 function clearDone() {
   const isAr = curLang === 'ar';
   const prevLen = dls.length;
-  const toRemove = dls.filter(d => d.status === 'complete' || d.status === 'cancelled' || d.status === 'error');
-  dls = dls.filter(d => d.status !== 'complete' && d.status !== 'cancelled' && d.status !== 'error');
+  const toRemove = dls.filter(d => d.status === 'complete' || d.status === 'cancelled' || d.status === 'error' || d.status === 'failed');
+  dls = dls.filter(d => d.status !== 'complete' && d.status !== 'cancelled' && d.status !== 'error' && d.status !== 'failed');
   const removed = prevLen - dls.length;
 
   if (hasTauriIPC() && toRemove.length > 0) {
     toRemove.forEach(d => {
-      tauriCall('cancel_download', { taskId: String(d.id), task_id: String(d.id) }).catch(() => {});
+      tauriCall('cancel_download', {
+        taskId: String(d.id),
+        task_id: String(d.id),
+        deleteFile: false,
+        delete_file: false
+      }).catch(() => {});
     });
   }
 
-  showT('info', isAr ? 'مسح المكتملة' : 'Cleared Completed', isAr ? `تمت إزالة ${removed} مهمة مكتملة` : `Removed ${removed} completed task(s)`);
-  addLog('info', `[CLEAR] Cleared ${removed} finished tasks`);
+  showT('info', isAr ? 'مسح المكتملة' : 'Cleared Completed', isAr ? `تمت إزالة ${removed} مهمة من القائمة (مع بقاء الملفات بالقرص)` : `Removed ${removed} task(s) from list (files kept on disk)`);
+  addLog('info', `[CLEAR] Cleared ${removed} finished tasks (files preserved)`);
   renderDLs();
   updBdg();
   updStats();
@@ -3176,7 +3517,7 @@ function renderDLs() {
   const sort = document.getElementById('sortSel')?.value || 'date';
 
   let list = dls.filter(d => {
-    if (curView === 'downloading' && (d.status !== 'downloading' && d.status !== 'queued' && d.status !== 'error' && d.status !== 'failed')) return false;
+    if (curView === 'downloading' && (d.status !== 'downloading' && d.status !== 'queued' && d.status !== 'paused' && d.status !== 'error' && d.status !== 'failed')) return false;
     if (curView === 'completed' && d.status !== 'complete') return false;
     if (curView === 'queued' && d.status !== 'queued') return false;
     if (catFilter && d.category !== catFilter) return false;
@@ -3250,7 +3591,7 @@ function renderDLs() {
       : `${d.connections || 16} ${isAr ? 'اتصال' : 'conns'}`;
 
     return `
-    <div id="dlrow-${safeId}" data-status="${d.status}" class="dl-row bg-surface-container border border-outline-variant/60 rounded overflow-hidden" ondblclick="handleRowDblClick('${safeId}')">
+    <div id="dlrow-${safeId}" data-status="${d.status}" class="dl-row bg-surface-container border border-outline-variant/60 rounded overflow-hidden" ondblclick="handleRowDblClick('${safeId}')" oncontextmenu="showRowCtxMenu(event, '${safeId}')">
       <div class="flex items-center gap-4 px-4 py-3 cursor-pointer select-none" onclick="showIdmModal('${safeId}')" title="${isAr ? 'انقر لعرض نافذة التقدم المباشرة (مثل IDM)' : 'Click to view IDM progress dialog'}">
         <div class="w-9 h-9 rounded bg-surface-container-highest flex items-center justify-center flex-shrink-0 border border-outline-variant">
           <span class="material-symbols-outlined text-primary-container text-[20px]">${safeIcon}</span>
@@ -3273,15 +3614,13 @@ function renderDLs() {
           <div id="dleta-${safeId}" dir="ltr" class="text-[12px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${isAct ? fmtT(d.eta_secs) : isComp ? '0s' : '--'}</div>
           <div class="text-[10px] text-on-surface-variant/70" style="font-family:'JetBrains Mono'">${priDisplay}</div>
         </div>
-        <div class="w-36 flex items-center justify-end gap-1 flex-shrink-0">
+        <div class="w-40 flex items-center justify-end gap-1 flex-shrink-0">
           ${isAct ? `<button class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? 'إيقاف مؤقت' : 'Pause'}" onclick="event.stopPropagation(); pauseDL('${safeId}')" data-act="pause-dl" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">pause</span></button>` : ''}
-          ${isPsd || isQ || isErr ? `<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? 'استئناف' : 'Resume'}" onclick="event.stopPropagation(); resumeDL('${safeId}')" data-act="resume-dl" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">play_arrow</span></button>` : ''}
+          ${isPsd || isQ || isErr ? `<button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? (isErr ? 'إعادة المحاولة' : 'استئناف') : (isErr ? 'Retry' : 'Resume')}" onclick="event.stopPropagation(); resumeDL('${safeId}')" data-act="resume-dl" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">play_arrow</span></button>` : ''}
           ${(isPsd || isErr) ? `<button class="p-1.5 text-on-surface-variant hover:text-cyan-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? 'تحديث رابط التحميل' : 'Refresh Link'}" onclick="event.stopPropagation(); openRefreshLinkModal('${safeId}')" data-act="refresh-link" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">link</span></button>` : ''}
-          ${isComp ? `
-            <button class="p-1.5 text-on-surface-variant hover:text-emerald-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? 'فتح الملف' : 'Open File'}" onclick="event.stopPropagation(); openFileById('${safeId}')"><span class="material-symbols-outlined text-[18px]">launch</span></button>
-            <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? 'فتح المجلد' : 'Open Folder'}" onclick="event.stopPropagation(); openFolder('${safeId}')" data-act="open-folder" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">folder_open</span></button>
-          ` : ''}
-          <button class="p-1.5 text-on-surface-variant hover:text-red-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? 'حذف' : 'Delete'}" onclick="event.stopPropagation(); cancelDL('${safeId}')" data-act="cancel-dl" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">close</span></button>
+          ${isComp ? `<button class="p-1.5 text-on-surface-variant hover:text-emerald-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? 'فتح الملف' : 'Open File'}" onclick="event.stopPropagation(); openFileById('${safeId}')" data-act="open-file" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">launch</span></button>` : ''}
+          <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? 'فتح المجلد' : 'Open Folder'}" onclick="event.stopPropagation(); openFolder('${safeId}')" data-act="open-folder" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">folder_open</span></button>
+          <button class="p-1.5 text-on-surface-variant hover:text-red-400 rounded hover:bg-surface-container-highest active:scale-95 transition-all" title="${isAr ? 'حذف المهمة والملف' : 'Delete Task & File'}" onclick="event.stopPropagation(); cancelDL('${safeId}')" data-act="cancel-dl" data-id="${safeId}"><span class="material-symbols-outlined text-[18px]">close</span></button>
           <button class="p-1 text-on-surface-variant rounded hover:text-primary active:scale-95 transition-all" onclick="event.stopPropagation(); togDet('${safeId}')" title="${isAr ? 'التفاصيل' : 'Details'}"><span class="material-symbols-outlined text-[16px] text-on-surface-variant transition-transform" id="chev-${safeId}" style="${d.expanded ? 'transform:rotate(180deg)' : ''}">expand_more</span></button>
         </div>
       </div>
@@ -5436,6 +5775,42 @@ window.openIdmFile = openIdmFile;
 window.openFile = openFile;
 window.handleRowDblClick = handleRowDblClick;
 window.promptDownloadFromBrowser = promptDownloadFromBrowser;
+window.openDeleteConfirmModal = openDeleteConfirmModal;
+window.closeDeleteConfirmModal = closeDeleteConfirmModal;
+window.updateDeleteModalBtnLabel = updateDeleteModalBtnLabel;
+window.confirmDeleteDL = confirmDeleteDL;
+window.performDeleteDL = performDeleteDL;
+window.showRowCtxMenu = showRowCtxMenu;
+window.hideRowCtxMenu = hideRowCtxMenu;
+window.copyTaskUrl = copyTaskUrl;
+window.pauseDL = pauseDL;
+window.resumeDL = resumeDL;
+window.cancelDL = cancelDL;
+window.openFolder = openFolder;
+window.pauseAll = pauseAll;
+window.resumeAll = resumeAll;
+window.clearDone = clearDone;
+
+document.addEventListener('click', () => hideRowCtxMenu());
+window.addEventListener('scroll', () => hideRowCtxMenu(), true);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    hideRowCtxMenu();
+    const delModal = document.getElementById('deleteConfirmModal');
+    if (delModal && !delModal.classList.contains('hidden')) {
+      closeDeleteConfirmModal();
+    }
+  } else if (e.key === 'Enter') {
+    const delModal = document.getElementById('deleteConfirmModal');
+    if (delModal && !delModal.classList.contains('hidden')) {
+      const activeTag = document.activeElement?.id || '';
+      if (activeTag !== 'delConfirmCancelBtn' && activeTag !== 'delConfirmListOnlyBtn') {
+        e.preventDefault();
+        confirmDeleteDL();
+      }
+    }
+  }
+});
 
 async function promptDownloadFromBrowser(req) {
   if (!req || !req.url) return;

@@ -344,6 +344,7 @@ mod tests {
             num_connections: 8,
             priority: 0,
             category: "archive".to_string(),
+            format_id: None,
             chunks: vec![
                 ChunkInfo {
                     index: 0,

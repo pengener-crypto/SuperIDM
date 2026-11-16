@@ -175,6 +175,7 @@ pub async fn start_download(
             num_connections: num_connections.clamp(1, 32),
             priority,
             category: if is_audio_cat { "Music".to_string() } else { "Videos".to_string() },
+            format_id: format_id.clone(),
             chunks: Vec::new(),
             created_at: now,
             updated_at: now,
@@ -190,6 +191,10 @@ pub async fn start_download(
                     cancel_token: cancel_tx,
                 },
             );
+        }
+        {
+            let all_tasks: Vec<_> = state.manager.read().tasks.values().map(|h| h.metadata.clone()).collect();
+            let _ = storage::save_tasks_db(&all_tasks).await;
         }
 
         let client_c = state.manager.read().http_client.clone();
@@ -220,6 +225,7 @@ pub async fn start_download(
         }
 
         // Spawn platform stream extractor
+        let mgr_err_arc = state.manager.clone();
         tokio::spawn(async move {
             let res = crate::engine::extractor::MediaExtractor::download_media_stream(
                 &client_c,
@@ -230,13 +236,20 @@ pub async fn start_download(
                 cancel_c,
             ).await;
             if let Err(e) = res {
-                eprintln!("[MediaExtractor Error] {}", e);
-                // Previously this error was only printed to a hidden console, so users just saw
-                // "Failed" with no reason. Send it to the UI.
-                let _ = app_err.emit("download_error", serde_json::json!({
-                    "id": task_id_err,
-                    "message": e,
-                }));
+                let was_user_paused = {
+                    let mgr = mgr_err_arc.read();
+                    mgr.tasks
+                        .get(&task_id_err)
+                        .map(|h| h.metadata.status == TaskStatus::Paused)
+                        .unwrap_or(true)
+                };
+                if !was_user_paused && !e.to_lowercase().contains("cancelled") {
+                    eprintln!("[MediaExtractor Error] {}", e);
+                    let _ = app_err.emit("download_error", serde_json::json!({
+                        "id": task_id_err,
+                        "message": e,
+                    }));
+                }
             }
         });
 
@@ -284,6 +297,7 @@ pub async fn start_download(
                         }
                         if is_comp {
                             h.metadata.status = TaskStatus::Completed;
+                            h.metadata.updated_at = chrono::Utc::now().timestamp_millis();
                             h.speed_meter.reset();
                             completed = true;
                         }
@@ -304,27 +318,41 @@ pub async fn start_download(
                 let _ = app_handle.emit("download_progress", &payload);
 
                 if is_comp {
+                    let all_tasks: Vec<_> = mgr_arc.read().tasks.values().map(|h| h.metadata.clone()).collect();
+                    let _ = storage::save_tasks_db(&all_tasks).await;
                     break;
                 }
             }
 
             if !completed {
-                let mut mgr = mgr_arc.write();
-                if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
-                    if h.metadata.status != TaskStatus::Completed && h.metadata.status != TaskStatus::Paused {
-                        h.metadata.status = TaskStatus::Failed;
-                        let payload = ProgressPayload {
-                            id: task_id_c.clone(),
-                            status: TaskStatus::Failed,
-                            downloaded_bytes: 0,
-                            total_bytes: 0,
-                            progress: 0.0,
-                            speed: 0.0,
-                            chunks: vec![],
-                            eta_secs: 0.0,
-                        };
-                        let _ = app_handle.emit("download_progress", &payload);
+                let maybe_fail = {
+                    let mut mgr = mgr_arc.write();
+                    if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
+                        if h.metadata.status != TaskStatus::Completed && h.metadata.status != TaskStatus::Paused {
+                            h.metadata.status = TaskStatus::Failed;
+                            h.metadata.updated_at = chrono::Utc::now().timestamp_millis();
+                            let payload = ProgressPayload {
+                                id: task_id_c.clone(),
+                                status: TaskStatus::Failed,
+                                downloaded_bytes: 0,
+                                total_bytes: 0,
+                                progress: 0.0,
+                                speed: 0.0,
+                                chunks: vec![],
+                                eta_secs: 0.0,
+                            };
+                            Some(payload)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
                     }
+                };
+                if let Some(payload) = maybe_fail {
+                    let _ = app_handle.emit("download_progress", &payload);
+                    let all_tasks: Vec<_> = mgr_arc.read().tasks.values().map(|h| h.metadata.clone()).collect();
+                    let _ = storage::save_tasks_db(&all_tasks).await;
                 }
             }
         });
@@ -451,6 +479,7 @@ pub async fn start_download(
         num_connections: effective_conns,
         priority,
         category,
+        format_id: None,
         chunks: chunks.clone(),
         created_at: now,
         updated_at: now,
@@ -848,7 +877,12 @@ pub async fn pause_download(
     };
 
     if let (Some(fp), Some(meta), Some(pl)) = (file_path_opt, metadata_opt, payload_opt) {
-        let _ = storage::save_part_json_atomic(&fp, &meta).await;
+        let is_media = crate::engine::extractor::MediaExtractor::is_media_url(&meta.url)
+            || meta.format_id.is_some()
+            || meta.chunks.len() <= 1 && meta.chunks.first().map(|c| c.end_byte == 0).unwrap_or(true);
+        if !is_media {
+            let _ = storage::save_part_json_atomic(&fp, &meta).await;
+        }
         let _ = app.emit("download_progress", &pl);
         let all_tasks: Vec<_> = state.manager.read().tasks.values().map(|h| h.metadata.clone()).collect();
         let _ = storage::save_tasks_db(&all_tasks).await;
@@ -892,18 +926,28 @@ pub async fn resume_download(
     }
 
     // If media stream extractor task: resume stream extractor
-    if crate::engine::extractor::MediaExtractor::is_media_url(&metadata.url) || metadata.chunks.is_empty() {
-        let dest_dir = PathBuf::from(&metadata.destination)
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("."));
+    if crate::engine::extractor::MediaExtractor::is_media_url(&metadata.url)
+        || metadata.format_id.is_some()
+        || metadata.chunks.is_empty()
+    {
+        let dest_path = PathBuf::from(&metadata.destination);
+        let dest_dir = if dest_path.is_dir() {
+            dest_path
+        } else {
+            dest_path
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| state.manager.read().default_download_dir.clone())
+        };
         let (prog_tx, mut prog_rx) = mpsc::channel(128);
         let url_c = metadata.url.clone();
+        let format_id_c = metadata.format_id.clone();
         let dest_dir_ext = dest_dir.clone();
         let dest_dir_watch = dest_dir.clone();
         let cancel_c = cancel_rx.clone();
 
         let client_c = state.manager.read().http_client.clone();
+        let mgr_err_arc = state.manager.clone();
         let app_err = app.clone();
         let task_id_err = id.clone();
         tokio::spawn(async move {
@@ -911,15 +955,24 @@ pub async fn resume_download(
                 &client_c,
                 &url_c,
                 &dest_dir_ext,
-                None,
+                format_id_c.as_deref(),
                 prog_tx,
                 cancel_c,
             ).await {
-                eprintln!("[MediaExtractor Resume Error] {}", e);
-                let _ = app_err.emit("download_error", serde_json::json!({
-                    "id": task_id_err,
-                    "message": e,
-                }));
+                let was_user_paused = {
+                    let mgr = mgr_err_arc.read();
+                    mgr.tasks
+                        .get(&task_id_err)
+                        .map(|h| h.metadata.status == TaskStatus::Paused)
+                        .unwrap_or(true)
+                };
+                if !was_user_paused && !e.to_lowercase().contains("cancelled") {
+                    eprintln!("[MediaExtractor Resume Error] {}", e);
+                    let _ = app_err.emit("download_error", serde_json::json!({
+                        "id": task_id_err,
+                        "message": e,
+                    }));
+                }
             }
         });
 
@@ -965,6 +1018,7 @@ pub async fn resume_download(
                         }
                         if is_comp {
                             h.metadata.status = TaskStatus::Completed;
+                            h.metadata.updated_at = chrono::Utc::now().timestamp_millis();
                             h.speed_meter.reset();
                             completed = true;
                         }
@@ -985,27 +1039,40 @@ pub async fn resume_download(
                 let _ = app_handle.emit("download_progress", &payload);
 
                 if is_comp {
+                    let all_tasks: Vec<_> = mgr_arc.read().tasks.values().map(|h| h.metadata.clone()).collect();
+                    let _ = storage::save_tasks_db(&all_tasks).await;
                     break;
                 }
             }
 
             if !completed {
-                let mut mgr = mgr_arc.write();
-                if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
-                    if h.metadata.status != TaskStatus::Completed && h.metadata.status != TaskStatus::Paused {
-                        h.metadata.status = TaskStatus::Failed;
-                        let payload = ProgressPayload {
-                            id: task_id_c.clone(),
-                            status: TaskStatus::Failed,
-                            downloaded_bytes: 0,
-                            total_bytes: 0,
-                            progress: 0.0,
-                            speed: 0.0,
-                            chunks: vec![],
-                            eta_secs: 0.0,
-                        };
-                        let _ = app_handle.emit("download_progress", &payload);
+                let maybe_fail = {
+                    let mut mgr = mgr_arc.write();
+                    if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
+                        if h.metadata.status != TaskStatus::Completed && h.metadata.status != TaskStatus::Paused {
+                            h.metadata.status = TaskStatus::Failed;
+                            h.metadata.updated_at = chrono::Utc::now().timestamp_millis();
+                            Some(ProgressPayload {
+                                id: task_id_c.clone(),
+                                status: TaskStatus::Failed,
+                                downloaded_bytes: 0,
+                                total_bytes: 0,
+                                progress: 0.0,
+                                speed: 0.0,
+                                chunks: vec![],
+                                eta_secs: 0.0,
+                            })
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
                     }
+                };
+                if let Some(payload) = maybe_fail {
+                    let _ = app_handle.emit("download_progress", &payload);
+                    let all_tasks: Vec<_> = mgr_arc.read().tasks.values().map(|h| h.metadata.clone()).collect();
+                    let _ = storage::save_tasks_db(&all_tasks).await;
                 }
             }
         });
@@ -1076,34 +1143,245 @@ pub async fn resume_download(
     Ok(())
 }
 
-/// Cancel a download task permanently.
+fn normalize_alnum_stem(stem: &str) -> String {
+    stem.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
+/// Resolve all candidate file paths for a task (never returning a bare directory), including
+/// normalized stem matching in case Windows / yt-dlp sanitized punctuation (`|` -> `｜`, `?` -> `？`).
+pub fn resolve_candidate_file_paths(
+    raw_dest: Option<&str>,
+    raw_filename: Option<&str>,
+    default_dir: &std::path::Path,
+) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    let mut dirs_to_search: Vec<PathBuf> = Vec::new();
+
+    if let Some(d_str) = raw_dest.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let dp = PathBuf::from(d_str);
+        if dp.is_dir() {
+            dirs_to_search.push(dp.clone());
+            if let Some(fname) = raw_filename.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                candidates.push(dp.join(fname));
+            }
+        } else {
+            candidates.push(dp.clone());
+            if let Some(parent) = dp.parent() {
+                if parent.is_dir() {
+                    dirs_to_search.push(parent.to_path_buf());
+                    if let Some(fname) = raw_filename.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                        let p_fname = parent.join(fname);
+                        if !candidates.contains(&p_fname) {
+                            candidates.push(p_fname);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(fname) = raw_filename.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let in_default = default_dir.join(fname);
+        if !candidates.contains(&in_default) {
+            candidates.push(in_default);
+        }
+        if default_dir.is_dir() && !dirs_to_search.iter().any(|d| d == default_dir) {
+            dirs_to_search.push(default_dir.to_path_buf());
+        }
+    }
+
+    // If none of the exact candidates exist, check sanitized-punctuation equivalent in search dirs
+    if !candidates.iter().any(|c| c.is_file()) {
+        let reference_name = raw_filename
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                candidates
+                    .first()
+                    .and_then(|p| p.file_name())
+                    .map(|n| n.to_string_lossy().to_string())
+            });
+        if let Some(ref_name) = reference_name {
+            let ref_path = std::path::Path::new(&ref_name);
+            let target_ext = ref_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.to_lowercase());
+            let target_norm = ref_path
+                .file_stem()
+                .map(|s| normalize_alnum_stem(&s.to_string_lossy()))
+                .unwrap_or_default();
+
+            if target_norm.chars().count() >= 6 {
+                for dir in dirs_to_search {
+                    if let Ok(entries) = std::fs::read_dir(&dir) {
+                        for entry in entries.flatten() {
+                            let ep = entry.path();
+                            if !ep.is_file() {
+                                continue;
+                            }
+                            let ep_ext = ep.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase());
+                            if target_ext.is_some() && ep_ext != target_ext {
+                                continue;
+                            }
+                            if let Some(estem) = ep.file_stem() {
+                                if normalize_alnum_stem(&estem.to_string_lossy()) == target_norm {
+                                    if !candidates.contains(&ep) {
+                                        candidates.push(ep);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    candidates
+}
+
+async fn remove_file_with_retry(path: &std::path::Path) -> bool {
+    if !path.exists() || path.is_dir() {
+        return false;
+    }
+    for attempt in 0..6u64 {
+        match tokio::fs::remove_file(path).await {
+            Ok(()) => return true,
+            Err(_) if attempt < 5 => {
+                tokio::time::sleep(Duration::from_millis(120)).await;
+            }
+            Err(_) => return false,
+        }
+    }
+    false
+}
+
+/// Remove the target file and/or associated temp fragments (`.part`, `.ytdl`, `.fNNN.*`).
+pub async fn cleanup_task_files(
+    candidates: &[PathBuf],
+    delete_completed_file: bool,
+) -> Vec<String> {
+    let mut deleted = Vec::new();
+
+    for path in candidates {
+        if path.is_dir() {
+            continue;
+        }
+        let _ = storage::delete_part_json(path).await;
+
+        let part_path = PathBuf::from(format!("{}.part", path.to_string_lossy()));
+        if remove_file_with_retry(&part_path).await {
+            deleted.push(part_path.to_string_lossy().to_string());
+        }
+        let ytdl_path = PathBuf::from(format!("{}.ytdl", path.to_string_lossy()));
+        if remove_file_with_retry(&ytdl_path).await {
+            deleted.push(ytdl_path.to_string_lossy().to_string());
+        }
+
+        if let (Some(parent), Some(stem)) = (path.parent(), path.file_stem().and_then(|s| s.to_str())) {
+            if parent.is_dir() && !stem.is_empty() {
+                if let Ok(mut entries) = tokio::fs::read_dir(parent).await {
+                    let prefix_dot = format!("{}.", stem);
+                    while let Ok(Some(entry)) = entries.next_entry().await {
+                        let ep = entry.path();
+                        if !ep.is_file() {
+                            continue;
+                        }
+                        if let Some(name) = ep.file_name().and_then(|n| n.to_str()) {
+                            let low = name.to_lowercase();
+                            let is_yt_temp = name.starts_with(&prefix_dot)
+                                && (low.contains(".part")
+                                    || low.ends_with(".ytdl")
+                                    || low.contains(".temp.")
+                                    || name[prefix_dot.len()..].starts_with('f')
+                                        && name[prefix_dot.len() + 1..]
+                                            .split('.')
+                                            .next()
+                                            .map(|d| !d.is_empty() && d.chars().all(|c| c.is_ascii_digit() || c == '-'))
+                                            .unwrap_or(false));
+                            if is_yt_temp && remove_file_with_retry(&ep).await {
+                                deleted.push(ep.to_string_lossy().to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if delete_completed_file && path.is_file() && remove_file_with_retry(path).await {
+            deleted.push(path.to_string_lossy().to_string());
+        }
+    }
+
+    deleted
+}
+
+/// Cancel / delete a download task and optionally delete its associated file on disk.
 #[tauri::command]
 pub async fn cancel_download(
     state: State<'_, AppState>,
     task_id: Option<String>,
     #[allow(non_snake_case)]
     taskId: Option<String>,
-) -> Result<(), String> {
+    destination: Option<String>,
+    filename: Option<String>,
+    delete_file: Option<bool>,
+    #[allow(non_snake_case)]
+    deleteFile: Option<bool>,
+) -> Result<serde_json::Value, String> {
     let id = task_id.or(taskId).ok_or_else(|| "Missing task_id".to_string())?;
-    let path = {
+    let should_delete_file = delete_file.or(deleteFile).unwrap_or(true);
+
+    let (removed_meta, default_dir) = {
         let mut mgr = state.manager.write();
+        let def = mgr.default_download_dir.clone();
         if let Some(handle) = mgr.tasks.remove(&id) {
             let _ = handle.cancel_token.send(true);
-            Some(PathBuf::from(&handle.metadata.destination))
+            (Some(handle.metadata), def)
         } else {
-            None
+            (None, def)
         }
     };
 
-    if let Some(path) = path {
-        let _ = storage::delete_part_json(&path).await;
-        let _ = tokio::fs::remove_file(&path).await;
+    let was_active = removed_meta
+        .as_ref()
+        .map(|m| m.status == TaskStatus::Downloading)
+        .unwrap_or(false);
+    if was_active {
+        // Give child processes (`taskkill /T`) a moment to terminate and close handles
+        tokio::time::sleep(Duration::from_millis(180)).await;
     }
+
+    let meta_dest = removed_meta.as_ref().map(|m| m.destination.as_str());
+    let meta_fname = removed_meta.as_ref().map(|m| m.filename.as_str());
+
+    let mut candidates = resolve_candidate_file_paths(
+        meta_dest.or(destination.as_deref()),
+        meta_fname.or(filename.as_deref()),
+        &default_dir,
+    );
+    if destination.is_some() || filename.is_some() {
+        for c in resolve_candidate_file_paths(destination.as_deref(), filename.as_deref(), &default_dir) {
+            if !candidates.contains(&c) {
+                candidates.push(c);
+            }
+        }
+    }
+
+    let deleted_paths = cleanup_task_files(&candidates, should_delete_file).await;
 
     let all_tasks: Vec<_> = state.manager.read().tasks.values().map(|h| h.metadata.clone()).collect();
     let _ = storage::save_tasks_db(&all_tasks).await;
 
-    Ok(())
+    Ok(serde_json::json!({
+        "removed": true,
+        "deleted_file": !deleted_paths.is_empty(),
+        "deleted_paths": deleted_paths,
+    }))
 }
 
 /// Get all tasks as summaries for the frontend dashboard.
@@ -1164,48 +1442,44 @@ pub async fn set_global_throttle(
     Ok(())
 }
 
-/// Open a folder in Windows Explorer.
+/// Open a folder in Windows Explorer (highlighting the target file when present).
 #[tauri::command]
 pub async fn open_download_folder(
+    state: State<'_, AppState>,
     path: Option<String>,
     #[allow(non_snake_case)]
     folderPath: Option<String>,
+    filename: Option<String>,
 ) -> Result<(), String> {
-    let target = path.or(folderPath).unwrap_or_else(|| "".to_string()).trim().to_string();
-    let default_downloads = dirs::download_dir().unwrap_or_else(|| PathBuf::from("C:\\Users\\Default\\Downloads"));
+    let default_downloads = state.manager.read().default_download_dir.clone();
+    let raw_target = path.or(folderPath).unwrap_or_default().trim().to_string();
 
-    let target_path = if target.is_empty() {
-        default_downloads.clone()
-    } else {
-        PathBuf::from(&target)
-    };
+    let candidates = resolve_candidate_file_paths(
+        if raw_target.is_empty() { None } else { Some(raw_target.as_str()) },
+        filename.as_deref(),
+        &default_downloads,
+    );
+    let existing_file = candidates.into_iter().find(|c| c.is_file());
 
     #[cfg(target_os = "windows")]
     {
-        if target_path.is_file() || (target_path.exists() && target_path.extension().is_some()) {
-            let path_str = target_path.to_string_lossy().to_string();
-            let _ = std::process::Command::new("explorer.exe")
-                .args(&["/select,", &path_str])
-                .spawn();
-        } else if target_path.exists() && target_path.is_dir() {
-            let _ = std::process::Command::new("explorer.exe")
-                .arg(&target_path)
-                .spawn();
-        } else if let Some(parent) = target_path.parent() {
-            // Never fall back to a bare drive root like "C:" — use Downloads instead.
-            let parent_is_drive_root = parent.parent().is_none();
-            if parent.is_dir() && !parent_is_drive_root && target_path.is_absolute() {
-                let _ = std::process::Command::new("explorer.exe")
-                    .arg(parent)
-                    .spawn();
-            } else {
-                let _ = std::process::Command::new("explorer.exe")
-                    .arg(&default_downloads)
-                    .spawn();
-            }
+        use std::os::windows::process::CommandExt;
+        if let Some(file_pb) = existing_file {
+            let arg = format!("/select,\"{}\"", file_pb.to_string_lossy());
+            let mut cmd = std::process::Command::new("explorer.exe");
+            cmd.raw_arg(arg);
+            let _ = cmd.spawn();
         } else {
+            let raw_pb = PathBuf::from(&raw_target);
+            let dir_to_open = if raw_pb.is_dir() {
+                raw_pb
+            } else if let Some(parent) = raw_pb.parent().filter(|p| p.is_dir() && p.parent().is_some() && raw_pb.is_absolute()) {
+                parent.to_path_buf()
+            } else {
+                default_downloads
+            };
             let _ = std::process::Command::new("explorer.exe")
-                .arg(&default_downloads)
+                .arg(&dir_to_open)
                 .spawn();
         }
     }
@@ -1213,32 +1487,42 @@ pub async fn open_download_folder(
     Ok(())
 }
 
-/// Open a downloaded file with default Windows associated application.
+/// Open a downloaded file with its default associated Windows application.
 #[tauri::command]
 pub async fn open_file(
+    state: State<'_, AppState>,
     path: Option<String>,
     #[allow(non_snake_case)]
     filePath: Option<String>,
+    filename: Option<String>,
 ) -> Result<(), String> {
-    let target = path.or(filePath).unwrap_or_else(|| "".to_string()).trim().to_string();
-    if target.is_empty() {
-        return Err("No file path provided".to_string());
-    }
-    let target_path = PathBuf::from(&target);
-    if !target_path.exists() {
-        return Err(format!("File does not exist: {}", target));
-    }
+    let default_downloads = state.manager.read().default_download_dir.clone();
+    let raw_target = path.or(filePath).unwrap_or_default().trim().to_string();
+
+    let candidates = resolve_candidate_file_paths(
+        if raw_target.is_empty() { None } else { Some(raw_target.as_str()) },
+        filename.as_deref(),
+        &default_downloads,
+    );
+    let target_file = candidates
+        .into_iter()
+        .find(|c| c.is_file())
+        .ok_or_else(|| {
+            let display = filename.unwrap_or(raw_target);
+            format!("File not found on disk: {}", display)
+        })?;
 
     #[cfg(target_os = "windows")]
     {
-        let path_str = target_path.to_string_lossy().to_string();
-        let _ = std::process::Command::new("cmd")
-            .args(&["/c", "start", "", &path_str])
-            .spawn();
+        let path_str = target_file.to_string_lossy().to_string();
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &path_str])
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = open::that(&target_path);
+        let _ = open::that(&target_file);
     }
 
     Ok(())
@@ -1316,6 +1600,7 @@ pub async fn start_stream_download(
         num_connections: 8,
         priority: 1,
         category,
+        format_id: None,
         chunks: Vec::new(),
         created_at: now,
         updated_at: now,
@@ -1432,29 +1717,37 @@ pub async fn refresh_task_link(
         mgr.http_client.clone()
     };
 
-    let fresh_url = if let Some(ref u) = provided_new {
-        let trimmed = u.trim();
-        if !trimmed.is_empty() {
-            trimmed.to_string()
-        } else {
-            let (source_url, mut placeholder) = {
-                let mgr = state.manager.read();
-                let h = mgr.tasks.get(&id).ok_or_else(|| "Task not found".to_string())?;
-                let s_url = provided_orig.unwrap_or_else(|| h.metadata.url.clone());
-                (s_url, h.metadata.clone())
-            };
-            crate::engine::recovery::RecoveryEngine::refresh_expired_link(
-                &client,
-                &source_url,
-                &mut placeholder,
-            ).await?
-        }
+    let fresh_url = if let Some(trimmed) = provided_new.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        trimmed.to_string()
     } else {
         let (source_url, mut placeholder) = {
             let mgr = state.manager.read();
-            let h = mgr.tasks.get(&id).ok_or_else(|| "Task not found".to_string())?;
-            let s_url = provided_orig.unwrap_or_else(|| h.metadata.url.clone());
-            (s_url, h.metadata.clone())
+            if let Some(h) = mgr.tasks.get(&id) {
+                let s_url = provided_orig.unwrap_or_else(|| h.metadata.url.clone());
+                (s_url, h.metadata.clone())
+            } else {
+                let s_url = provided_orig.ok_or_else(|| "Task not found".to_string())?;
+                let now = chrono::Utc::now().timestamp_millis();
+                let placeholder = DownloadMetadata {
+                    id: id.clone(),
+                    url: s_url.clone(),
+                    destination: String::new(),
+                    filename: String::new(),
+                    total_bytes: 0,
+                    status: TaskStatus::Paused,
+                    etag: None,
+                    last_modified: None,
+                    supports_range: true,
+                    num_connections: 1,
+                    priority: 0,
+                    category: "Videos".to_string(),
+                    format_id: None,
+                    chunks: vec![],
+                    created_at: now,
+                    updated_at: now,
+                };
+                (s_url, placeholder)
+            }
         };
         crate::engine::recovery::RecoveryEngine::refresh_expired_link(
             &client,
@@ -1463,23 +1756,29 @@ pub async fn refresh_task_link(
         ).await?
     };
 
-    let (dest_path, meta_clone, all_tasks) = {
+    let updated_in_mgr = {
         let mut mgr = state.manager.write();
-        let h = mgr.tasks.get_mut(&id).ok_or_else(|| "Task not found".to_string())?;
-        h.metadata.url = fresh_url.clone();
-        h.metadata.updated_at = chrono::Utc::now().timestamp_millis();
-        if h.metadata.status == TaskStatus::Failed {
-            h.metadata.status = TaskStatus::Paused;
+        if let Some(h) = mgr.tasks.get_mut(&id) {
+            h.metadata.url = fresh_url.clone();
+            h.metadata.updated_at = chrono::Utc::now().timestamp_millis();
+            if h.metadata.status == TaskStatus::Failed {
+                h.metadata.status = TaskStatus::Paused;
+            }
+            let dest = PathBuf::from(&h.metadata.destination);
+            let meta = h.metadata.clone();
+            let all = mgr.tasks.values().map(|t| t.metadata.clone()).collect::<Vec<_>>();
+            Some((dest, meta, all))
+        } else {
+            None
         }
-        let dest = PathBuf::from(&h.metadata.destination);
-        let meta = h.metadata.clone();
-        let all = mgr.tasks.values().map(|t| t.metadata.clone()).collect::<Vec<_>>();
-        (dest, meta, all)
     };
 
-    // Save updated checkpoint .part.json with fresh URL
-    let _ = storage::save_part_json_atomic(&dest_path, &meta_clone).await;
-    let _ = storage::save_tasks_db(&all_tasks).await;
+    if let Some((dest_path, meta_clone, all_tasks)) = updated_in_mgr {
+        if !meta_clone.chunks.is_empty() && !crate::engine::extractor::MediaExtractor::is_media_url(&meta_clone.url) {
+            let _ = storage::save_part_json_atomic(&dest_path, &meta_clone).await;
+        }
+        let _ = storage::save_tasks_db(&all_tasks).await;
+    }
 
     Ok(fresh_url)
 }
@@ -1890,6 +2189,53 @@ pub async fn export_diagnostic_report(
         "report": report,
         "status": status,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_resolve_candidate_paths_exact_dir_and_sanitized() {
+        let dir = TempDir::new().unwrap();
+        let video_real = dir.path().join("Is Google Gemini Back？.mp4");
+        std::fs::write(&video_real, b"video bytes").unwrap();
+
+        // When destination is just the folder and UI sanitized `?` -> `_`
+        let cands = resolve_candidate_file_paths(
+            Some(&dir.path().to_string_lossy()),
+            Some("Is Google Gemini Back_.mp4"),
+            dir.path(),
+        );
+        assert!(cands.iter().any(|p| p == &video_real && p.is_file()));
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_task_files_deletes_video_and_parts() {
+        let dir = TempDir::new().unwrap();
+        let main_file = dir.path().join("My Video.mp4");
+        let part_file = dir.path().join("My Video.mp4.part");
+        let frag_file = dir.path().join("My Video.f399.mp4.part");
+        let sidecar_file = PathBuf::from(format!("{}.part.json", main_file.to_string_lossy()));
+
+        std::fs::write(&main_file, b"mp4").unwrap();
+        std::fs::write(&part_file, b"part").unwrap();
+        std::fs::write(&frag_file, b"frag").unwrap();
+        std::fs::write(&sidecar_file, b"{}").unwrap();
+
+        // delete_completed_file = false removes only sidecar/temp fragments, preserves main file
+        let _ = cleanup_task_files(&[main_file.clone()], false).await;
+        assert!(main_file.exists());
+        assert!(!part_file.exists());
+        assert!(!frag_file.exists());
+        assert!(!sidecar_file.exists());
+
+        // delete_completed_file = true physically deletes the video/program itself
+        let deleted = cleanup_task_files(&[main_file.clone()], true).await;
+        assert!(!main_file.exists());
+        assert!(!deleted.is_empty());
+    }
 }
 
 
