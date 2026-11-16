@@ -251,15 +251,7 @@ pub async fn start_download(
             while let Some((progress, speed, downloaded, total, eta_secs, is_comp, final_name_opt)) = prog_rx.recv().await {
                 let raw_total = if total > 0 { total } else if downloaded > 0 { downloaded } else { 0 };
                 let eff_downloaded = downloaded;
-                // During multi-pass (video then audio), keep total_bytes scaled to `progress` so
-                // `meta.progress()` never prematurely reports 100% (99% in UI) at the end of Pass 1.
-                let eff_total = if is_comp {
-                    raw_total.max(eff_downloaded)
-                } else if raw_total > 0 && progress > 0.01 {
-                    raw_total.max(((eff_downloaded as f64) / progress.min(0.98)) as u64)
-                } else {
-                    raw_total
-                };
+                let eff_total = raw_total.max(eff_downloaded);
                 {
                     let mut mgr = mgr_arc.write();
                     if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
@@ -273,6 +265,7 @@ pub async fn start_download(
                             let new_dest = dest_dir_watch.join(fname);
                             h.metadata.destination = new_dest.to_string_lossy().to_string();
                         }
+                        let prog_bp = (progress.clamp(0.0, 1.0) * 10000.0) as usize;
                         if h.metadata.chunks.is_empty() {
                             h.metadata.chunks.push(ChunkInfo {
                                 index: 0,
@@ -280,13 +273,14 @@ pub async fn start_download(
                                 end_byte: eff_total,
                                 current_byte: eff_downloaded,
                                 completed: is_comp,
-                                retry_count: 0,
+                                retry_count: prog_bp,
                             });
                         } else {
                             h.metadata.chunks[0].start_byte = 0;
                             h.metadata.chunks[0].current_byte = eff_downloaded;
                             h.metadata.chunks[0].end_byte = eff_total;
                             h.metadata.chunks[0].completed = is_comp;
+                            h.metadata.chunks[0].retry_count = prog_bp;
                         }
                         if is_comp {
                             h.metadata.status = TaskStatus::Completed;
@@ -929,13 +923,7 @@ pub async fn resume_download(
             while let Some((progress, speed, downloaded, total, eta_secs, is_comp, final_name_opt)) = prog_rx.recv().await {
                 let raw_total = if total > 0 { total } else if downloaded > 0 { downloaded } else { 0 };
                 let eff_downloaded = downloaded;
-                let eff_total = if is_comp {
-                    raw_total.max(eff_downloaded)
-                } else if raw_total > 0 && progress > 0.01 {
-                    raw_total.max(((eff_downloaded as f64) / progress.min(0.98)) as u64)
-                } else {
-                    raw_total
-                };
+                let eff_total = raw_total.max(eff_downloaded);
                 {
                     let mut mgr = mgr_arc.write();
                     if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
@@ -949,6 +937,7 @@ pub async fn resume_download(
                             let new_dest = dest_dir_watch.join(fname);
                             h.metadata.destination = new_dest.to_string_lossy().to_string();
                         }
+                        let prog_bp = (progress.clamp(0.0, 1.0) * 10000.0) as usize;
                         if h.metadata.chunks.is_empty() {
                             h.metadata.chunks.push(ChunkInfo {
                                 index: 0,
@@ -956,12 +945,13 @@ pub async fn resume_download(
                                 end_byte: eff_total,
                                 current_byte: eff_downloaded,
                                 completed: is_comp,
-                                retry_count: 0,
+                                retry_count: prog_bp,
                             });
                         } else {
                             h.metadata.chunks[0].current_byte = eff_downloaded;
                             h.metadata.chunks[0].end_byte = eff_total;
                             h.metadata.chunks[0].completed = is_comp;
+                            h.metadata.chunks[0].retry_count = prog_bp;
                         }
                         if is_comp {
                             h.metadata.status = TaskStatus::Completed;
@@ -1126,8 +1116,10 @@ pub fn get_all_tasks(state: State<'_, AppState>) -> Vec<TaskSummary> {
                 downloaded_bytes: dld,
                 progress: if meta.status == TaskStatus::Completed {
                     1.0
+                } else if meta.chunks.len() == 1 && meta.chunks[0].retry_count > 10 {
+                    ((meta.chunks[0].retry_count as f64) / 10000.0).min(0.99)
                 } else if tot > 0 {
-                    meta.progress()
+                    meta.progress().min(0.99)
                 } else {
                     0.0
                 },

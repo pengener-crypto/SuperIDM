@@ -1278,9 +1278,9 @@ impl MediaExtractor {
                     let mut normalized_progress = if is_audio_only_req {
                         raw_percent.min(1.0) * 0.95 // Single audio pass 0% -> 95%, then ExtractAudio -> 98%
                     } else if is_audio_pass {
-                        0.75 + (raw_percent.min(1.0) * 0.23) // 75% -> 98%
+                        0.88 + (raw_percent.min(1.0) * 0.10) // 88% -> 98%
                     } else {
-                        raw_percent.min(1.0) * 0.75 // 0% -> 75%
+                        raw_percent.min(1.0) * 0.88 // 0% -> 88% (video is ~88-90% of total bytes)
                     };
 
                     // Guarantee progress never retreats backwards
