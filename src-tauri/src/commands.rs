@@ -154,19 +154,27 @@ pub async fn start_download(
         let file_path = dest_dir.join(&initial_name);
         let now = chrono::Utc::now().timestamp_millis();
 
+        let is_audio_cat = format_id
+            .as_deref()
+            .map(|f| {
+                let fl = f.to_lowercase();
+                fl.contains("audio") || fl == "mp3"
+            })
+            .unwrap_or(false);
+
         let metadata = DownloadMetadata {
             id: task_id.clone(),
             url: url.clone(),
             destination: file_path.to_string_lossy().to_string(),
             filename: initial_name,
-            total_bytes: 50 * 1024 * 1024,
+            total_bytes: 0,
             status: TaskStatus::Downloading,
             etag: None,
             last_modified: None,
             supports_range: true,
-            num_connections: 8,
+            num_connections: 1,
             priority,
-            category: "Videos".to_string(),
+            category: if is_audio_cat { "Music".to_string() } else { "Videos".to_string() },
             chunks: Vec::new(),
             created_at: now,
             updated_at: now,
@@ -241,13 +249,13 @@ pub async fn start_download(
             let mut completed = false;
             let mut prev_downloaded = 0u64;
             while let Some((progress, speed, downloaded, total, eta_secs, is_comp, final_name_opt)) = prog_rx.recv().await {
-                let raw_total = if total > 0 { total } else { 100_000 };
-                let eff_downloaded = if downloaded > 0 { downloaded } else { (progress * 100_000.0) as u64 };
+                let raw_total = if total > 0 { total } else if downloaded > 0 { downloaded } else { 0 };
+                let eff_downloaded = downloaded;
                 // During multi-pass (video then audio), keep total_bytes scaled to `progress` so
                 // `meta.progress()` never prematurely reports 100% (99% in UI) at the end of Pass 1.
                 let eff_total = if is_comp {
                     raw_total.max(eff_downloaded)
-                } else if progress > 0.01 {
+                } else if raw_total > 0 && progress > 0.01 {
                     raw_total.max(((eff_downloaded as f64) / progress.min(0.98)) as u64)
                 } else {
                     raw_total
@@ -387,11 +395,7 @@ pub async fn start_download(
     let filename = storage::resolve_unique_filename(&dest_dir, &raw_filename);
     let file_path = dest_dir.join(&filename);
 
-    let total_bytes = if probe.content_length > 0 {
-        probe.content_length
-    } else {
-        50 * 1024 * 1024 // Fallback 50MB estimate if unknown
-    };
+    let total_bytes = probe.content_length;
 
     // Pre-flight Disk Space Check (fail fast before pre-allocation or network usage)
     if probe.content_length > 0 {
@@ -420,10 +424,13 @@ pub async fn start_download(
         1
     };
 
-    let chunks = chunker::calculate_chunks(total_bytes, effective_conns);
+    let chunk_span = if total_bytes > 0 { total_bytes } else { u64::MAX / 2 };
+    let chunks = chunker::calculate_chunks(chunk_span, effective_conns);
 
-    // Pre-allocate file
-    let _ = storage::preallocate_file(&file_path, total_bytes).await;
+    // Pre-allocate file only when server reported an exact Content-Length
+    if total_bytes > 0 {
+        let _ = storage::preallocate_file(&file_path, total_bytes).await;
+    }
 
     let now = chrono::Utc::now().timestamp_millis();
 
@@ -920,11 +927,11 @@ pub async fn resume_download(
             let mut completed = false;
             let mut prev_downloaded = 0u64;
             while let Some((progress, speed, downloaded, total, eta_secs, is_comp, final_name_opt)) = prog_rx.recv().await {
-                let raw_total = if total > 0 { total } else { 100_000 };
-                let eff_downloaded = if downloaded > 0 { downloaded } else { (progress * 100_000.0) as u64 };
+                let raw_total = if total > 0 { total } else if downloaded > 0 { downloaded } else { 0 };
+                let eff_downloaded = downloaded;
                 let eff_total = if is_comp {
                     raw_total.max(eff_downloaded)
-                } else if progress > 0.01 {
+                } else if raw_total > 0 && progress > 0.01 {
                     raw_total.max(((eff_downloaded as f64) / progress.min(0.98)) as u64)
                 } else {
                     raw_total
@@ -1117,10 +1124,10 @@ pub fn get_all_tasks(state: State<'_, AppState>) -> Vec<TaskSummary> {
                 destination: meta.destination.clone(),
                 total_bytes: tot,
                 downloaded_bytes: dld,
-                progress: if tot > 0 {
+                progress: if meta.status == TaskStatus::Completed {
+                    1.0
+                } else if tot > 0 {
                     meta.progress()
-                } else if !meta.chunks.is_empty() && meta.chunks[0].end_byte > 0 {
-                    meta.chunks[0].downloaded() as f64 / meta.chunks[0].end_byte as f64
                 } else {
                     0.0
                 },
@@ -1129,6 +1136,7 @@ pub fn get_all_tasks(state: State<'_, AppState>) -> Vec<TaskSummary> {
                 category: meta.category.clone(),
                 priority: meta.priority,
                 num_connections: meta.num_connections,
+                supports_range: meta.supports_range,
                 created_at: meta.created_at,
                 eta_secs: if spd > 0.0 && tot > dld {
                     (tot - dld) as f64 / spd
@@ -1298,12 +1306,12 @@ pub async fn start_stream_download(
         url: url.clone(),
         destination: file_path.to_string_lossy().to_string(),
         filename: filename.clone(),
-        total_bytes: 100 * 1024 * 1024,
+        total_bytes: 0,
         status: TaskStatus::Downloading,
         etag: None,
         last_modified: None,
         supports_range: true,
-        num_connections: 8,
+        num_connections: 1,
         priority: 1,
         category,
         chunks: Vec::new(),
@@ -1689,6 +1697,197 @@ pub fn open_external_url(url: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to open URL: {}", e))?;
     }
     Ok(())
+}
+
+/// Probe and return real measured versions and status of yt-dlp, FFmpeg, and JS runtime.
+#[tauri::command]
+pub async fn get_engine_status() -> Result<crate::engine::extractor::EngineStatus, String> {
+    tokio::task::spawn_blocking(crate::engine::extractor::MediaExtractor::engine_status)
+        .await
+        .map_err(|e| format!("Engine status probe failed: {}", e))
+}
+
+/// Check GitHub Releases for a newer version of SuperIDM desktop app.
+#[tauri::command]
+pub async fn check_app_update(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let client = {
+        let mgr = state.manager.read();
+        mgr.http_client.clone()
+    };
+    let current = env!("CARGO_PKG_VERSION").trim_start_matches('v').to_string();
+    let req = client
+        .get("https://api.github.com/repos/pengener-crypto/SuperIDM/releases/latest")
+        .header("User-Agent", format!("SuperIDM-Core/{}", current))
+        .header("Accept", "application/vnd.github+json")
+        .send();
+
+    let resp = tokio::time::timeout(std::time::Duration::from_secs(8), req)
+        .await
+        .map_err(|_| "Update server timed out".to_string())?
+        .map_err(|e| format!("Update check failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API returned HTTP {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let latest_raw = json
+        .get("tag_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&current);
+    let latest = latest_raw.trim().trim_start_matches('v').to_string();
+
+    let parse_ver = |s: &str| -> (u32, u32, u32) {
+        let mut parts = s.split('.').map(|p| p.parse::<u32>().unwrap_or(0));
+        (
+            parts.next().unwrap_or(0),
+            parts.next().unwrap_or(0),
+            parts.next().unwrap_or(0),
+        )
+    };
+    let update_available = parse_ver(&latest) > parse_ver(&current);
+
+    let mut setup_url = format!(
+        "https://github.com/pengener-crypto/SuperIDM/releases/download/v{}/SuperIDM_Setup.exe",
+        latest
+    );
+    if let Some(assets) = json.get("assets").and_then(|v| v.as_array()) {
+        for a in assets {
+            if a.get("name").and_then(|n| n.as_str()) == Some("SuperIDM_Setup.exe") {
+                if let Some(dl) = a.get("browser_download_url").and_then(|u| u.as_str()) {
+                    setup_url = dl.to_string();
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::json!({
+        "current_version": current,
+        "latest_version": latest,
+        "update_available": update_available,
+        "download_url": setup_url,
+        "release_url": json.get("html_url").and_then(|u| u.as_str()).unwrap_or("https://github.com/pengener-crypto/SuperIDM/releases/latest"),
+    }))
+}
+
+/// Generate a complete diagnostic report (engine binaries, versions, tasks, backend & UI logs)
+/// and save it to Desktop\SuperIDM_Diagnostic_Report.txt.
+#[tauri::command]
+pub async fn export_diagnostic_report(
+    state: State<'_, AppState>,
+    ui_logs: Option<Vec<String>>,
+    #[allow(non_snake_case)] uiLogs: Option<Vec<String>>,
+) -> Result<serde_json::Value, String> {
+    let status = tokio::task::spawn_blocking(crate::engine::extractor::MediaExtractor::engine_status)
+        .await
+        .map_err(|e| format!("Engine probe failed: {}", e))?;
+
+    let (tasks_snapshot, download_dir) = {
+        let mgr = state.manager.read();
+        let list: Vec<String> = mgr
+            .tasks
+            .values()
+            .map(|h| {
+                let m = &h.metadata;
+                format!(
+                    "  - [{}] {:?} | {} | dld={} / tot={} | conns={} | url={}",
+                    &m.id[..m.id.len().min(8)],
+                    m.status,
+                    m.filename,
+                    m.downloaded_bytes(),
+                    m.total_bytes,
+                    m.num_connections,
+                    m.url
+                )
+            })
+            .collect();
+        (list, mgr.default_download_dir.clone())
+    };
+
+    let backend_logs = crate::engine::extractor::recent_engine_log();
+    let frontend_logs = ui_logs.or(uiLogs).unwrap_or_default();
+
+    let mut report = String::new();
+    report.push_str("============================================================\n");
+    report.push_str(&format!(
+        "SuperIDM Diagnostic Report — v{}\n",
+        env!("CARGO_PKG_VERSION")
+    ));
+    report.push_str(&format!(
+        "Generated At: {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S %z")
+    ));
+    report.push_str(&format!(
+        "OS / Arch:    {} / {}\n",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    ));
+    report.push_str(&format!(
+        "Download Dir: {}\n",
+        download_dir.to_string_lossy()
+    ));
+    report.push_str("============================================================\n\n");
+
+    report.push_str("[MEDIA ENGINE COMPONENTS]\n");
+    report.push_str(&format!("  Overall Ready : {}\n", status.ready));
+    report.push_str(&format!(
+        "  yt-dlp Path   : {}\n",
+        status.ytdlp_path.as_deref().unwrap_or("NOT FOUND")
+    ));
+    report.push_str(&format!(
+        "  yt-dlp Ver    : {}\n",
+        status.ytdlp_version.as_deref().unwrap_or("INVALID / MISSING")
+    ));
+    report.push_str(&format!(
+        "  FFmpeg Path   : {}\n",
+        status.ffmpeg_path.as_deref().unwrap_or("NOT FOUND")
+    ));
+    report.push_str(&format!("  FFmpeg OK     : {}\n", status.ffmpeg_ok));
+    report.push_str(&format!(
+        "  JS Runtime    : {}\n",
+        status.js_runtime.as_deref().unwrap_or("NOT FOUND")
+    ));
+    report.push_str(&format!("  JS Runtime OK : {}\n\n", status.js_ok));
+
+    report.push_str(&format!("[TASKS ({})]\n", tasks_snapshot.len()));
+    if tasks_snapshot.is_empty() {
+        report.push_str("  (no tasks)\n\n");
+    } else {
+        for t in &tasks_snapshot {
+            report.push_str(t);
+            report.push('\n');
+        }
+        report.push('\n');
+    }
+
+    report.push_str(&format!("[BACKEND ENGINE LOGS ({})]\n", backend_logs.len()));
+    if backend_logs.is_empty() {
+        report.push_str("  (no backend errors recorded)\n\n");
+    } else {
+        for l in &backend_logs {
+            report.push_str("  ");
+            report.push_str(l);
+            report.push('\n');
+        }
+        report.push('\n');
+    }
+
+    report.push_str(&format!("[UI ACTIVITY LOGS ({})]\n", frontend_logs.len()));
+    for l in frontend_logs.iter().take(60) {
+        report.push_str("  ");
+        report.push_str(l);
+        report.push('\n');
+    }
+
+    let out_dir = dirs::desktop_dir().unwrap_or(download_dir);
+    let out_path = out_dir.join("SuperIDM_Diagnostic_Report.txt");
+    let _ = tokio::fs::write(&out_path, report.as_bytes()).await;
+
+    Ok(serde_json::json!({
+        "path": out_path.to_string_lossy().to_string(),
+        "report": report,
+        "status": status,
+    }))
 }
 
 

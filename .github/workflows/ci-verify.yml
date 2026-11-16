@@ -1,0 +1,45 @@
+name: Clean Windows Engine Verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  verify-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Provision bundled engine binaries (yt-dlp + qjs + ffmpeg)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "msix_build" | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "msix_build\yt-dlp.exe"
+          Invoke-WebRequest -Uri "https://github.com/quickjs-ng/quickjs/releases/download/v0.18.0/qjs-windows-x86_64.exe" -OutFile "msix_build\qjs.exe"
+          Invoke-WebRequest -Uri "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-win32-x64.gz" -OutFile "msix_build\ffmpeg.gz"
+          python -c "import gzip, shutil; shutil.copyfileobj(gzip.open('msix_build/ffmpeg.gz', 'rb'), open('msix_build/ffmpeg.exe', 'wb'))"
+          Remove-Item "msix_build\ffmpeg.gz" -Force
+          & "msix_build\yt-dlp.exe" --version
+          & "msix_build\qjs.exe" -e "console.log(6*7)"
+          & "msix_build\ffmpeg.exe" -hide_banner -version | Select-Object -First 2
+
+      - name: Run Rust unit & integration tests on clean Windows
+        shell: pwsh
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml

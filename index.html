@@ -388,7 +388,7 @@ html[dir="rtl"] .flex.items-baseline {
       </div>
       <div class="bg-surface-container-low border border-outline-variant rounded p-4">
         <div id="lblTotUp" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1" style="font-family:'JetBrains Mono'">Total Up</div>
-        <div><span dir="ltr" class="inline-flex items-baseline gap-1.5"><span id="sUpSpd" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0.1</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">MB/s</span></span></div>
+        <div><span dir="ltr" class="inline-flex items-baseline gap-1.5"><span id="sUpSpd" class="text-[18px] font-semibold text-on-surface" style="font-family:'JetBrains Mono'">0.0</span><span class="text-[13px] text-on-surface-variant" style="font-family:'JetBrains Mono'">MB/s</span></span></div>
         <div class="text-[11px] text-on-surface-variant mt-1" id="sHeartbeatTxt" style="font-family:'JetBrains Mono'">Heartbeat active</div>
       </div>
       <div class="bg-surface-container-low border border-outline-variant rounded p-4">
@@ -456,12 +456,21 @@ html[dir="rtl"] .flex.items-baseline {
           <span id="bwLbl30s">30s ago</span><span id="bwCurDn">0.0 MB/s</span><span id="bwLblNow">Now</span>
         </div>
       </div>
-      <div class="bg-surface-container border border-outline-variant rounded p-4">
+      <div class="bg-surface-container border border-outline-variant rounded p-4 flex flex-col justify-between">
         <div class="flex justify-between items-center mb-3">
-          <span id="bwLblUpSpd" class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">Upload Speed</span>
-          <span class="text-[13px] text-on-surface-variant font-mono"><span id="bwLblAvg">Avg:</span> 0.1 MB/s</span>
+          <span id="bwLblUpSpd" class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">Session Summary</span>
+          <span class="text-[12px] text-primary font-mono" id="bwSumComp">0 completed</span>
         </div>
-        <div class="bw-bars" id="bwUpBars"></div>
+        <div class="grid grid-cols-2 gap-3 text-[12px] font-mono">
+          <div class="bg-surface-container-low rounded p-2.5 border border-outline-variant/50">
+            <div class="text-[10px] text-on-surface-variant mb-0.5" id="bwLblTotDnBox">Total Downloaded</div>
+            <div class="text-on-surface font-semibold" id="bwSumTotDn" dir="ltr">0 B</div>
+          </div>
+          <div class="bg-surface-container-low rounded p-2.5 border border-outline-variant/50">
+            <div class="text-[10px] text-on-surface-variant mb-0.5" id="bwLblActConnsBox">Active Streams</div>
+            <div class="text-primary font-semibold" id="bwSumConns" dir="ltr">0</div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="bg-surface-container border border-outline-variant rounded p-5">
@@ -709,27 +718,39 @@ html[dir="rtl"] .flex.items-baseline {
               <p class="text-[12px] text-on-surface-variant" id="extractorCardDesc" style="font-family:Inter">Independent engine powers YouTube, TikTok, Instagram &amp; Facebook extraction without full app updates</p>
             </div>
           </div>
-          <button onclick="updateExtractorCore()" id="btnUpdateExtractor" class="px-3.5 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded transition-all text-[12px] flex items-center gap-1.5 active:scale-95 shadow-sm">
-            <span class="material-symbols-outlined text-[16px]" id="updateExtractorIco">sync</span>
-            <span id="updateExtractorTxt">Check &amp; Update Engine</span>
-          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="exportDiagnostics()" id="btnExportDiag" class="px-3 py-1.5 bg-surface-container-highest hover:bg-surface-container-high text-on-surface border border-outline-variant font-semibold rounded transition-all text-[12px] flex items-center gap-1.5 active:scale-95">
+              <span class="material-symbols-outlined text-[16px]">bug_report</span>
+              <span id="exportDiagTxt">Diagnostic Report</span>
+            </button>
+            <button onclick="updateExtractorCore()" id="btnUpdateExtractor" class="px-3.5 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded transition-all text-[12px] flex items-center gap-1.5 active:scale-95 shadow-sm">
+              <span class="material-symbols-outlined text-[16px]" id="updateExtractorIco">sync</span>
+              <span id="updateExtractorTxt">Check &amp; Update Engine</span>
+            </button>
+          </div>
         </div>
         <div class="flex items-center justify-between pt-2 border-t border-outline-variant/60 text-[12px]">
           <div class="text-on-surface-variant flex items-center gap-2">
             <span class="material-symbols-outlined text-[16px]">verified</span>
             <span id="extractorStatusLabel">Core Status:</span>
-            <span class="text-primary font-mono text-[11px] bg-surface-container-lowest px-2 py-0.5 rounded" id="extractorStatusTxt">Ready &amp; Active</span>
+            <span class="text-primary font-mono text-[11px] bg-surface-container-lowest px-2 py-0.5 rounded" id="extractorStatusTxt" dir="ltr">Checking...</span>
           </div>
         </div>
       </div>
 
       <div class="col-span-2 bg-surface-container border border-outline-variant rounded p-5">
-        <div id="stHdrAbout" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-3" style="font-family:'JetBrains Mono'">About SuperIDM</div>
+        <div class="flex items-center justify-between mb-3">
+          <div id="stHdrAbout" class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">About SuperIDM</div>
+          <button onclick="checkAppUpdate(true)" id="btnCheckAppUpdate" class="px-3 py-1 bg-surface-container-highest hover:bg-surface-container-high text-primary border border-outline-variant rounded text-[11px] font-semibold flex items-center gap-1.5 transition-all active:scale-95">
+            <span class="material-symbols-outlined text-[14px]">system_update_alt</span>
+            <span id="checkAppUpdateTxt">Check App Update</span>
+          </button>
+        </div>
         <div class="grid grid-cols-4 gap-4 text-[13px]" style="font-family:'JetBrains Mono'">
           <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary" dir="ltr">2.7.5</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblEngine" class="text-[11px] text-on-surface-variant mb-1">Engine</div><div class="text-on-surface" dir="ltr">SuperIDM/Rust+Tokio</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblProto" class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface" dir="ltr">HTTP/HTTPS/FTP</div></div>
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant" dir="ltr">2026.11.10</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant" dir="ltr">2026.11.16</div></div>
         </div>
       </div>
     </div>
@@ -739,7 +760,10 @@ html[dir="rtl"] .flex.items-baseline {
   <div id="logsView" class="p-6 flex-1 overflow-y-auto min-h-0 custom-scrollbar hidden">
     <div class="flex items-center justify-between mb-4">
       <h3 id="logsTitle" class="text-[22px] font-semibold text-primary" style="font-family:Inter">Activity Logs</h3>
-      <button data-act="clear-logs" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">clear_all</span><span id="logsClearBtn">Clear</span></button>
+      <div class="flex items-center gap-2">
+        <button onclick="exportDiagnostics()" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] bg-primary-container/15 text-primary border border-primary-container/40 rounded hover:bg-primary-container/25 transition-all active:scale-95" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">bug_report</span><span id="logsExportDiagBtn">Export Diagnostic Report</span></button>
+        <button data-act="clear-logs" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">clear_all</span><span id="logsClearBtn">Clear</span></button>
+      </div>
     </div>
     <div id="logBox" dir="ltr" class="bg-surface-container-low border border-outline-variant rounded p-4 overflow-y-auto text-left" style="max-height:calc(100vh - 200px)"></div>
   </div>
@@ -1455,8 +1479,9 @@ function bindTauriEvents() {
       listenFn('download_error', (event) => {
         const p = event.payload || event;
         if (!p) return;
-        const msg = String(p.message || 'Download stream failed');
-        addLog('error', `[DOWNLOAD ERROR] ${msg}`);
+        const rawMsg = String(p.message || 'Download stream failed');
+        const msg = humanizeDownloadError(rawMsg);
+        addLog('error', `[DOWNLOAD ERROR] ${rawMsg}`);
         const dl = p.id ? dls.find(d => String(d.id) === String(p.id)) : null;
         if (dl) {
           dl.lastError = msg;
@@ -1635,11 +1660,12 @@ async function syncFromBackend() {
           status: mapStatus(t.status),
           speed: t.speed || 0,
           connections: t.num_connections || gMaxConn,
+          supports_range: t.supports_range !== false,
           priority: t.priority > 0 ? 'High' : 'Normal',
           addedAt: t.created_at || Date.now(),
           destination: t.destination || savePth,
           server: t.url && t.url.includes('://') ? t.url.split('/')[2] : 'server',
-          protocol: t.url && t.url.startsWith('https') ? 'HTTPS (TLS 1.3)' : 'HTTP',
+          protocol: t.url && t.url.startsWith('https') ? 'HTTPS' : 'HTTP',
           expanded: false,
           bwH: Array(10).fill(0),
           eta_secs: t.eta_secs || 0,
@@ -1665,6 +1691,8 @@ async function syncFromBackend() {
         }
         dl.filename = fname;
         dl.name = fname;
+        if (t.num_connections) dl.connections = t.num_connections;
+        if (t.supports_range !== undefined) dl.supports_range = t.supports_range;
         if (t.total_bytes !== undefined && t.total_bytes > 0) {
           dl.total_bytes = t.total_bytes;
         }
@@ -1752,7 +1780,7 @@ function loadLocalDls() {
             addedAt: t.addedAt || Date.now(),
             destination: t.destination || savePth,
             server: t.url && t.url.includes('://') ? t.url.split('/')[2] : 'server',
-            protocol: t.url && t.url.startsWith('https') ? 'HTTPS (TLS 1.3)' : 'HTTP',
+            protocol: t.url && t.url.startsWith('https') ? 'HTTPS' : 'HTTP',
             expanded: false,
             bwH: Array(10).fill(0),
             eta_secs: 0,
@@ -1781,7 +1809,7 @@ async function addDL(rawUrl, opts = {}) {
   const conn = opts.conn || gMaxConn;
   const cat = (opts.cat && opts.cat !== 'Auto-detect') ? opts.cat : c;
   const pri = opts.pri === 'High' ? 1 : 0;
-  const simTot = opts.tot || 104857600;
+  const simTot = opts.tot || 0;
 
   const activeCount = dls.filter(d => d.status === 'downloading').length;
   const shouldQueue = opts.status === 'queued' || (activeCount >= gMaxActive);
@@ -1851,7 +1879,7 @@ async function addDL(rawUrl, opts = {}) {
       addedAt: Date.now(),
       destination: savePth,
       server: url.includes('://') ? url.split('/')[2] : 'cdn.server.net',
-      protocol: url.startsWith('https') ? 'HTTPS (TLS 1.3)' : 'HTTP',
+      protocol: url.startsWith('https') ? 'HTTPS' : 'HTTP',
       expanded: false,
       bwH: Array(10).fill(0),
       eta_secs: 0,
@@ -2747,14 +2775,30 @@ function updateIdmModal(dl) {
   const total = dl.total_bytes || dl.total || dl.size || 0;
   const downloaded = dl.downloaded_bytes || dl.downloaded || 0;
   const pct = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : (dl.progress ? Math.round(dl.progress * 100) : 0);
-  const connCount = dl.connections || dl.conn || 16;
+  const connCount = dl.connections || dl.conn || 1;
+  const isStreamTask = connCount === 1 && (dl.category === 'Videos' || dl.category === 'Music');
 
-  if (szEl) szEl.textContent = total > 0 ? fmtBytes(total) : '--';
+  if (szEl) szEl.textContent = total > 0 ? fmtBytes(total) : (dl.status === 'downloading' ? (isAr ? 'جارٍ التحضير...' : 'Preparing...') : '--');
   if (dldEl) dldEl.textContent = fmtBytes(downloaded);
   if (pctEl) pctEl.textContent = `${pct}%`;
   if (barEl) barEl.style.width = `${pct}%`;
-  if (connEl) connEl.textContent = isAr ? `${connCount} خط اتصال` : `${connCount} connections`;
-  if (resEl) resEl.textContent = isAr ? 'نعم (مدعوم)' : 'Yes (Supported)';
+  if (connEl) {
+    connEl.textContent = isStreamTask
+      ? (isAr ? 'محرك البث المباشر' : 'Media Stream Engine')
+      : (isAr ? `${connCount} خط اتصال` : `${connCount} connections`);
+  }
+  if (resEl) {
+    if (isStreamTask) {
+      resEl.textContent = isAr ? 'مدعوم (استئناف تلقائي)' : 'Supported (Auto-Resume)';
+      resEl.className = 'text-emerald-400 font-semibold ml-1.5';
+    } else if (dl.supports_range === false) {
+      resEl.textContent = isAr ? 'غير مدعوم من الخادم' : 'No (Server unsupported)';
+      resEl.className = 'text-amber-400 font-semibold ml-1.5';
+    } else {
+      resEl.textContent = isAr ? 'نعم (مدعوم)' : 'Yes (Supported)';
+      resEl.className = 'text-emerald-400 font-semibold ml-1.5';
+    }
+  }
 
   if (dl.status === 'complete' || dl.status === 'completed') {
     if (dotEl) dotEl.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
@@ -2822,6 +2866,8 @@ function updateIdmModal(dl) {
     if (stTxtEl) {
       if (downloaded === 0 && dl.statusNote) {
         stTxtEl.textContent = dl.statusNote;
+      } else if (isStreamTask) {
+        stTxtEl.textContent = isAr ? 'جارٍ استخراج وتنزيل البث...' : 'Downloading media stream...';
       } else {
         stTxtEl.textContent = isAr ? `جارٍ التنزيل عبر ${connCount} خطوط اتصال...` : `Downloading (${connCount} connections)...`;
       }
@@ -2963,7 +3009,7 @@ function resumeAll() {
   dls.forEach(d => {
     if (d.status === 'paused' || d.status === 'queued') {
       d.status = 'downloading';
-      d.speed = 2500000;
+      d.speed = 0;
       if (hasTauriIPC()) tauriCall('resume_download', { taskId: String(d.id), task_id: String(d.id) }).catch(e => console.warn(e));
     }
   });
@@ -3076,8 +3122,14 @@ function updateDLRowDOM(d) {
 
   const szEl = document.getElementById(`dlsz-${d.id}`);
   if (szEl) {
-    const displayTotal = d.total_bytes > 0 ? Math.max(d.downloaded_bytes, d.total_bytes) : d.downloaded_bytes;
-    szEl.textContent = `${fmtSz(Math.min(d.downloaded_bytes, displayTotal))} / ${fmtSz(displayTotal)}`;
+    const displayTotal = d.total_bytes > 0 ? Math.max(d.downloaded_bytes, d.total_bytes) : 0;
+    if (displayTotal > 0) {
+      szEl.textContent = `${fmtSz(Math.min(d.downloaded_bytes, displayTotal))} / ${fmtSz(displayTotal)}`;
+    } else if (d.downloaded_bytes > 0) {
+      szEl.textContent = fmtSz(d.downloaded_bytes);
+    } else {
+      szEl.textContent = isAct ? (isAr ? 'جارٍ التحضير...' : 'Preparing...') : '--';
+    }
   }
 
   const spdEl = document.getElementById(`dlspd-${d.id}`);
@@ -3189,7 +3241,13 @@ function renderDLs() {
     const catDisplay = isAr ? (catMapAr[d.category] || safeCat) : safeCat;
     const safePri = escapeHtml(d.priority || 'High');
     const priDisplay = safePri === 'High' ? (isAr ? 'عالية' : 'High') : (isAr ? 'عادية' : 'Low');
-    const displayTotal = d.total_bytes > 0 ? Math.max(d.downloaded_bytes, d.total_bytes) : d.downloaded_bytes;
+    const displayTotal = d.total_bytes > 0 ? Math.max(d.downloaded_bytes, d.total_bytes) : 0;
+    const szLabel = displayTotal > 0
+      ? `${fmtSz(Math.min(d.downloaded_bytes, displayTotal))} / ${fmtSz(displayTotal)}`
+      : (d.downloaded_bytes > 0 ? fmtSz(d.downloaded_bytes) : (isAct ? (isAr ? 'جارٍ التحضير...' : 'Preparing...') : '--'));
+    const connLabel = (d.connections === 1 && (d.category === 'Videos' || d.category === 'Music'))
+      ? (isAr ? 'محرك البث' : 'Stream Engine')
+      : `${d.connections || 16} ${isAr ? 'اتصال' : 'conns'}`;
 
     return `
     <div id="dlrow-${safeId}" data-status="${d.status}" class="dl-row bg-surface-container border border-outline-variant/60 rounded overflow-hidden" ondblclick="handleRowDblClick('${safeId}')">
@@ -3204,12 +3262,12 @@ function renderDLs() {
           </div>
           <div class="flex items-center gap-2 mt-1">
             <div id="dlseg-${safeId}" class="seg-bar">${segs.map(s => `<div class="seg ${s}"></div>`).join('')}</div>
-            <span id="dlsz-${safeId}" dir="ltr" class="text-[11px] text-on-surface-variant flex-shrink-0" style="font-family:'JetBrains Mono'">${fmtSz(Math.min(d.downloaded_bytes, displayTotal))} / ${fmtSz(displayTotal)}</span>
+            <span id="dlsz-${safeId}" dir="ltr" class="text-[11px] text-on-surface-variant flex-shrink-0" style="font-family:'JetBrains Mono'">${szLabel}</span>
           </div>
         </div>
         <div class="w-28 text-right flex-shrink-0">
           <div id="dlspd-${safeId}" dir="ltr" class="text-[12px] font-semibold ${isAct ? 'text-primary' : 'text-on-surface-variant'}" style="font-family:'JetBrains Mono'">${isAct ? fmtSpd(d.speed) : '--'}</div>
-          <div class="text-[10px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${d.connections || 16} ${isAr ? 'اتصال' : 'conns'}</div>
+          <div class="text-[10px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${connLabel}</div>
         </div>
         <div class="w-24 text-right flex-shrink-0">
           <div id="dleta-${safeId}" dir="ltr" class="text-[12px] text-on-surface-variant" style="font-family:'JetBrains Mono'">${isAct ? fmtT(d.eta_secs) : isComp ? '0s' : '--'}</div>
@@ -3232,7 +3290,7 @@ function renderDLs() {
         <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">${isAr ? 'مسار الحفظ' : 'Save Path'}</div><div class="text-on-surface truncate" title="${safeDest}">${safeDest}</div><div class="text-on-surface-variant text-[11px]">${isAr ? 'الفئة' : 'Category'}: ${catDisplay}</div></div>
         <div class="space-y-1">
           <div class="text-on-surface-variant text-[10px] uppercase">${isAr ? 'المسارات / الأولوية' : 'Streams / Priority'}</div>
-          <div class="text-on-surface">${d.connections || 16} ${isAr ? 'مسارات ذكية متزامنة' : 'dynamic active streams'}</div>
+          <div class="text-on-surface">${(d.connections === 1 && (d.category === 'Videos' || d.category === 'Music')) ? (isAr ? 'محرك استخراج ودمج البث' : 'Media Stream Extractor') : `${d.connections || 1} ${isAr ? 'اتصالات متوازية' : 'parallel connections'}`}</div>
           ${(isPsd || isErr) ? `<div class="pt-1"><button onclick="event.stopPropagation(); openRefreshLinkModal('${safeId}')" class="px-2 py-0.5 bg-primary-container/20 hover:bg-primary-container/30 border border-primary-container/40 rounded text-[11px] text-primary flex items-center gap-1 font-sans"><span class="material-symbols-outlined text-[13px]">autorenew</span><span>${isAr ? 'تحديث الرابط المنتهي' : 'Refresh Expired Link'}</span></button></div>` : `<div class="text-primary-container text-[11px]">${isAr ? 'الأولوية' : 'Priority'}: ${priDisplay}</div>`}
         </div>
         <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">${isAr ? 'استهلاك الباندويث (10 ثوانٍ)' : '10s Bandwidth History'}</div><div class="flex items-end gap-0.5 h-7 pt-1">${(d.bwH || []).map(v => `<div style="height:${Math.max(3, Math.min(100, (v / 8) * 100))}%" class="flex-1 bg-primary-container/50 rounded-sm"></div>`).join('')}</div></div>
@@ -3245,13 +3303,18 @@ function renderDLs() {
 function updStats() {
   const active = dls.filter(d => d.status === 'downloading');
   const q = dls.filter(d => d.status === 'queued');
+  const comp = dls.filter(d => d.status === 'complete' || d.status === 'completed');
   const totSpeed = active.reduce((s, d) => s + (d.speed || 0), 0);
-  const conns = active.reduce((s, d) => s + (d.connections || 16), 0);
+  const conns = active.reduce((s, d) => s + (d.connections || 1), 0);
   const totDn = dls.reduce((s, d) => s + (d.downloaded_bytes || 0), 0);
   const dnMBs = totSpeed / 1048576;
 
   const sDn = document.getElementById('sDnSpd');
   if (sDn) sDn.textContent = dnMBs.toFixed(1);
+  const sUp = document.getElementById('sUpSpd');
+  if (sUp) sUp.textContent = peakDn.toFixed(1);
+  const sHb = document.getElementById('sHeartbeatTxt');
+  if (sHb) sHb.textContent = curLang === 'ar' ? `${comp.length} مكتمل` : `${comp.length} completed`;
   const sAct = document.getElementById('sAct');
   if (sAct) sAct.textContent = active.length;
   const sTot = document.getElementById('sTot');
@@ -3270,6 +3333,16 @@ function updStats() {
   if (bwPk) bwPk.textContent = peakDn.toFixed(1);
   const bwCur = document.getElementById('bwCurDn');
   if (bwCur) bwCur.textContent = dnMBs.toFixed(1) + ' MB/s';
+  const bwSumComp = document.getElementById('bwSumComp');
+  if (bwSumComp) bwSumComp.textContent = curLang === 'ar' ? `${comp.length} مكتمل` : `${comp.length} completed`;
+  const bwSumTotDn = document.getElementById('bwSumTotDn');
+  if (bwSumTotDn) bwSumTotDn.textContent = fmtSz(totDn);
+  const bwSumConns = document.getElementById('bwSumConns');
+  if (bwSumConns) bwSumConns.textContent = String(conns);
+  const bwLblTotDnBox = document.getElementById('bwLblTotDnBox');
+  if (bwLblTotDnBox) bwLblTotDnBox.textContent = curLang === 'ar' ? 'إجمالي ما تم تنزيله' : 'Total Downloaded';
+  const bwLblActConnsBox = document.getElementById('bwLblActConnsBox');
+  if (bwLblActConnsBox) bwLblActConnsBox.textContent = curLang === 'ar' ? 'الاتصالات النشطة' : 'Active Streams';
 }
 
 function updBwBars() {
@@ -4045,10 +4118,10 @@ const I18N = {
     tabBw: 'استهلاك الباندويث',
     tabSched: 'المجدول الزمني',
     lblTotDown: 'إجمالي سرعة التنزيل',
-    lblTotUp: 'إجمالي سرعة الرفع',
+    lblTotUp: 'أقصى سرعة مسجلة',
     lblActTasks: 'المهام النشطة',
-    lblSysLoad: 'استهلاك النظام',
-    sHeartbeatTxt: 'نبض الشبكة نشط',
+    lblSysLoad: 'سعة المهام المتزامنة',
+    sHeartbeatTxt: '0 مكتمل',
     downloaded: 'تم تنزيله',
     queued: 'في الانتظار',
 
@@ -4079,7 +4152,7 @@ const I18N = {
     bwTitle: 'مراقبة استهلاك الباندويث',
     bwDesc: 'معدل السرعة الحي خلال آخر 30 عينة (فترات 400 مللي ثانية)',
     bwLblDnSpd: 'سرعة التنزيل',
-    bwLblUpSpd: 'سرعة الرفع',
+    bwLblUpSpd: 'ملخص الجلسة الفعلي',
     bwLblPeak: 'الذروة:',
     bwLbl30s: 'قبل 30 ثانية',
     bwLblNow: 'الآن',
@@ -4311,10 +4384,10 @@ const I18N = {
     tabBw: 'Bandwidth',
     tabSched: 'Scheduler',
     lblTotDown: 'Total Down',
-    lblTotUp: 'Total Up',
+    lblTotUp: 'Peak Speed',
     lblActTasks: 'Active Tasks',
-    lblSysLoad: 'System Load',
-    sHeartbeatTxt: 'Heartbeat active',
+    lblSysLoad: 'Slot Capacity',
+    sHeartbeatTxt: '0 completed',
     downloaded: 'downloaded',
     queued: 'queued',
 
@@ -4345,7 +4418,7 @@ const I18N = {
     bwTitle: 'Bandwidth Monitor',
     bwDesc: 'Real-time speed over the last 30 samples (400ms intervals)',
     bwLblDnSpd: 'Download Speed',
-    bwLblUpSpd: 'Upload Speed',
+    bwLblUpSpd: 'Session Summary',
     bwLblPeak: 'Peak:',
     bwLbl30s: '30s ago',
     bwLblNow: 'Now',
@@ -4622,9 +4695,17 @@ function applyI18n() {
       : (isRtl ? '+ تنزيل دفعات' : '+ Batch mode');
   }
 
+  const expDiag = document.getElementById('exportDiagTxt');
+  if (expDiag) expDiag.textContent = isRtl ? 'تقرير التشخيص' : 'Diagnostic Report';
+  const logsExpDiag = document.getElementById('logsExportDiagBtn');
+  if (logsExpDiag) logsExpDiag.textContent = isRtl ? 'تصدير تقرير التشخيص' : 'Export Diagnostic Report';
+  const chkAppUpd = document.getElementById('checkAppUpdateTxt');
+  if (chkAppUpd) chkAppUpd.textContent = isRtl ? 'فحص تحديث البرنامج' : 'Check App Update';
+
   setView(curView);
   renderDLs();
   updStats();
+  refreshEngineStatusUI();
 }
 
 function toggleLang() {
@@ -4638,6 +4719,120 @@ function toggleLang() {
 
 window.toggleLang = toggleLang;
 window.applyI18n = applyI18n;
+
+function humanizeDownloadError(rawMsg) {
+  const s = String(rawMsg || '');
+  const low = s.toLowerCase();
+  const isAr = curLang === 'ar';
+  if (low.includes('not a bot') || low.includes('sign in to confirm')) {
+    return isAr
+      ? 'يوتيوب يطلب التحقق لهذا الفيديو. جرّب الضغط على "تحديث المحرك" من الإعدادات أو إعادة المحاولة.'
+      : 'YouTube requested verification for this video. Try "Check & Update Engine" in Settings or retry.';
+  }
+  if (low.includes('private video') || low.includes('members-only')) {
+    return isAr
+      ? 'هذا الفيديو خاص أو مخصص للمنتسبين فقط ولا يمكن تحميله.'
+      : 'This video is private or members-only and cannot be downloaded.';
+  }
+  if (low.includes('video unavailable') || low.includes('has been removed')) {
+    return isAr
+      ? 'الفيديو غير متاح (تم حذفه أو محجوب في منطقتك الجغرافية).'
+      : 'This video is unavailable (removed or region-restricted).';
+  }
+  if (low.includes('403') || low.includes('forbidden')) {
+    return isAr
+      ? 'انتهت صلاحية رابط البث المؤقت (403). اضغط استئناف/إعادة المحاولة لتجديده.'
+      : 'Temporary stream link expired (HTTP 403). Click Resume/Retry to refresh.';
+  }
+  if (low.includes('timed out') || low.includes('did not respond') || low.includes('cannot reach')) {
+    return isAr
+      ? 'تعذر الاتصال بالخادم (ضعف في الإنترنت أو انتهاء المهلة). يرجى المحاولة مرة أخرى.'
+      : 'Connection timed out or network unreachable. Please try again.';
+  }
+  return s;
+}
+window.humanizeDownloadError = humanizeDownloadError;
+
+let lastEngineStatus = null;
+async function refreshEngineStatusUI() {
+  const stat = document.getElementById('extractorStatusTxt');
+  if (!stat || !hasTauriIPC()) return;
+  try {
+    const info = await tauriCall('get_engine_status');
+    if (info) {
+      lastEngineStatus = info;
+      const ytVer = info.ytdlp_version ? `yt-dlp ${info.ytdlp_version}` : 'yt-dlp missing';
+      const ff = info.ffmpeg_ok ? 'FFmpeg OK' : 'FFmpeg missing';
+      const jsName = info.js_runtime ? info.js_runtime.split(':')[0] : 'JS';
+      const js = info.js_ok ? `${jsName} OK` : 'JS missing';
+      stat.textContent = `${ytVer} • ${ff} • ${js}`;
+    }
+  } catch (e) {}
+}
+window.refreshEngineStatusUI = refreshEngineStatusUI;
+
+async function exportDiagnostics() {
+  const isAr = curLang === 'ar';
+  if (!hasTauriIPC()) {
+    showT('info', isAr ? 'تقرير التشخيص' : 'Diagnostic Report', isAr ? 'متاح داخل تطبيق سطح المكتب' : 'Available inside desktop app');
+    return;
+  }
+  try {
+    const uiLogLines = logs.slice(0, 60).map(l => `[${l.ts}] [${l.type}] ${l.text}`);
+    const res = await tauriCall('export_diagnostic_report', { uiLogs: uiLogLines, ui_logs: uiLogLines });
+    if (res && res.report && navigator.clipboard && navigator.clipboard.writeText) {
+      try { await navigator.clipboard.writeText(res.report); } catch (e) {}
+    }
+    const savedPath = (res && res.path) ? res.path : 'Desktop\\SuperIDM_Diagnostic_Report.txt';
+    addLog('success', `[DIAGNOSTICS] Saved report to: ${savedPath}`);
+    showT(
+      'success',
+      isAr ? 'تم حفظ ونسخ تقرير التشخيص' : 'Diagnostic Report Saved & Copied',
+      isAr ? `تم حفظ الملف على سطح المكتب ونسخه للحافظة: ${savedPath}` : `Saved to Desktop & copied to clipboard: ${savedPath}`
+    );
+    refreshEngineStatusUI();
+  } catch (e) {
+    showT('error', isAr ? 'فشل تصدير التقرير' : 'Diagnostic Export Failed', String(e));
+  }
+}
+window.exportDiagnostics = exportDiagnostics;
+
+async function checkAppUpdate(manual = false) {
+  if (!hasTauriIPC()) return;
+  const isAr = curLang === 'ar';
+  const btn = document.getElementById('btnCheckAppUpdate');
+  const txt = document.getElementById('checkAppUpdateTxt');
+  if (manual && btn) btn.disabled = true;
+  if (manual && txt) txt.textContent = isAr ? 'جارٍ الفحص...' : 'Checking...';
+  try {
+    const info = await tauriCall('check_app_update');
+    if (info && info.update_available) {
+      addLog('info', `[UPDATE] New version v${info.latest_version} available!`);
+      showT(
+        'info',
+        isAr ? `تحديث جديد متاح (v${info.latest_version})` : `Update Available (v${info.latest_version})`,
+        isAr ? 'جارٍ فتح رابط التحميل المباشر للنسخة الجديدة...' : 'Opening direct installer download...'
+      );
+      if (manual && info.download_url) {
+        await tauriCall('open_external_url', { url: info.download_url });
+      }
+    } else if (manual && info) {
+      showT(
+        'success',
+        isAr ? 'البرنامج محدّث' : 'Up to Date',
+        isAr ? `أنت تستخدم أحدث إصدار حالياً (v${info.current_version})` : `You are running the latest version (v${info.current_version})`
+      );
+    }
+  } catch (e) {
+    if (manual) {
+      showT('error', isAr ? 'فحص التحديث' : 'Update Check', humanizeDownloadError(e));
+    }
+  } finally {
+    if (manual && btn) btn.disabled = false;
+    if (manual && txt) txt.textContent = isAr ? 'فحص تحديث البرنامج' : 'Check App Update';
+  }
+}
+window.checkAppUpdate = checkAppUpdate;
 
 async function updateExtractorCore() {
   const btn = document.getElementById('btnUpdateExtractor');
@@ -4657,14 +4852,15 @@ async function updateExtractorCore() {
       if (stat) stat.textContent = res || t.extractorReady;
       showT('success', t.extractorCardTitle, res || t.extractorUpdated);
       addLog('success', `[EXTRACTOR CORE] ${res}`);
+      await refreshEngineStatusUI();
     } else {
       setTimeout(() => {
-        if (stat) stat.textContent = 'v2026.08.20 (Latest)';
+        if (stat) stat.textContent = 'v2026.10.26 (Latest)';
         showT('success', t.extractorCardTitle, t.extractorUpdated);
       }, 1000);
     }
   } catch (e) {
-    showT('error', curLang === 'ar' ? 'خطأ في التحديث' : 'Update Error', String(e));
+    showT('error', curLang === 'ar' ? 'خطأ في التحديث' : 'Update Error', humanizeDownloadError(e));
     addLog('error', `[EXTRACTOR CORE ERROR] ${e}`);
   } finally {
     btn.disabled = false;
@@ -4955,12 +5151,16 @@ function initTauriState() {
       }
     }).catch(() => {});
 
+    if (!lastEngineStatus) {
+      refreshEngineStatusUI();
+    }
     syncFromBackend();
   }
 }
 
 applyI18n();
 initTauriState();
+setTimeout(() => checkAppUpdate(false), 8000);
 setInterval(initTauriState, 1500);
 setInterval(syncFromBackend, 600);
 setInterval(localTick, 350);

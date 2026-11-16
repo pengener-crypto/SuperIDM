@@ -85,6 +85,9 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             commands::set_window_title,
             commands::open_external_url,
             commands::focus_window,
+            commands::get_engine_status,
+            commands::check_app_update,
+            commands::export_diagnostic_report,
         ])
         .setup(move |app| {
             let manager_clone = manager.clone();
@@ -172,6 +175,37 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = rpc.start(mgr_rpc).await {
                     eprintln!("Warning: RPC server failed to start: {}", e);
+                }
+            });
+
+            // Silent daily yt-dlp background check (runs 6s after startup, at most once every 24h)
+            let mgr_bg = manager_clone.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(6)).await;
+                let stamp_path = dirs::data_local_dir()
+                    .map(|d| d.join("SuperIDM").join("bin").join("last_ytdlp_check.txt"));
+                let now_secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let should_check = match stamp_path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
+                    Some(s) => {
+                        let prev = s.trim().parse::<u64>().unwrap_or(0);
+                        now_secs.saturating_sub(prev) >= 86_400
+                    }
+                    None => true,
+                };
+                if should_check {
+                    let client = mgr_bg.read().http_client.clone();
+                    if let Ok(msg) = engine::extractor::MediaExtractor::update_ytdlp_core(&client).await {
+                        engine::extractor::record_engine_log(format!("[daily-check] {}", msg));
+                        if let Some(p) = stamp_path {
+                            if let Some(parent) = p.parent() {
+                                let _ = tokio::fs::create_dir_all(parent).await;
+                            }
+                            let _ = tokio::fs::write(&p, now_secs.to_string()).await;
+                        }
+                    }
                 }
             });
 

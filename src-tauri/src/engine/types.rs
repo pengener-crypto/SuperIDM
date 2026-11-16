@@ -165,6 +165,7 @@ pub struct TaskSummary {
     pub category: String,
     pub priority: u8,
     pub num_connections: usize,
+    pub supports_range: bool,
     pub created_at: i64,
     pub eta_secs: f64,
 }

@@ -9,7 +9,97 @@ use super::types::{MediaExtractionInfo, MediaFormat, PlaylistItem, PlaylistExtra
 /// Universal Media Extractor Pipeline.
 pub struct MediaExtractor;
 
+/// In-memory ring buffer of recent engine events/errors, included in diagnostic reports.
+fn engine_log_buffer() -> &'static parking_lot::Mutex<std::collections::VecDeque<String>> {
+    static BUF: std::sync::OnceLock<parking_lot::Mutex<std::collections::VecDeque<String>>> =
+        std::sync::OnceLock::new();
+    BUF.get_or_init(|| parking_lot::Mutex::new(std::collections::VecDeque::with_capacity(200)))
+}
+
+/// Record a line in the engine diagnostic log (also printed to stderr).
+pub fn record_engine_log(msg: impl AsRef<str>) {
+    let line = format!(
+        "[{}] {}",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        msg.as_ref()
+    );
+    eprintln!("{}", line);
+    let mut buf = engine_log_buffer().lock();
+    if buf.len() >= 200 {
+        buf.pop_front();
+    }
+    buf.push_back(line);
+}
+
+/// Snapshot of recent engine log lines (oldest first).
+pub fn recent_engine_log() -> Vec<String> {
+    engine_log_buffer().lock().iter().cloned().collect()
+}
+
+/// Real, measured state of the media engine components (no assumed values).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EngineStatus {
+    pub ytdlp_path: Option<String>,
+    pub ytdlp_version: Option<String>,
+    pub ffmpeg_path: Option<String>,
+    pub ffmpeg_ok: bool,
+    pub js_runtime: Option<String>,
+    pub js_ok: bool,
+    pub ready: bool,
+}
+
+fn run_quiet(exe: &std::path::Path, args: &[&str]) -> Option<std::process::Output> {
+    let mut cmd = Command::new(exe);
+    cmd.args(args);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd.output().ok()
+}
+
 impl MediaExtractor {
+    /// Probe every media engine component by actually executing it.
+    /// Blocking: call from `spawn_blocking`.
+    pub fn engine_status() -> EngineStatus {
+        let ytdlp = Self::find_ytdlp_binary();
+        let ytdlp_version = ytdlp.as_ref().and_then(|p| Self::verify_ytdlp_binary(p));
+
+        let ffmpeg = Self::find_ffmpeg_binary();
+        let ffmpeg_ok = ffmpeg
+            .as_ref()
+            .and_then(|p| run_quiet(p, &["-hide_banner", "-version"]))
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        let js_runtime = Self::js_runtime_arg();
+        let js_ok = js_runtime
+            .as_ref()
+            .and_then(|rt| {
+                let (kind, path) = rt.split_once(':')?;
+                let exe = std::path::PathBuf::from(path);
+                let out = match kind {
+                    "quickjs" | "node" => run_quiet(&exe, &["-e", "console.log(6*7)"]),
+                    "deno" => run_quiet(&exe, &["eval", "console.log(6*7)"]),
+                    _ => None,
+                }?;
+                Some(out.status.success() && String::from_utf8_lossy(&out.stdout).contains("42"))
+            })
+            .unwrap_or(false);
+
+        let ready = ytdlp_version.is_some() && ffmpeg_ok && js_ok;
+        EngineStatus {
+            ytdlp_path: ytdlp.map(|p| p.to_string_lossy().to_string()),
+            ytdlp_version,
+            ffmpeg_path: ffmpeg.map(|p| p.to_string_lossy().to_string()),
+            ffmpeg_ok,
+            js_runtime,
+            js_ok,
+            ready,
+        }
+    }
+
     /// Check if a URL belongs to a media stream or streaming platform
     pub fn is_media_url(url: &str) -> bool {
         let u = url.to_lowercase();
@@ -646,7 +736,7 @@ impl MediaExtractor {
                     return Some(local_bin);
                 } else {
                     // Corrupted, truncated, or outdated (< 2026.10.01) local binary — delete it!
-                    eprintln!("[SuperIDM] Purging invalid/outdated local yt-dlp binary: {:?}", local_bin);
+                    record_engine_log(format!("[engine] purged invalid/outdated local yt-dlp: {:?}", local_bin));
                     let _ = std::fs::remove_file(&local_bin);
                 }
             }
@@ -866,7 +956,7 @@ impl MediaExtractor {
         // YouTube needs a JavaScript runtime for its stream-URL challenges. Bootstrap Deno once if neither Deno nor Node is present.
         if Self::is_youtube_url(url) && Self::js_runtime_arg().is_none() {
             if let Err(e) = Self::ensure_deno_binary(client).await {
-                eprintln!("[SuperIDM] Deno bootstrap failed ({}); continuing without JS runtime.", e);
+                record_engine_log(format!("[bootstrap] JS runtime unavailable: {}", e));
             }
         }
 
@@ -879,11 +969,11 @@ impl MediaExtractor {
             return Err(first_err);
         }
 
-        eprintln!("[SuperIDM] Media download failed ({}). Auto-updating extractor core and retrying once...", first_err);
+        record_engine_log(format!("[download] first attempt failed, auto-updating engine and retrying: {}", first_err));
         match Self::update_ytdlp_core(client).await {
-            Ok(msg) => eprintln!("[SuperIDM] {}", msg),
+            Ok(msg) => record_engine_log(format!("[update] {}", msg)),
             Err(e) => {
-                eprintln!("[SuperIDM] Extractor auto-update failed: {}", e);
+                record_engine_log(format!("[update] auto-update failed: {}", e));
                 return Err(first_err);
             }
         }
@@ -920,7 +1010,7 @@ impl MediaExtractor {
                     has_ffmpeg = true;
                 }
                 Err(e) => {
-                    eprintln!("[SuperIDM] FFmpeg Auto-Bootstrap failed ({}); falling back to single combined stream.", e);
+                    record_engine_log(format!("[bootstrap] FFmpeg unavailable, falling back to single combined stream: {}", e));
                 }
             }
         }
@@ -930,10 +1020,19 @@ impl MediaExtractor {
         const SINGLE_STREAM_ONLY: &str =
             "best[ext=mp4][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best";
 
+        let is_audio_only_req = format_id
+            .map(|fid| {
+                let fl = fid.to_lowercase();
+                fl.contains("audio") || fl == "mp3"
+            })
+            .unwrap_or(false);
+
         let format_arg_str = match format_id {
             Some(fid) if !fid.is_empty() && fid != "best" && fid != "auto" => {
-                if has_ffmpeg {
-                    if fid.contains('+') || fid.to_lowercase().contains("audio") {
+                if is_audio_only_req {
+                    "bestaudio[ext=m4a]/bestaudio/best".to_string()
+                } else if has_ffmpeg {
+                    if fid.contains('+') {
                         fid.to_string()
                     } else {
                         format!("{}+bestaudio[ext=m4a]/{}+bestaudio/best", fid, fid)
@@ -968,7 +1067,13 @@ impl MediaExtractor {
             .arg("--fragment-retries").arg("10");
 
         if has_ffmpeg {
-            cmd.arg("--merge-output-format").arg("mp4");
+            if is_audio_only_req {
+                cmd.arg("-x")
+                    .arg("--audio-format").arg("mp3")
+                    .arg("--audio-quality").arg("0");
+            } else {
+                cmd.arg("--merge-output-format").arg("mp4");
+            }
         }
 
         // JS runtime for YouTube challenges (Deno preferred, explicit path so PATH is irrelevant)
@@ -1033,7 +1138,7 @@ impl MediaExtractor {
 
             let raw_line = line.trim();
 
-            // Detect FFmpeg format merger
+            // Detect FFmpeg format merger or audio extraction destination
             if raw_line.contains("[Merger]") || raw_line.contains("Merging formats into") {
                 if let Some(start) = raw_line.find('"') {
                     if let Some(end) = raw_line.rfind('"') {
@@ -1045,6 +1150,16 @@ impl MediaExtractor {
                 }
                 max_progress = max_progress.max(0.98);
                 let _ = progress_tx.send((max_progress, 0.0, total_bytes, total_bytes, 1.0, false, None)).await;
+                continue;
+            }
+            if raw_line.contains("[ExtractAudio]") {
+                if let Some((_, dest_raw)) = raw_line.split_once("Destination:") {
+                    let p = std::path::PathBuf::from(dest_raw.trim());
+                    let fname = p.file_name().map(|n| n.to_string_lossy().to_string());
+                    final_path = Some(p);
+                    max_progress = max_progress.max(0.98);
+                    let _ = progress_tx.send((max_progress, 0.0, total_bytes, total_bytes, 1.0, false, fname)).await;
+                }
                 continue;
             }
 
@@ -1064,11 +1179,13 @@ impl MediaExtractor {
                 dest_count += 1;
                 if dest_count >= 2 {
                     is_audio_pass = true;
-                } else if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
-                    // NOTE: Do NOT include "webm" here — 2K/4K YouTube video streams use .webm (VP9/AV1).
-                    let ext_low = ext.to_lowercase();
-                    if matches!(ext_low.as_str(), "m4a" | "opus" | "mp3" | "aac" | "ogg" | "flac" | "wav") {
-                        is_audio_pass = true;
+                } else if !is_audio_only_req {
+                    if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                        // NOTE: Do NOT include "webm" here — 2K/4K YouTube video streams use .webm (VP9/AV1).
+                        let ext_low = ext.to_lowercase();
+                        if matches!(ext_low.as_str(), "m4a" | "opus" | "mp3" | "aac" | "ogg" | "flac" | "wav") {
+                            is_audio_pass = true;
+                        }
                     }
                 }
                 let is_temp_part = p.file_name()
@@ -1079,12 +1196,17 @@ impl MediaExtractor {
                     .unwrap_or(false);
 
                 // Extract clean display filename so UI replaces "Video_Stream.mp4" immediately
+                let target_ext = if is_audio_only_req && has_ffmpeg { "mp3" } else { "mp4" };
                 let clean_display_name = p.file_name().and_then(|n| n.to_str()).map(|fname| {
                     if is_temp_part {
                         if let Some((stem, _)) = fname.rsplit_once('.') {
                             if let Some(f_idx) = stem.rfind(".f") {
-                                return format!("{}.mp4", &stem[..f_idx]);
+                                return format!("{}.{}", &stem[..f_idx], target_ext);
                             }
+                        }
+                    } else if is_audio_only_req && has_ffmpeg {
+                        if let Some((stem, _)) = fname.rsplit_once('.') {
+                            return format!("{}.mp3", stem);
                         }
                     }
                     fname.to_string()
@@ -1146,12 +1268,14 @@ impl MediaExtractor {
                     }
 
                     // Auto-detect pass switch if raw_percent dropped drastically (e.g. 99% -> 2%)
-                    if !is_audio_pass && last_raw_percent > 0.80 && raw_percent < 0.20 {
+                    if !is_audio_only_req && !is_audio_pass && last_raw_percent > 0.80 && raw_percent < 0.20 {
                         is_audio_pass = true;
                     }
                     last_raw_percent = raw_percent;
 
-                    let mut normalized_progress = if is_audio_pass {
+                    let mut normalized_progress = if is_audio_only_req {
+                        raw_percent.min(1.0) * 0.95 // Single audio pass 0% -> 95%, then ExtractAudio -> 98%
+                    } else if is_audio_pass {
                         0.75 + (raw_percent.min(1.0) * 0.23) // 75% -> 98%
                     } else {
                         raw_percent.min(1.0) * 0.75 // 0% -> 75%
@@ -1203,7 +1327,17 @@ impl MediaExtractor {
                     .cloned()
                     .unwrap_or_else(|| log.last().cloned().unwrap_or_else(|| "Video extraction failed".to_string()))
             };
-            eprintln!("[MediaExtractor Error] yt-dlp exit status: {:?}, detail: {}", status.code(), last_err);
+            let tail: Vec<String> = {
+                let log = stderr_log.lock();
+                log.iter().rev().take(8).rev().cloned().collect()
+            };
+            record_engine_log(format!(
+                "[download] yt-dlp exit {:?} for {} | {}\n    stderr tail:\n    {}",
+                status.code(),
+                clean_url,
+                last_err,
+                tail.join("\n    ")
+            ));
             Err(format!("Video extraction failed: {}", last_err))
         }
     }
@@ -1443,6 +1577,7 @@ impl MediaExtractor {
                 .or_else(|| err_msg.lines().rev().find(|l| !l.trim().is_empty()))
                 .unwrap_or("Playlist unavailable or invalid URL")
                 .trim();
+            record_engine_log(format!("[playlist] extraction failed for {} | {}", clean_url, first_line));
             return Err(first_line.to_string());
         }
 
@@ -1688,6 +1823,7 @@ impl MediaExtractor {
                 .or_else(|| err_msg.lines().rev().find(|l| !l.trim().is_empty()))
                 .unwrap_or("Video unavailable or invalid URL")
                 .trim();
+            record_engine_log(format!("[extract] failed for {} | {}", clean_url, first_line));
             return Err(first_line.to_string());
         }
 
@@ -2067,5 +2203,18 @@ mod tests {
         // Small file should be rejected by verify_ytdlp_binary
         let cargo_toml = manifest_dir.join("Cargo.toml");
         assert!(MediaExtractor::verify_ytdlp_binary(&cargo_toml).is_none());
+    }
+
+    #[test]
+    fn test_engine_status_and_log_buffer() {
+        record_engine_log("[test] diagnostic log entry");
+        let logs = recent_engine_log();
+        assert!(logs.iter().any(|l| l.contains("[test] diagnostic log entry")));
+
+        let status = MediaExtractor::engine_status();
+        assert!(status.ytdlp_version.is_some());
+        assert!(status.ffmpeg_ok);
+        assert!(status.js_ok);
+        assert!(status.ready);
     }
 }
