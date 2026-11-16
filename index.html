@@ -1252,38 +1252,38 @@ html[dir="rtl"] .flex.items-baseline {
 </div>
 
 <!-- ══ DELETE CONFIRMATION MODAL ══ -->
-<div id="deleteConfirmModal" class="fixed inset-0 z-[105] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.78);backdrop-filter:blur(8px)" onclick="if(event.target===this) closeDeleteConfirmModal()">
-  <div class="w-full max-w-md bg-surface-container border border-outline-variant rounded-lg shadow-2xl overflow-hidden">
+<div id="deleteConfirmModal" class="fixed inset-0 z-[105] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.78);backdrop-filter:blur(8px);z-index:105" onclick="if(event.target===this) closeDeleteConfirmModal()">
+  <div class="glass-panel w-full max-w-md rounded-xl shadow-2xl flex flex-col modal-enter overflow-hidden border border-outline-variant/80" style="max-width:440px">
     <div class="flex items-center justify-between px-4 py-3 border-b border-outline-variant/60 bg-surface-container-low">
       <div class="flex items-center gap-2.5">
         <span class="material-symbols-outlined text-[20px] text-red-400">delete_forever</span>
-        <h3 id="delConfirmTitle" class="text-sm font-semibold text-on-surface">حذف التنزيل والملف</h3>
+        <h3 id="delConfirmTitle" class="text-[14px] font-bold text-on-surface">حذف التنزيل والملف</h3>
       </div>
-      <button type="button" onclick="closeDeleteConfirmModal()" class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors">
+      <button type="button" onclick="closeDeleteConfirmModal()" class="w-7 h-7 rounded flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors">
         <span class="material-symbols-outlined text-[18px]">close</span>
       </button>
     </div>
-    <div class="p-4 space-y-3">
-      <p id="delConfirmSubtitle" class="text-xs text-on-surface-variant leading-relaxed">هل تريد حذف هذه المهمة نهائياً مع الملف المرتبط بها على القرص؟</p>
-      <div class="p-3 rounded bg-surface-container-lowest border border-outline-variant/60 space-y-1.5">
-        <div id="delConfirmFilename" class="text-xs font-medium text-on-surface break-all"></div>
+    <div class="p-4 flex flex-col gap-3">
+      <p id="delConfirmSubtitle" class="text-[12px] text-on-surface-variant leading-relaxed">هل تريد حذف هذه المهمة نهائياً مع الملف المرتبط بها على القرص؟</p>
+      <div class="p-3 rounded-lg bg-surface-container-lowest/90 border border-outline-variant/60 flex flex-col gap-1">
+        <div id="delConfirmFilename" class="text-[12px] font-semibold text-on-surface break-all"></div>
         <div id="delConfirmPath" class="text-[11px] font-mono text-on-surface-variant break-all"></div>
       </div>
-      <label class="flex items-start gap-2.5 p-2.5 rounded bg-red-500/10 border border-red-500/25 cursor-pointer select-none">
-        <input id="delConfirmDiskChk" type="checkbox" checked class="mt-0.5 accent-red-500" onchange="updateDeleteModalBtnLabel()">
-        <span id="delConfirmDiskLbl" class="text-xs text-red-200 leading-relaxed">حذف الملف المرتبط من القرص أيضاً (الفيديو، البرنامج، أو الملفات المؤقتة)</span>
+      <label class="flex items-start gap-2.5 p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 cursor-pointer select-none">
+        <input id="delConfirmDiskChk" type="checkbox" checked class="mt-0.5 accent-red-500 cursor-pointer" onchange="updateDeleteModalBtnLabel()">
+        <span id="delConfirmDiskLbl" class="text-[12px] text-red-400 leading-relaxed">حذف الملف المرتبط من القرص أيضاً (الفيديو، البرنامج، أو الملفات المؤقتة)</span>
       </label>
     </div>
     <div class="flex items-center justify-end gap-2 px-4 py-3 border-t border-outline-variant/60 bg-surface-container-low">
-      <button type="button" id="delConfirmCancelBtn" onclick="closeDeleteConfirmModal()" class="px-3 py-1.5 rounded text-xs font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest border border-outline-variant/60 transition-colors">إلغاء</button>
-      <button type="button" id="delConfirmListOnlyBtn" onclick="confirmDeleteDL(false)" class="px-3 py-1.5 rounded text-xs font-medium text-on-surface bg-surface-container-highest hover:bg-surface-container border border-outline-variant transition-colors">إزالة من القائمة فقط</button>
-      <button type="button" id="delConfirmPrimaryBtn" onclick="confirmDeleteDL()" class="px-3.5 py-1.5 rounded text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow transition-colors">حذف الملف والمهمة</button>
+      <button type="button" id="delConfirmCancelBtn" onclick="closeDeleteConfirmModal()" class="px-3 py-1.5 rounded text-[12px] font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest border border-outline-variant/60 transition-colors">إلغاء</button>
+      <button type="button" id="delConfirmListOnlyBtn" onclick="confirmDeleteDL(false)" class="px-3 py-1.5 rounded text-[12px] font-medium text-on-surface bg-surface-container-highest hover:bg-surface-container border border-outline-variant transition-colors">إزالة من القائمة فقط</button>
+      <button type="button" id="delConfirmPrimaryBtn" onclick="confirmDeleteDL()" class="px-3.5 py-1.5 rounded text-[12px] font-semibold bg-red-600 hover:bg-red-500 text-white shadow transition-colors">حذف الملف والمهمة</button>
     </div>
   </div>
 </div>
 
 <!-- ══ ROW CONTEXT MENU ══ -->
-<div id="rowCtxMenu" class="fixed z-[115] hidden min-w-[220px] bg-surface-container border border-outline-variant rounded-md shadow-2xl py-1.5 text-xs select-none" onclick="event.stopPropagation()"></div>
+<div id="rowCtxMenu" class="fixed z-[115] hidden min-w-[220px] glass-panel border border-outline-variant/80 rounded-lg shadow-2xl py-1.5 text-[12px] select-none" style="z-index:115;min-width:220px" onclick="event.stopPropagation()"></div>
 
 <!-- ══ IDM CLASSIC FLOATING PROGRESS DIALOG ══ -->
 <div id="idmDownloadModal" class="fixed inset-0 z-[96] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.78);backdrop-filter:blur(8px)">
@@ -2594,10 +2594,10 @@ function updateDeleteModalBtnLabel() {
   if (!chk || !btn) return;
   if (chk.checked) {
     btn.textContent = isAr ? 'حذف الملف والمهمة' : 'Delete File & Task';
-    btn.className = 'px-3.5 py-1.5 rounded text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow transition-colors';
+    btn.className = 'px-3.5 py-1.5 rounded text-[12px] font-semibold bg-red-600 hover:bg-red-500 text-white shadow transition-colors';
   } else {
     btn.textContent = isAr ? 'إزالة من القائمة فقط' : 'Remove from List Only';
-    btn.className = 'px-3.5 py-1.5 rounded text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow transition-colors';
+    btn.className = 'px-3.5 py-1.5 rounded text-[12px] font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow transition-colors';
   }
 }
 
@@ -2892,7 +2892,7 @@ function showRowCtxMenu(ev, id) {
   const isErr = dl.status === 'error' || dl.status === 'failed';
 
   const item = (icon, label, cls, onclickStr) =>
-    `<button type="button" class="w-full flex items-center gap-2.5 px-3 py-1.5 text-left ${cls} hover:bg-surface-container-highest transition-colors" onclick="hideRowCtxMenu(); ${onclickStr}">
+    `<button type="button" class="w-full flex items-center gap-2.5 px-3 py-1.5 ${isAr ? 'text-right' : 'text-left'} ${cls} hover:bg-surface-container-highest transition-colors" onclick="hideRowCtxMenu(); ${onclickStr}">
        <span class="material-symbols-outlined text-[16px]">${icon}</span>
        <span class="truncate">${label}</span>
      </button>`;
