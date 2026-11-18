@@ -4266,7 +4266,7 @@ function playCompletionChime() {
 let gLastTitle = '';
 function updateWindowTitle(activeCount, totSpeed, avgProg) {
   const en = document.getElementById('taskbarSpeedOpt')?.checked ?? true;
-  let title = 'SuperIDM — Download Engine v2.7.5';
+  let title = 'SuperIDM — Download Engine v2.7.6';
   if (en && activeCount > 0) {
     const spdStr = fmtSpd(totSpeed);
     const pct = Math.round(avgProg * 100);
@@ -4511,7 +4511,7 @@ const I18N = {
   ar: {
     // Header & Brand
     langBtn: 'English',
-    brandEngineVer: 'محرك v2.7.5 فائق السرعة',
+    brandEngineVer: 'محرك v2.7.6 فائق السرعة',
     txtAddLink: 'إضافة رابط جديد',
     txtDownloadsHdr: 'التنزيلات',
     txtNavDl: 'جارٍ التنزيل',
@@ -4602,10 +4602,11 @@ const I18N = {
     stLblSoundAlert: 'تنبيه صوتي عند اكتمال التنزيل',
     stLblForceHttps: 'فرض اتصال HTTPS الآمن فقط',
     stHdrBrowserInt: 'التكامل مع المتصفحات ولاقط الفيديو العائم',
-    stDescBrowserInt: 'تكامل فوري بنقرة واحدة لمتصفحات Chrome و Edge و Brave و Opera',
+    stDescBrowserInt: 'تكامل فوري بنقرة واحدة لمتصفحات Chrome و Edge و Firefox و Brave و Opera',
     stBadgeActiveReady: 'نشط وجاهز',
     stBtnChrome: 'تكامل بنقرة واحدة ←',
     stBtnEdge: 'تثبيت من متجر Edge الرسمي ←',
+    stBtnFirefox: 'تثبيت من متجر Firefox الرسمي ←',
     stBtnBrave: 'تكامل بنقرة واحدة ←',
     stChromeDirectLbl: 'متجر Google Chrome الرسمي:',
     stTxtCopyChrome: 'نسخ',
@@ -4614,6 +4615,10 @@ const I18N = {
     stTxtCopyEdge: 'نسخ',
     stTxtOpenEdge: 'فتح',
     stEdgeStoreTag: 'متجر رسمي معتمد',
+    stFirefoxDirectLbl: 'متجر Mozilla Firefox الرسمي:',
+    stTxtCopyFirefox: 'نسخ',
+    stTxtOpenFirefox: 'فتح',
+    stFirefoxStoreTag: 'متجر Firefox AMO',
     stLblExtLoc: 'حالة الإضافة:',
     stExtStatusTxt: 'جاهزة ومتزامنة',
     extModalTitle: 'تثبيت إضافة SuperIDM في المتصفح',
@@ -4631,6 +4636,12 @@ const I18N = {
     extBtnCopyEdge: 'نسخ الرابط',
     extBtnOpenEdge: 'فتح بالمتصفح',
     extStoreInstructionEdge: 'بعد فتح الرابط في المتصفح، اضغط على زر "الحصول على" الأزرق لتثبيت الإضافة بنقرة واحدة.',
+    extStoreHeadingFirefox: 'متجر Mozilla Firefox الرسمي (AMO معتمدة وآمنة)',
+    extBadgeOfficialFirefox: 'موصى به • رسمي',
+    extStoreNoticeFirefox: 'الإضافة معتمدة رسمياً في متجر إضافات Mozilla Firefox (AMO). يمكنك تثبيتها بنقرة واحدة لمتصفح Firefox:',
+    extBtnCopyFirefox: 'نسخ الرابط',
+    extBtnOpenFirefox: 'فتح بالمتصفح',
+    extStoreInstructionFirefox: 'بعد فتح الرابط في المتصفح، اضغط على زر "Add to Firefox" (إضافة إلى Firefox) الأزرق لتثبيت الإضافة بنقرة واحدة.',
     extPreferManualTxt: 'هل تفضل تثبيت الإضافة يدوياً بالمجلد؟',
     extPreferManualBtn: 'عرض إرشادات التثبيت اليدوي ←',
     manGuideTitle: 'خطوات التثبيت اليدوي المفصلة (لجميع المتصفحات):',
@@ -4777,7 +4788,7 @@ const I18N = {
   en: {
     // Header & Brand
     langBtn: 'العربية',
-    brandEngineVer: 'v2.7.5 Engine',
+    brandEngineVer: 'v2.7.6 Engine',
     txtAddLink: 'Add New Link',
     txtDownloadsHdr: 'Downloads',
     txtNavDl: 'Downloading',
@@ -4868,10 +4879,11 @@ const I18N = {
     stLblSoundAlert: 'Sound alert on completion',
     stLblForceHttps: 'Force HTTPS only',
     stHdrBrowserInt: 'Browser Integration & Floating Video Grabber',
-    stDescBrowserInt: 'Seamless 1-Click integration for Google Chrome, Microsoft Edge, Brave & Opera',
+    stDescBrowserInt: 'Seamless 1-Click integration for Google Chrome, Microsoft Edge, Mozilla Firefox, Brave & Opera',
     stBadgeActiveReady: 'Active & Ready',
     stBtnChrome: '1-Click Integrate →',
     stBtnEdge: 'Official Edge Store Install →',
+    stBtnFirefox: 'Official Firefox Store Install →',
     stBtnBrave: '1-Click Integrate →',
     stChromeDirectLbl: 'Official Google Chrome Store:',
     stTxtCopyChrome: 'Copy',
@@ -4880,6 +4892,10 @@ const I18N = {
     stTxtCopyEdge: 'Copy',
     stTxtOpenEdge: 'Open',
     stEdgeStoreTag: 'Official Store',
+    stFirefoxDirectLbl: 'Official Mozilla Firefox Store:',
+    stTxtCopyFirefox: 'Copy',
+    stTxtOpenFirefox: 'Open',
+    stFirefoxStoreTag: 'Firefox AMO',
     stLblExtLoc: 'Extension Status:',
     stExtStatusTxt: 'Ready & Synced',
     extModalTitle: 'Install SuperIDM Browser Extension',
@@ -4897,6 +4913,12 @@ const I18N = {
     extBtnCopyEdge: 'Copy Link',
     extBtnOpenEdge: 'Open in Browser',
     extStoreInstructionEdge: 'After opening the page in your browser, click the blue "Get" button to install the extension directly.',
+    extStoreHeadingFirefox: 'Official Mozilla Firefox Store (AMO Verified & Safe)',
+    extBadgeOfficialFirefox: 'Recommended • Official',
+    extStoreNoticeFirefox: 'The extension is officially verified in Mozilla Firefox Add-ons (AMO). Install with 1-click for Mozilla Firefox:',
+    extBtnCopyFirefox: 'Copy Link',
+    extBtnOpenFirefox: 'Open in Browser',
+    extStoreInstructionFirefox: 'After opening the page in your browser, click the blue "Add to Firefox" button to install the extension directly.',
     extPreferManualTxt: 'Prefer installing the extension manually from folder?',
     extPreferManualBtn: 'View Manual Installation Guide →',
     manGuideTitle: 'Detailed Manual Installation Steps (All Browsers):',
@@ -5581,7 +5603,7 @@ setInterval(localTick, 350);
 setInterval(chkSched, 60000);
 clipInt = setInterval(chkClip, 2500);
 
-addLog('info', '[INIT] SuperIDM v2.7.5 Engine started');
+addLog('info', '[INIT] SuperIDM v2.7.6 Engine started');
 addLog('info', '[READY] All buttons, modals, and download engine are 100% active');
 setTimeout(() => {
   const isAr = curLang === 'ar';
@@ -5592,6 +5614,7 @@ setTimeout(() => {
 // ════════ BROWSER INTEGRATION ACTIONS ════════
 const EDGE_STORE_URL = 'https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem';
 const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en';
+const FIREFOX_STORE_URL = 'https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/';
 
 function openExtModal() {
   const m = document.getElementById('extSetupModal');
@@ -5733,6 +5756,55 @@ async function openEdgeStorePage() {
   }
 }
 
+async function copyFirefoxStoreLink() {
+  const isAr = (curLang === 'ar');
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(FIREFOX_STORE_URL);
+    } else {
+      const inps = document.querySelectorAll('.firefox-store-url-val');
+      if (inps && inps.length > 0) {
+        inps[0].select();
+        document.execCommand('copy');
+      }
+    }
+    showT('success', isAr ? 'تم نسخ الرابط' : 'Link Copied', isAr ? 'تم نسخ رابط متجر Firefox إلى الحافظة! الصقه في المتصفح.' : 'Firefox store link copied! Paste it in Firefox address bar.');
+
+    const txts = document.querySelectorAll('.txt-copy-firefox');
+    const icos = document.querySelectorAll('.ico-copy-firefox');
+    txts.forEach(t => t.textContent = isAr ? 'تم النسخ!' : 'Copied!');
+    icos.forEach(i => i.textContent = 'check');
+    setTimeout(() => {
+      const nowAr = (curLang === 'ar');
+      const stCopy = document.getElementById('stTxtCopyFirefox');
+      if (stCopy) stCopy.textContent = nowAr ? 'نسخ' : 'Copy';
+      const extCopy = document.getElementById('extBtnCopyFirefox');
+      if (extCopy) extCopy.textContent = nowAr ? 'نسخ الرابط' : 'Copy Link';
+      icos.forEach(i => i.textContent = 'content_copy');
+    }, 3000);
+  } catch (e) {
+    showT('warn', isAr ? 'الرابط' : 'Link', FIREFOX_STORE_URL);
+  }
+}
+
+async function openFirefoxStorePage() {
+  const isAr = (curLang === 'ar');
+  showT('info', isAr ? 'متجر Mozilla Firefox' : 'Mozilla Firefox Store', isAr ? 'جاري فتح صفحة الإضافة في المتصفح...' : 'Opening extension page in browser...');
+  if (hasTauriIPC()) {
+    try {
+      await tauriCall('open_external_url', { url: FIREFOX_STORE_URL });
+    } catch (e) {
+      try {
+        await tauriCall('launch_browser_extensions', { browser: 'firefox' });
+      } catch (err) {
+        window.open(FIREFOX_STORE_URL, '_blank');
+      }
+    }
+  } else {
+    window.open(FIREFOX_STORE_URL, '_blank');
+  }
+}
+
 async function openBrowserExtensionsPage(browser) {
   if (hasTauriIPC()) {
     const isAr = (curLang === 'ar');
@@ -5750,6 +5822,8 @@ async function installBrowserExt(browser) {
   switchExtTab('store');
   if (browser === 'edge' || browser === 'microsoft edge') {
     openEdgeStorePage();
+  } else if (browser === 'firefox' || browser === 'mozilla firefox') {
+    openFirefoxStorePage();
   } else {
     openChromeStorePage();
   }
