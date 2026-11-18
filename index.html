@@ -612,22 +612,22 @@ html[dir="rtl"] .flex.items-baseline {
         <!-- Direct Store Links Cards in Settings (Chrome, Edge & Firefox) -->
         <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
           <!-- Chrome Store -->
-          <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px]">G</span>
-                <span class="text-[12px] font-semibold text-on-surface" id="stChromeDirectLbl">متجر Google Chrome الرسمي:</span>
+          <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2 overflow-hidden">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px] flex-shrink-0">G</span>
+                <span class="text-[12px] font-semibold text-on-surface truncate" id="stChromeDirectLbl">متجر Google Chrome الرسمي:</span>
               </div>
-              <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">Chrome &bull; Brave</span>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono flex-shrink-0">Chrome &bull; Brave</span>
             </div>
-            <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
-              <span class="material-symbols-outlined text-primary text-[15px] ml-1">link</span>
-              <input id="chromeStoreUrlSettingsInp" type="text" readonly value="https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en" class="chrome-store-url-val flex-1 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" dir="ltr" />
-              <button type="button" onclick="copyChromeStoreLink()" class="px-2.5 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
+            <div class="flex items-center gap-1.5 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary overflow-hidden">
+              <span class="material-symbols-outlined text-primary text-[15px] ml-1 flex-shrink-0">link</span>
+              <input id="chromeStoreUrlSettingsInp" type="text" readonly value="https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en" class="chrome-store-url-val flex-1 min-w-0 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" style="min-width:0" dir="ltr" />
+              <button type="button" onclick="copyChromeStoreLink()" class="flex-shrink-0 px-2 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
                 <span class="material-symbols-outlined text-[13px] ico-copy-chrome">content_copy</span>
                 <span id="stTxtCopyChrome" class="txt-copy-chrome">نسخ</span>
               </button>
-              <button type="button" onclick="openChromeStorePage()" class="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+              <button type="button" onclick="openChromeStorePage()" class="flex-shrink-0 px-2 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
                 <span class="material-symbols-outlined text-[13px]">open_in_new</span>
                 <span id="stTxtOpenChrome" class="txt-open-chrome">فتح</span>
               </button>
@@ -635,22 +635,22 @@ html[dir="rtl"] .flex.items-baseline {
           </div>
 
           <!-- Edge Store -->
-          <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px]">E</span>
-                <span class="text-[12px] font-semibold text-on-surface" id="stEdgeDirectLbl">متجر Microsoft Edge الرسمي:</span>
+          <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2 overflow-hidden">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px] flex-shrink-0">E</span>
+                <span class="text-[12px] font-semibold text-on-surface truncate" id="stEdgeDirectLbl">متجر Microsoft Edge الرسمي:</span>
               </div>
-              <span id="stEdgeStoreTag" class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">Edge Store</span>
+              <span id="stEdgeStoreTag" class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono flex-shrink-0">Edge Store</span>
             </div>
-            <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
-              <span class="material-symbols-outlined text-primary text-[15px] ml-1">link</span>
-              <input id="edgeStoreUrlSettingsInp" type="text" readonly value="https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem" class="edge-store-url-val flex-1 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" dir="ltr" />
-              <button type="button" onclick="copyEdgeStoreLink()" class="px-2.5 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
+            <div class="flex items-center gap-1.5 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary overflow-hidden">
+              <span class="material-symbols-outlined text-primary text-[15px] ml-1 flex-shrink-0">link</span>
+              <input id="edgeStoreUrlSettingsInp" type="text" readonly value="https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem" class="edge-store-url-val flex-1 min-w-0 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" style="min-width:0" dir="ltr" />
+              <button type="button" onclick="copyEdgeStoreLink()" class="flex-shrink-0 px-2 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
                 <span class="material-symbols-outlined text-[13px] ico-copy-edge">content_copy</span>
                 <span id="stTxtCopyEdge" class="txt-copy-edge">نسخ</span>
               </button>
-              <button type="button" onclick="openEdgeStorePage()" class="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+              <button type="button" onclick="openEdgeStorePage()" class="flex-shrink-0 px-2 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
                 <span class="material-symbols-outlined text-[13px]">open_in_new</span>
                 <span id="stTxtOpenEdge" class="txt-open-edge">فتح</span>
               </button>
@@ -658,22 +658,22 @@ html[dir="rtl"] .flex.items-baseline {
           </div>
 
           <!-- Firefox Store -->
-          <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px]">F</span>
-                <span class="text-[12px] font-semibold text-on-surface" id="stFirefoxDirectLbl">متجر Mozilla Firefox الرسمي:</span>
+          <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2 overflow-hidden">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px] flex-shrink-0">F</span>
+                <span class="text-[12px] font-semibold text-on-surface truncate" id="stFirefoxDirectLbl">متجر Mozilla Firefox الرسمي:</span>
               </div>
-              <span id="stFirefoxStoreTag" class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">Firefox AMO</span>
+              <span id="stFirefoxStoreTag" class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono flex-shrink-0">Firefox AMO</span>
             </div>
-            <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
-              <span class="material-symbols-outlined text-primary text-[15px] ml-1">link</span>
-              <input id="firefoxStoreUrlSettingsInp" type="text" readonly value="https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/" class="firefox-store-url-val flex-1 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" dir="ltr" />
-              <button type="button" onclick="copyFirefoxStoreLink()" class="px-2.5 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
+            <div class="flex items-center gap-1.5 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary overflow-hidden">
+              <span class="material-symbols-outlined text-primary text-[15px] ml-1 flex-shrink-0">link</span>
+              <input id="firefoxStoreUrlSettingsInp" type="text" readonly value="https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/" class="firefox-store-url-val flex-1 min-w-0 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" style="min-width:0" dir="ltr" />
+              <button type="button" onclick="copyFirefoxStoreLink()" class="flex-shrink-0 px-2 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
                 <span class="material-symbols-outlined text-[13px] ico-copy-firefox">content_copy</span>
                 <span id="stTxtCopyFirefox" class="txt-copy-firefox">نسخ</span>
               </button>
-              <button type="button" onclick="openFirefoxStorePage()" class="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+              <button type="button" onclick="openFirefoxStorePage()" class="flex-shrink-0 px-2 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
                 <span class="material-symbols-outlined text-[13px]">open_in_new</span>
                 <span id="stTxtOpenFirefox" class="txt-open-firefox">فتح</span>
               </button>
@@ -973,7 +973,7 @@ html[dir="rtl"] .flex.items-baseline {
 
 <!-- ══ EXTENSION SETUP MODAL ══ -->
 <div id="extSetupModal" class="fixed inset-0 z-[95] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.75);backdrop-filter:blur(10px)">
-  <div class="glass-panel w-full max-w-lg rounded-xl shadow-2xl flex flex-col p-6 space-y-4 border border-outline-variant max-h-[90vh] overflow-y-auto custom-scrollbar">
+  <div class="glass-panel w-full max-w-xl rounded-xl shadow-2xl flex flex-col p-6 space-y-4 border border-outline-variant max-h-[90vh] overflow-y-auto custom-scrollbar" style="max-width:560px">
     <div class="flex items-center justify-between border-b border-outline-variant/50 pb-3">
       <div class="flex items-center gap-2.5">
         <span class="material-symbols-outlined text-primary text-[24px]">extension</span>
@@ -995,28 +995,28 @@ html[dir="rtl"] .flex.items-baseline {
     </div>
     
     <div class="text-[13px] text-on-surface-variant" id="extModalContent">
-      <!-- Tab 1: Official Stores Links View (Chrome & Edge) -->
+      <!-- Tab 1: Official Stores Links View (Chrome, Edge & Firefox) -->
       <div id="extViewStore" class="space-y-3.5">
         <!-- 1. Google Chrome Web Store Card -->
-        <div class="p-4 bg-primary/10 border border-primary/30 rounded-xl space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px]">G</span>
+        <div class="p-4 bg-primary/10 border border-primary/30 rounded-xl space-y-3 overflow-hidden">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px] flex-shrink-0">G</span>
               <span class="font-bold text-on-surface text-[14px]" id="extStoreHeadingChrome">متجر Google Chrome الرسمي (Chrome, Brave, Opera)</span>
             </div>
-            <span id="extBadgeOfficialChrome" class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">موصى به • رسمي</span>
+            <span id="extBadgeOfficialChrome" class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap flex-shrink-0">موصى به • رسمي</span>
           </div>
           <p class="text-[12px] text-on-surface-variant leading-relaxed" id="extStoreNoticeChrome">
             الإضافة معتمدة رسمياً في متجر Google Chrome الإلكتروني. يمكنك تثبيتها بنقرة واحدة لمتصفح Chrome أو Brave أو Opera:
           </p>
-          <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
-            <span class="material-symbols-outlined text-primary text-[17px] ml-1">link</span>
-            <input id="chromeStoreUrlInp" type="text" readonly value="https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en" class="chrome-store-url-val flex-1 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" dir="ltr" />
-            <button type="button" onclick="copyChromeStoreLink()" class="px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
+          <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary overflow-hidden">
+            <span class="material-symbols-outlined text-primary text-[17px] ml-1 flex-shrink-0">link</span>
+            <input id="chromeStoreUrlInp" type="text" readonly value="https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en" class="chrome-store-url-val flex-1 min-w-0 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" style="min-width:0" dir="ltr" />
+            <button type="button" onclick="copyChromeStoreLink()" class="flex-shrink-0 px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
               <span class="material-symbols-outlined text-[15px] ico-copy-chrome">content_copy</span>
               <span id="extBtnCopyChrome" class="txt-copy-chrome">نسخ الرابط</span>
             </button>
-            <button type="button" onclick="openChromeStorePage()" class="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+            <button type="button" onclick="openChromeStorePage()" class="flex-shrink-0 px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
               <span class="material-symbols-outlined text-[15px]">open_in_new</span>
               <span id="extBtnOpenChrome" class="txt-open-chrome">فتح بالمتصفح</span>
             </button>
@@ -1028,25 +1028,25 @@ html[dir="rtl"] .flex.items-baseline {
         </div>
 
         <!-- 2. Microsoft Edge Add-ons Card -->
-        <div class="p-4 bg-primary/10 border border-primary/30 rounded-xl space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px]">E</span>
+        <div class="p-4 bg-primary/10 border border-primary/30 rounded-xl space-y-3 overflow-hidden">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px] flex-shrink-0">E</span>
               <span class="font-bold text-on-surface text-[14px]" id="extStoreHeadingEdge">متجر Microsoft Edge الرسمي (معتمدة وآمنة)</span>
             </div>
-            <span id="extBadgeOfficialEdge" class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">موصى به • رسمي</span>
+            <span id="extBadgeOfficialEdge" class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap flex-shrink-0">موصى به • رسمي</span>
           </div>
           <p class="text-[12px] text-on-surface-variant leading-relaxed" id="extStoreNoticeEdge">
             الإضافة معتمدة رسمياً في متجر إضافات Microsoft Edge. يمكنك تثبيتها بنقرة واحدة لمتصفح Edge:
           </p>
-          <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
-            <span class="material-symbols-outlined text-primary text-[17px] ml-1">link</span>
-            <input id="edgeStoreUrlInp" type="text" readonly value="https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem" class="edge-store-url-val flex-1 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" dir="ltr" />
-            <button type="button" onclick="copyEdgeStoreLink()" class="px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
+          <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary overflow-hidden">
+            <span class="material-symbols-outlined text-primary text-[17px] ml-1 flex-shrink-0">link</span>
+            <input id="edgeStoreUrlInp" type="text" readonly value="https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem" class="edge-store-url-val flex-1 min-w-0 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" style="min-width:0" dir="ltr" />
+            <button type="button" onclick="copyEdgeStoreLink()" class="flex-shrink-0 px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
               <span class="material-symbols-outlined text-[15px] ico-copy-edge">content_copy</span>
               <span id="extBtnCopyEdge" class="txt-copy-edge">نسخ الرابط</span>
             </button>
-            <button type="button" onclick="openEdgeStorePage()" class="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+            <button type="button" onclick="openEdgeStorePage()" class="flex-shrink-0 px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
               <span class="material-symbols-outlined text-[15px]">open_in_new</span>
               <span id="extBtnOpenEdge" class="txt-open-edge">فتح بالمتصفح</span>
             </button>
@@ -1058,25 +1058,25 @@ html[dir="rtl"] .flex.items-baseline {
         </div>
 
         <!-- 3. Mozilla Firefox Add-ons Card -->
-        <div class="p-4 bg-primary/10 border border-primary/30 rounded-xl space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px]">F</span>
+        <div class="p-4 bg-primary/10 border border-primary/30 rounded-xl space-y-3 overflow-hidden">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px] flex-shrink-0">F</span>
               <span class="font-bold text-on-surface text-[14px]" id="extStoreHeadingFirefox">متجر Mozilla Firefox الرسمي (AMO معتمدة وآمنة)</span>
             </div>
-            <span id="extBadgeOfficialFirefox" class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">موصى به • رسمي</span>
+            <span id="extBadgeOfficialFirefox" class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap flex-shrink-0">موصى به • رسمي</span>
           </div>
           <p class="text-[12px] text-on-surface-variant leading-relaxed" id="extStoreNoticeFirefox">
             الإضافة معتمدة رسمياً في متجر إضافات Mozilla Firefox (AMO). يمكنك تثبيتها بنقرة واحدة لمتصفح Firefox:
           </p>
-          <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
-            <span class="material-symbols-outlined text-primary text-[17px] ml-1">link</span>
-            <input id="firefoxStoreUrlInp" type="text" readonly value="https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/" class="firefox-store-url-val flex-1 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" dir="ltr" />
-            <button type="button" onclick="copyFirefoxStoreLink()" class="px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
+          <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary overflow-hidden">
+            <span class="material-symbols-outlined text-primary text-[17px] ml-1 flex-shrink-0">link</span>
+            <input id="firefoxStoreUrlInp" type="text" readonly value="https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/" class="firefox-store-url-val flex-1 min-w-0 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" style="min-width:0" dir="ltr" />
+            <button type="button" onclick="copyFirefoxStoreLink()" class="flex-shrink-0 px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
               <span class="material-symbols-outlined text-[15px] ico-copy-firefox">content_copy</span>
               <span id="extBtnCopyFirefox" class="txt-copy-firefox">نسخ الرابط</span>
             </button>
-            <button type="button" onclick="openFirefoxStorePage()" class="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+            <button type="button" onclick="openFirefoxStorePage()" class="flex-shrink-0 px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
               <span class="material-symbols-outlined text-[15px]">open_in_new</span>
               <span id="extBtnOpenFirefox" class="txt-open-firefox">فتح بالمتصفح</span>
             </button>
