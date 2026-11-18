@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SuperIDM &mdash; Download Engine v2.7.5</title>
+<title>SuperIDM &mdash; Download Engine v2.7.6</title>
 <meta name="description" content="SuperIDM is a high-performance download manager with multi-connection segmented downloading, queue management, and real-time bandwidth monitoring."/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -310,7 +310,7 @@ html[dir="rtl"] .flex.items-baseline {
       </div>
       <div>
         <h1 class="text-[16px] font-bold text-primary tracking-tight" style="font-family:Inter">SuperIDM</h1>
-        <p id="brandEngineVer" class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.7.5 Engine</p>
+        <p id="brandEngineVer" class="text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'">v2.7.6 Engine</p>
       </div>
     </div>
     <button id="btnAddModal" onclick="openAddModal()" data-act="open-modal" class="w-full py-2 px-4 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded transition-all flex items-center justify-center gap-2 active:scale-95 glow-btn text-[14px]" style="font-family:Inter">
@@ -567,7 +567,7 @@ html[dir="rtl"] .flex.items-baseline {
             <span class="material-symbols-outlined text-primary text-[24px]">extension</span>
             <div>
               <h4 id="stHdrBrowserInt" class="text-[15px] font-bold text-on-surface" style="font-family:Inter">Browser Integration &amp; Floating Video Grabber</h4>
-              <p id="stDescBrowserInt" class="text-[12px] text-on-surface-variant" style="font-family:Inter">Seamless 1-Click integration for Google Chrome, Microsoft Edge, Brave &amp; Opera</p>
+              <p id="stDescBrowserInt" class="text-[12px] text-on-surface-variant" style="font-family:Inter">Seamless 1-Click integration for Google Chrome, Microsoft Edge, Mozilla Firefox, Brave &amp; Opera</p>
             </div>
           </div>
           <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono bg-primary-container/20 text-primary-container border border-primary-container/30">
@@ -575,7 +575,7 @@ html[dir="rtl"] .flex.items-baseline {
           </span>
         </div>
 
-        <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <button onclick="installBrowserExt('chrome')" class="p-3 bg-surface-container-low hover:bg-surface-container-high border border-outline-variant rounded flex items-center gap-3 transition-all active:scale-95 text-left">
             <div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center border border-primary/20 text-primary font-bold">G</div>
             <div>
@@ -592,6 +592,14 @@ html[dir="rtl"] .flex.items-baseline {
             </div>
           </button>
 
+          <button onclick="installBrowserExt('firefox')" class="p-3 bg-surface-container-low hover:bg-surface-container-high border border-outline-variant rounded flex items-center gap-3 transition-all active:scale-95 text-left">
+            <div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center border border-primary/20 text-primary font-bold">F</div>
+            <div>
+              <div class="text-[13px] font-semibold text-on-surface" style="font-family:Inter">Mozilla Firefox</div>
+              <div id="stBtnFirefox" class="text-[11px] text-primary" style="font-family:Inter">1-Click Integrate &rarr;</div>
+            </div>
+          </button>
+
           <button onclick="installBrowserExt('brave')" class="p-3 bg-surface-container-low hover:bg-surface-container-high border border-outline-variant rounded flex items-center gap-3 transition-all active:scale-95 text-left">
             <div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center border border-primary/20 text-primary font-bold">B</div>
             <div>
@@ -601,8 +609,8 @@ html[dir="rtl"] .flex.items-baseline {
           </button>
         </div>
 
-        <!-- Direct Store Links Cards in Settings (Chrome & Edge) -->
-        <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <!-- Direct Store Links Cards in Settings (Chrome, Edge & Firefox) -->
+        <div class="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
           <!-- Chrome Store -->
           <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2">
             <div class="flex items-center justify-between">
@@ -645,6 +653,29 @@ html[dir="rtl"] .flex.items-baseline {
               <button type="button" onclick="openEdgeStorePage()" class="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
                 <span class="material-symbols-outlined text-[13px]">open_in_new</span>
                 <span id="stTxtOpenEdge" class="txt-open-edge">فتح</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Firefox Store -->
+          <div class="p-3 bg-surface-container-low border border-primary-container/30 rounded-lg space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[11px]">F</span>
+                <span class="text-[12px] font-semibold text-on-surface" id="stFirefoxDirectLbl">متجر Mozilla Firefox الرسمي:</span>
+              </div>
+              <span id="stFirefoxStoreTag" class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">Firefox AMO</span>
+            </div>
+            <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
+              <span class="material-symbols-outlined text-primary text-[15px] ml-1">link</span>
+              <input id="firefoxStoreUrlSettingsInp" type="text" readonly value="https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/" class="firefox-store-url-val flex-1 bg-transparent text-[10.5px] text-on-surface font-mono outline-none select-all" dir="ltr" />
+              <button type="button" onclick="copyFirefoxStoreLink()" class="px-2.5 py-1 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap">
+                <span class="material-symbols-outlined text-[13px] ico-copy-firefox">content_copy</span>
+                <span id="stTxtCopyFirefox" class="txt-copy-firefox">نسخ</span>
+              </button>
+              <button type="button" onclick="openFirefoxStorePage()" class="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+                <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+                <span id="stTxtOpenFirefox" class="txt-open-firefox">فتح</span>
               </button>
             </div>
           </div>
@@ -747,10 +778,10 @@ html[dir="rtl"] .flex.items-baseline {
           </button>
         </div>
         <div class="grid grid-cols-4 gap-4 text-[13px]" style="font-family:'JetBrains Mono'">
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary" dir="ltr">2.7.5</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary" dir="ltr">2.7.6</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblEngine" class="text-[11px] text-on-surface-variant mb-1">Engine</div><div class="text-on-surface" dir="ltr">SuperIDM/Rust+Tokio</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblProto" class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface" dir="ltr">HTTP/HTTPS/FTP</div></div>
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant" dir="ltr">2026.11.16</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant" dir="ltr">2026.11.18</div></div>
         </div>
       </div>
     </div>
@@ -1023,6 +1054,36 @@ html[dir="rtl"] .flex.items-baseline {
           <div class="flex items-center gap-1.5 text-[11.5px] text-primary">
             <span class="material-symbols-outlined text-[15px] flex-shrink-0">info</span>
             <span id="extStoreInstructionEdge">بعد فتح الرابط في المتصفح، اضغط على زر <b>"الحصول على" (Get)</b> الأزرق لتثبيت الإضافة بنقرة واحدة.</span>
+          </div>
+        </div>
+
+        <!-- 3. Mozilla Firefox Add-ons Card -->
+        <div class="p-4 bg-primary/10 border border-primary/30 rounded-xl space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[12px]">F</span>
+              <span class="font-bold text-on-surface text-[14px]" id="extStoreHeadingFirefox">متجر Mozilla Firefox الرسمي (AMO معتمدة وآمنة)</span>
+            </div>
+            <span id="extBadgeOfficialFirefox" class="text-[11px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">موصى به • رسمي</span>
+          </div>
+          <p class="text-[12px] text-on-surface-variant leading-relaxed" id="extStoreNoticeFirefox">
+            الإضافة معتمدة رسمياً في متجر إضافات Mozilla Firefox (AMO). يمكنك تثبيتها بنقرة واحدة لمتصفح Firefox:
+          </p>
+          <div class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant rounded p-1.5 focus-within:border-primary">
+            <span class="material-symbols-outlined text-primary text-[17px] ml-1">link</span>
+            <input id="firefoxStoreUrlInp" type="text" readonly value="https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/" class="firefox-store-url-val flex-1 bg-transparent text-[11px] text-on-surface font-mono outline-none select-all" dir="ltr" />
+            <button type="button" onclick="copyFirefoxStoreLink()" class="px-3 py-1.5 bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-semibold rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap shadow-sm">
+              <span class="material-symbols-outlined text-[15px] ico-copy-firefox">content_copy</span>
+              <span id="extBtnCopyFirefox" class="txt-copy-firefox">نسخ الرابط</span>
+            </button>
+            <button type="button" onclick="openFirefoxStorePage()" class="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded text-[12px] flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border border-outline-variant">
+              <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+              <span id="extBtnOpenFirefox" class="txt-open-firefox">فتح بالمتصفح</span>
+            </button>
+          </div>
+          <div class="flex items-center gap-1.5 text-[11.5px] text-primary">
+            <span class="material-symbols-outlined text-[15px] flex-shrink-0">info</span>
+            <span id="extStoreInstructionFirefox">بعد فتح الرابط في المتصفح، اضغط على زر <b>"Add to Firefox" (إضافة إلى Firefox)</b> الأزرق لتثبيت الإضافة بنقرة واحدة.</span>
           </div>
         </div>
 
@@ -5760,10 +5821,13 @@ function resetBrowserExts() {
 
 window.EDGE_STORE_URL = EDGE_STORE_URL;
 window.CHROME_STORE_URL = CHROME_STORE_URL;
+window.FIREFOX_STORE_URL = FIREFOX_STORE_URL;
 window.copyChromeStoreLink = copyChromeStoreLink;
 window.openChromeStorePage = openChromeStorePage;
 window.copyEdgeStoreLink = copyEdgeStoreLink;
 window.openEdgeStorePage = openEdgeStorePage;
+window.copyFirefoxStoreLink = copyFirefoxStoreLink;
+window.openFirefoxStorePage = openFirefoxStorePage;
 window.switchExtTab = switchExtTab;
 window.openBrowserExtensionsPage = openBrowserExtensionsPage;
 window.openExtModal = openExtModal;

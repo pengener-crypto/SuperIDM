@@ -6,6 +6,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20it%20on%20Windows-0078D4?logo=microsoft&logoColor=white)](https://apps.microsoft.com/detail/XP8M52XFHFS9Z2)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Extension-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo)
 [![Edge Add-ons](https://img.shields.io/badge/Edge%20Add--ons-Extension-0078D7?logo=microsoftedge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem)
+[![Firefox Add-ons](https://img.shields.io/badge/Firefox%20Add--ons-Extension-FF7139?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-cyan.svg)](https://github.com/pengener-crypto/SuperIDM)
 [![Built With](https://img.shields.io/badge/Built%20With-Rust%202024%20%7C%20Tauri%20v2-orange.svg)](https://tauri.app/)
@@ -42,9 +43,11 @@ Install the official extension from your browser's store — it pairs with the d
 
 [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo)
 [![Edge Add-ons](https://img.shields.io/badge/Edge%20Add--ons-Get%20for%20Edge-0078D7?logo=microsoftedge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem)
+[![Firefox Add-ons](https://img.shields.io/badge/Firefox%20Add--ons-Add%20to%20Firefox-FF7139?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/)
 
 * **Google Chrome / Brave / Opera / Vivaldi:** [Chrome Web Store](https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo)
 * **Microsoft Edge:** [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem)
+* **Mozilla Firefox:** [Firefox Add-ons (AMO)](https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/)
 * **Manual (developers):** enable Developer Mode on `chrome://extensions` and load the unpacked `extension/` directory.
 
 ---

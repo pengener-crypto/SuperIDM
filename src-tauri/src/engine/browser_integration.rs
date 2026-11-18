@@ -110,12 +110,17 @@ pub fn register_browser_registry(browser: &str) -> Result<String, String> {
 pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
     let edge_store_url = "https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem";
     let chrome_store_url = "https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en";
-    let _is_store = browser.eq_ignore_ascii_case("edge_store") || browser.eq_ignore_ascii_case("chrome_store") || browser.eq_ignore_ascii_case("store");
+    let firefox_store_url = "https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/";
+    let _is_store = browser.eq_ignore_ascii_case("edge_store")
+        || browser.eq_ignore_ascii_case("chrome_store")
+        || browser.eq_ignore_ascii_case("firefox_store")
+        || browser.eq_ignore_ascii_case("store");
     let _is_edge = matches!(browser.to_lowercase().as_str(), "edge" | "microsoft edge" | "edge_store" | "edge_dev");
     
     let target_url = match browser.to_lowercase().as_str() {
         "edge_store" => edge_store_url,
         "chrome_store" => chrome_store_url,
+        "firefox_store" | "firefox" | "mozilla firefox" => firefox_store_url,
         "edge" | "microsoft edge" => edge_store_url,
         "chrome" | "google chrome" | "brave" | "opera" | "vivaldi" => chrome_store_url,
         "edge_dev" => "edge://extensions",
@@ -132,6 +137,11 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
             "edge" | "microsoft edge" | "edge_store" | "edge_dev" => vec![
                 PathBuf::from(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
                 PathBuf::from(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+            ],
+            "firefox" | "mozilla firefox" | "firefox_store" => vec![
+                PathBuf::from(r"C:\Program Files\Mozilla Firefox\firefox.exe"),
+                PathBuf::from(r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe"),
+                dirs::data_local_dir().map(|p| p.join(r"Mozilla Firefox\firefox.exe")).unwrap_or_default(),
             ],
             "brave" => vec![
                 PathBuf::from(r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"),

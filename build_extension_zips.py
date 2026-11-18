@@ -7,7 +7,8 @@ import zipfile
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SRC_EXT = os.path.join(BASE_DIR, 'extension')
-VERSION = '2.7.5'
+VERSION = '2.7.6'
+DESKTOP_DIR = r'C:\Users\Haider Nasrat\Desktop'
 UNPACKED_COPY = r'C:\Users\Haider Nasrat\Desktop\SuperIDM-Extension'
 ZIP_NAMES = [
     f'SuperIDM_Extension_v{VERSION}.zip',
@@ -33,6 +34,8 @@ def main():
             for full, rel in iter_package_files():
                 z.write(full, rel)
         print(f'Built {zip_name} ({os.path.getsize(target)} bytes)')
+        if os.path.isdir(DESKTOP_DIR):
+            shutil.copy2(target, os.path.join(DESKTOP_DIR, zip_name))
 
     if os.path.isdir(UNPACKED_COPY):
         for name in CODE_FILES:
