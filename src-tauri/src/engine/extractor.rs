@@ -950,6 +950,7 @@ impl MediaExtractor {
         url: &str,
         dest_dir: &std::path::Path,
         format_id: Option<&str>,
+        extra_headers: &[(String, String)],
         progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>, // (progress 0..1, speed bps, downloaded bytes, total bytes, eta_secs, is_completed, final_filename)
         cancel_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<std::path::PathBuf, String> {
@@ -960,7 +961,7 @@ impl MediaExtractor {
             }
         }
 
-        let first = Self::run_ytdlp_download(client, url, dest_dir, format_id, progress_tx.clone(), cancel_rx.clone()).await;
+        let first = Self::run_ytdlp_download(client, url, dest_dir, format_id, extra_headers, progress_tx.clone(), cancel_rx.clone()).await;
         let first_err = match first {
             Ok(p) => return Ok(p),
             Err(e) => e,
@@ -977,9 +978,41 @@ impl MediaExtractor {
                 return Err(first_err);
             }
         }
-        Self::run_ytdlp_download(client, url, dest_dir, format_id, progress_tx, cancel_rx)
+        Self::run_ytdlp_download(client, url, dest_dir, format_id, extra_headers, progress_tx, cancel_rx)
             .await
             .map_err(|e| if e == first_err { e } else { format!("{} (after engine update; first attempt: {})", e, first_err) })
+    }
+
+    /// Headers the browser extension captured (Referer / Origin / Cookie) that yt-dlp needs to
+    /// fetch a sniffed stream. Page URLs of known platforms (YouTube, ...) are left alone so
+    /// their own extractors keep working exactly as before; Cookie is only forwarded for direct
+    /// media URLs (.m3u8 / .mpd / .mp4 ...), where it is the only way to reach protected CDNs.
+    pub fn ytdlp_header_pairs(url: &str, headers: &[(String, String)]) -> Vec<(String, String)> {
+        if headers.is_empty() || Self::is_youtube_url(url) {
+            return Vec::new();
+        }
+        let path = url.split(|c| c == '?' || c == '#').next().unwrap_or("").to_lowercase();
+        let is_direct_media = [".m3u8", ".mpd", ".mp4", ".webm", ".m4v", ".mkv", ".mov", ".ts", ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wav"]
+            .iter()
+            .any(|ext| path.ends_with(ext));
+        let mut out: Vec<(String, String)> = Vec::new();
+        for (k, v) in headers {
+            let name = k.trim();
+            let value = v.trim();
+            if value.is_empty() || value.contains('\r') || value.contains('\n') || value.len() > 8192 {
+                continue;
+            }
+            let lname = name.to_ascii_lowercase();
+            let allowed = match lname.as_str() {
+                "referer" | "origin" => true,
+                "cookie" => is_direct_media,
+                _ => false,
+            };
+            if allowed && !out.iter().any(|(ek, _)| ek.eq_ignore_ascii_case(name)) {
+                out.push((name.to_string(), value.to_string()));
+            }
+        }
+        out
     }
 
     async fn kill_process_tree(child: &mut tokio::process::Child) {
@@ -1005,6 +1038,7 @@ impl MediaExtractor {
         url: &str,
         dest_dir: &std::path::Path,
         format_id: Option<&str>,
+        extra_headers: &[(String, String)],
         progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>,
         mut cancel_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<std::path::PathBuf, String> {
@@ -1115,6 +1149,10 @@ impl MediaExtractor {
                     cmd.env("PATH", format!("{};{}", parent_dir.to_string_lossy(), current_path));
                 }
             }
+        }
+
+        for (name, value) in Self::ytdlp_header_pairs(&clean_url, extra_headers) {
+            cmd.arg("--add-header").arg(format!("{}:{}", name, value));
         }
 
         cmd.arg(&clean_url);
@@ -2254,6 +2292,28 @@ impl MediaExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ytdlp_header_pairs_filtering() {
+        let hdrs = vec![
+            ("Referer".to_string(), "https://site.example/watch/1".to_string()),
+            ("Cookie".to_string(), "sid=abc".to_string()),
+            ("X-Evil".to_string(), "1".to_string()),
+            ("Origin".to_string(), "bad\r\nInjected: 1".to_string()),
+        ];
+        // Direct media URL: Referer + Cookie forwarded, unknown + CR/LF headers dropped
+        let direct = MediaExtractor::ytdlp_header_pairs("https://cdn.example/a/master.m3u8?token=1", &hdrs);
+        assert_eq!(direct.len(), 2);
+        assert!(direct.iter().any(|(k, _)| k == "Referer"));
+        assert!(direct.iter().any(|(k, _)| k == "Cookie"));
+        // Platform page URL: Cookie is NOT forwarded, Referer is
+        let page = MediaExtractor::ytdlp_header_pairs("https://example.com/watch/1", &hdrs);
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].0, "Referer");
+        // YouTube is never touched
+        assert!(MediaExtractor::ytdlp_header_pairs("https://www.youtube.com/watch?v=ew0RSjgDgH8", &hdrs).is_empty());
+        assert!(MediaExtractor::ytdlp_header_pairs("https://cdn.example/a.mp4", &[]).is_empty());
+    }
 
     #[test]
     fn test_clean_target_url_markdown() {

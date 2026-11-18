@@ -194,7 +194,9 @@ function renderMedia(mediaList) {
     nameEl.textContent = shortUrl;
     const typeEl = document.createElement('div');
     typeEl.className = 'media-type';
-    typeEl.textContent = m.type || 'media';
+    const kindLabel = m.kind === 'manifest' ? 'Stream (HLS/DASH)' : (m.type || 'media');
+    const sizeLabel = m.size > 0 ? ' · ' + (m.size >= 1073741824 ? (m.size / 1073741824).toFixed(2) + ' GB' : (m.size / 1048576).toFixed(1) + ' MB') : '';
+    typeEl.textContent = kindLabel + sizeLabel;
     info.appendChild(nameEl);
     info.appendChild(typeEl);
     item.appendChild(info);
@@ -217,6 +219,8 @@ function renderMedia(mediaList) {
         const isPlatform = /instagram\.com|instagr\.am|tiktok\.com|youtube\.com|youtu\.be|facebook\.com|fb\.watch|twitter\.com|x\.com|vimeo\.com/i.test(tabUrl);
         const isInstagramCdn = /fbcdn\.net|cdninstagram\.com/i.test(m.url);
 
+        const isManifest = m.kind === 'manifest' || /\.(m3u8|mpd)(\?|#|$)/i.test(m.url);
+
         let sendPayload;
         if (isPlatform || isInstagramCdn) {
           const targetUrl = (tabUrl && tabUrl.startsWith('http')) ? tabUrl : m.url;
@@ -225,13 +229,25 @@ function renderMedia(mediaList) {
             type: 'download_video',
             url: targetUrl,
             filename: cleanTitle,
-            format: 'bestvideo+bestaudio/best'
+            format: 'bestvideo+bestaudio/best',
+            referrer: tabUrl
+          };
+        } else if (isManifest) {
+          // HLS / DASH manifests are not files: the media engine has to stitch the segments
+          const safeTitle = rawTitle.replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+          sendPayload = {
+            type: 'download_video',
+            url: m.url,
+            filename: safeTitle ? `${safeTitle}.mp4` : undefined,
+            format: 'bestvideo+bestaudio/best',
+            referrer: tabUrl
           };
         } else {
           sendPayload = {
             type: 'download',
             url: m.url,
-            filename: shortUrl
+            filename: shortUrl,
+            referrer: tabUrl
           };
         }
 

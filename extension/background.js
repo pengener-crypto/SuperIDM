@@ -239,7 +239,38 @@ function broadcastStatus() {
 }
 
 // ═══════ Send Download to SuperIDM ═══════
+// Guards against the same URL being queued twice within a few seconds (click interceptor +
+// browser download hook, double clicks, ...).
+const recentSends = new Map();
+const DUPLICATE_WINDOW_MS = 2500;
+
+function pageHeaders(pageUrl) {
+  if (!pageUrl || !/^https?:/i.test(pageUrl)) return undefined;
+  const headers = { 'Referer': pageUrl };
+  try { headers['Origin'] = new URL(pageUrl).origin; } catch (e) { /* ignore */ }
+  return headers;
+}
+
 async function sendToSuperIDM(url, filename, format, headers, cookies) {
+  const nowTs = Date.now();
+  const dupKey = String(url) + '|' + String(format || '');
+  const last = recentSends.get(dupKey);
+  if (last && nowTs - last < DUPLICATE_WINDOW_MS) {
+    return { ok: true, via: 'duplicate-skipped' };
+  }
+  recentSends.set(dupKey, nowTs);
+  if (recentSends.size > 200) {
+    for (const [k, t] of recentSends) {
+      if (nowTs - t > DUPLICATE_WINDOW_MS) recentSends.delete(k);
+    }
+  }
+
+  const result = await sendToSuperIDMInternal(url, filename, format, headers, cookies);
+  if (!result || !result.ok) recentSends.delete(dupKey); // allow an immediate retry after a failure
+  return result;
+}
+
+async function sendToSuperIDMInternal(url, filename, format, headers, cookies) {
   // If token not loaded yet, try loading it
   if (!rpcToken) {
     try { await authInitPromise; } catch (e) {}
@@ -389,7 +420,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       }
     }
     if (url) {
-      const result = await sendToSuperIDM(url);
+      const result = await sendToSuperIDM(url, undefined, undefined, pageHeaders(info.pageUrl || (tab && tab.url)));
       if (!result.ok) {
         chrome.notifications.create({
           type: 'basic',
@@ -401,18 +432,67 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
   } else if (info.menuItemId === 'superidm-download-page-links') {
     if (tab && tab.id) {
-      chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => {
-          const links = [...document.querySelectorAll('a[href]')]
-            .map(a => a.href)
-            .filter(h => /\.(zip|rar|7z|exe|msi|iso|tar|gz|pdf|mp4|mkv|avi|mp3|flac|wav|apk|dmg|deb|rpm)(\?.*)?$/i.test(h));
-          return [...new Set(links)];
+      const allowed = (settings.fileExtensions || DEFAULT_SETTINGS.fileExtensions)
+        .split(/[\s,;]+/)
+        .map(e => e.trim().replace(/^\./, '').toLowerCase())
+        .filter(Boolean);
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          args: [allowed],
+          func: (allowedExts) => {
+            const set = new Set(allowedExts);
+            const out = [];
+            const seen = new Set();
+            document.querySelectorAll('a[href]').forEach(a => {
+              const href = a.href;
+              if (!/^https?:/i.test(href) || seen.has(href)) return;
+              let ext = '';
+              try {
+                const p = new URL(href).pathname;
+                const dot = p.lastIndexOf('.');
+                if (dot !== -1) ext = p.substring(dot + 1).toLowerCase();
+              } catch (e) { return; }
+              if (a.hasAttribute('download') || set.has(ext)) {
+                seen.add(href);
+                out.push(href);
+              }
+            });
+            return out.slice(0, 100);
+          }
+        });
+        const urls = (results && results[0] && results[0].result) || [];
+        if (urls.length === 0) {
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icons/icon128.png',
+            title: 'SuperIDM',
+            message: 'No downloadable links found on this page.'
+          });
+          return;
         }
-      }).then(results => {
-        const urls = results?.[0]?.result || [];
-        urls.forEach(u => sendToSuperIDM(u));
-      });
+        const hdrs = pageHeaders(tab.url);
+        let sent = 0;
+        let lastError = '';
+        for (const u of urls) {
+          const r = await sendToSuperIDM(u, undefined, undefined, hdrs);
+          if (r && r.ok) sent++; else { lastError = (r && r.error) || lastError; if (!sent) break; }
+          await new Promise(res => setTimeout(res, 120)); // don't flood the desktop app
+        }
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: 'SuperIDM',
+          message: sent > 0 ? `Sent ${sent} of ${urls.length} links to SuperIDM.` : (lastError || 'Desktop app is not running. Please start SuperIDM first.')
+        });
+      } catch (e) {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: 'SuperIDM',
+          message: 'Could not read links from this page.'
+        });
+      }
     }
   }
 });
@@ -523,46 +603,89 @@ if (onDeterminingEvent && typeof onDeterminingEvent.addListener === 'function') 
 }
 
 // ═══════ Media Stream Sniffer ═══════
+// Only keep things a user could actually want to download: HLS/DASH manifests and full media
+// files. Individual stream segments (.ts / .m4s / chunk-123) and ad/analytics noise are dropped,
+// otherwise hundreds of segments push the real manifest out of the per-tab list.
+const MEDIA_NOISE = /google-analytics|doubleclick|googlesyndication|googleadservices|scorecardresearch|adservice|\/ads?\/|analytics|googlevideo\.com/i;
+const MEDIA_SEGMENT = /\.(ts|m4s|cmfv|cmfa|fmp4|vtt|webvtt|srt)(\?|#|$)|[\/_.-](seg(ment)?|frag(ment)?|chunk)[-_]?\d+/i;
+const MEDIA_MANIFEST = /\.(m3u8|mpd|f4m|ism)(\?|#|$)|\/manifest(\.[a-z0-9]+)?(\?|$)/i;
+const MEDIA_MIN_BYTES = 100 * 1024;
+const MEDIA_RANGE_PARAMS = ['range', 'bytestart', 'byteend', 'rn', 'rbuf'];
+const MAX_MEDIA_PER_TAB = 40;
+const tabUrls = {};
+
+function normalizeMediaKey(raw) {
+  try {
+    const u = new URL(raw);
+    MEDIA_RANGE_PARAMS.forEach(p => u.searchParams.delete(p));
+    u.hash = '';
+    return u.toString();
+  } catch (e) {
+    return raw;
+  }
+}
+
+function getHeader(details, name) {
+  const h = details.responseHeaders && details.responseHeaders.find(x => x.name.toLowerCase() === name);
+  return h && h.value ? String(h.value) : '';
+}
+
+function mediaTotalSize(details) {
+  const range = getHeader(details, 'content-range'); // e.g. "bytes 0-1023/52428800"
+  const m = range.match(/\/(\d+)\s*$/);
+  if (m) return parseInt(m[1], 10);
+  const len = parseInt(getHeader(details, 'content-length'), 10);
+  return Number.isFinite(len) ? len : 0;
+}
+
 function processMediaRequest(details) {
   if (!settings.sniffMedia || !details.url || details.tabId <= 0) return;
   const rawUrl = details.url;
-  const url = rawUrl.toLowerCase();
+  if (!/^https?:/i.test(rawUrl)) return;
+  if (MEDIA_NOISE.test(rawUrl) || MEDIA_SEGMENT.test(rawUrl)) return;
 
-  // Exclude ads, analytics, small tracking pixels
-  if (url.includes('google-analytics') || url.includes('doubleclick') || url.includes('/ad/') || url.includes('analytics')) {
-    return;
-  }
-
-  const isMediaExt = /\.(mp4|webm|m4v|flv|avi|mkv|mov|ts|m3u8|mpd|f4m|ism|mp3|aac|m4a|ogg|opus|wav|flac)(\?|$)/i.test(url);
-  const contentType = details.responseHeaders?.find(h => h.name.toLowerCase() === 'content-type')?.value?.toLowerCase() || '';
-  const isMediaMime = /video|audio/i.test(contentType)
+  const contentType = getHeader(details, 'content-type').toLowerCase();
+  const isManifest = MEDIA_MANIFEST.test(rawUrl)
     || contentType.includes('application/vnd.apple.mpegurl')
     || contentType.includes('application/x-mpegurl')
     || contentType.includes('application/dash+xml')
     || contentType.includes('application/vnd.ms-sstr+xml');
+  const isMediaExt = /\.(mp4|webm|m4v|flv|avi|mkv|mov|mp3|aac|m4a|ogg|opus|wav|flac)(\?|#|$)/i.test(rawUrl);
+  const isMediaMime = /^(video|audio)\//i.test(contentType);
+  const isMedia = isManifest || isMediaExt || isMediaMime || details.type === 'media';
+  if (!isMedia) return;
 
-  const isMedia = isMediaExt || (details.type === 'media') || isMediaMime;
+  const size = mediaTotalSize(details);
+  if (!isManifest && size > 0 && size < MEDIA_MIN_BYTES) return; // tracking clips, UI sounds
 
-  if (isMedia) {
-    if (!tabMedia[details.tabId]) tabMedia[details.tabId] = [];
-    // Deduplicate by URL
-    if (!tabMedia[details.tabId].some(m => m.url === rawUrl)) {
-      tabMedia[details.tabId].push({
-        url: rawUrl,
-        type: contentType || (isMediaExt ? 'media-stream' : 'media'),
-        time: Date.now()
-      });
-      // Keep only last 30 per tab
-      if (tabMedia[details.tabId].length > 30) tabMedia[details.tabId].shift();
-
-      // Notify the tab content script immediately that new media was detected
-      chrome.tabs.sendMessage(details.tabId, {
-        type: 'media_detected',
-        mediaUrl: rawUrl,
-        contentType: contentType
-      }).catch(() => {});
-    }
+  const key = normalizeMediaKey(rawUrl);
+  const list = tabMedia[details.tabId] || (tabMedia[details.tabId] = []);
+  const existing = list.find(m => m.key === key);
+  if (existing) {
+    if (size > (existing.size || 0)) existing.size = size;
+    return;
   }
+
+  list.push({
+    key,
+    url: rawUrl,
+    type: contentType || (isManifest ? 'manifest' : 'media'),
+    kind: isManifest ? 'manifest' : 'file',
+    size,
+    time: Date.now()
+  });
+  if (list.length > MAX_MEDIA_PER_TAB) {
+    // Drop the oldest non-manifest first so manifests survive
+    const idx = list.findIndex(m => m.kind !== 'manifest');
+    list.splice(idx === -1 ? 0 : idx, 1);
+  }
+
+  // Notify the tab content script immediately that new media was detected
+  chrome.tabs.sendMessage(details.tabId, {
+    type: 'media_detected',
+    mediaUrl: rawUrl,
+    contentType: contentType
+  }).catch(() => {});
 }
 
 if (chrome.webRequest) {
@@ -576,23 +699,24 @@ if (chrome.webRequest) {
       );
     } catch (e) { /* ignore */ }
   }
-
-  // 2. Also listen to onCompleted for completed chunks/segments
-  if (chrome.webRequest.onCompleted) {
-    try {
-      chrome.webRequest.onCompleted.addListener(
-        processMediaRequest,
-        { urls: ['<all_urls>'] },
-        ['responseHeaders']
-      );
-    } catch (e) { /* ignore */ }
-  }
 }
 
-// Clean up closed tabs
+// Clean up closed tabs, and forget stale media when a tab navigates to a different page
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete tabMedia[tabId];
+  delete tabUrls[tabId];
 });
+
+if (chrome.tabs.onUpdated) {
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (!changeInfo.url) return;
+    const pageUrl = changeInfo.url.split('#')[0];
+    if (tabUrls[tabId] && tabUrls[tabId] !== pageUrl) {
+      delete tabMedia[tabId];
+    }
+    tabUrls[tabId] = pageUrl;
+  });
+}
 
 // Refresh connection + auto-pair immediately (critical when MV3 service worker wakes from idle)
 async function refreshConnectionState() {
@@ -680,12 +804,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'download') {
-    sendToSuperIDM(msg.url, msg.filename, msg.format).then(sendResponse);
+    sendToSuperIDM(msg.url, msg.filename, msg.format, pageHeaders(msg.referrer)).then(sendResponse);
     return true;
   }
 
   if (msg.type === 'download_video') {
-    sendToSuperIDM(msg.url, msg.filename, msg.format).then(sendResponse);
+    // Sniffed CDN streams usually reject requests without the original page as Referer/Origin
+    sendToSuperIDM(msg.url, msg.filename, msg.format, pageHeaders(msg.referrer)).then(sendResponse);
     return true;
   }
 });

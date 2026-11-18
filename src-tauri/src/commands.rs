@@ -203,6 +203,7 @@ pub async fn start_download(
         let dest_dir_watch = dest_dir.clone();
         let cancel_c = cancel_rx.clone();
         let format_id_c = format_id.clone();
+        let media_headers_c: Vec<(String, String)> = headers.clone().unwrap_or_default();
         let app_err = app.clone();
         let task_id_err = task_id.clone();
 
@@ -232,6 +233,7 @@ pub async fn start_download(
                 &url_c,
                 &dest_dir_ext,
                 format_id_c.as_deref(),
+                &media_headers_c,
                 prog_tx,
                 cancel_c,
             ).await;
@@ -956,6 +958,7 @@ pub async fn resume_download(
                 &url_c,
                 &dest_dir_ext,
                 format_id_c.as_deref(),
+                &[],
                 prog_tx,
                 cancel_c,
             ).await {

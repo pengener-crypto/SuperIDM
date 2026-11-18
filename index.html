@@ -2471,14 +2471,7 @@ async function startDL() {
     let customHeaders = {};
     const hdrText = document.getElementById('inpHeaders')?.value?.trim();
     if (hdrText) {
-      try {
-        const parsed = JSON.parse(hdrText);
-        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-          Object.assign(customHeaders, parsed);
-        }
-      } catch (e) {
-        console.warn('Invalid JSON headers:', e);
-      }
+      Object.assign(customHeaders, parseHeadersText(hdrText));
     }
     const userVal = document.getElementById('inpUser')?.value?.trim();
     const passVal = document.getElementById('inpPass')?.value || '';
@@ -2563,14 +2556,7 @@ async function queueDL() {
   let customHeaders = {};
   const hdrText = document.getElementById('inpHeaders')?.value?.trim();
   if (hdrText) {
-    try {
-      const parsed = JSON.parse(hdrText);
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        Object.assign(customHeaders, parsed);
-      }
-    } catch (e) {
-      console.warn('Invalid JSON headers:', e);
-    }
+    Object.assign(customHeaders, parseHeadersText(hdrText));
   }
   const userVal = document.getElementById('inpUser')?.value?.trim();
   const passVal = document.getElementById('inpPass')?.value || '';
@@ -2583,6 +2569,34 @@ async function queueDL() {
   showT('info', isAr ? 'تمت الجدولة' : 'Task Queued', isAr ? 'تمت إضافة التنزيل إلى قائمة الانتظار' : 'Download scheduled in queue');
   closeAddModal();
   setView('queued');
+}
+
+// Accepts either a JSON object ({"Referer":"..."}) or plain "Name: Value" lines — the format the
+// browser extension writes into the Advanced > Custom Headers box. Previously only JSON was
+// understood, so Referer/Cookie captured by the extension were silently dropped.
+function parseHeadersText(text) {
+  const out = {};
+  const raw = (text || '').trim();
+  if (!raw) return out;
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === 'string' || typeof v === 'number') out[String(k).trim()] = String(v);
+        }
+        return out;
+      }
+    } catch (e) { /* fall through to line parsing */ }
+  }
+  raw.split(/\r?\n/).forEach(line => {
+    const idx = line.indexOf(':');
+    if (idx <= 0) return;
+    const name = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    if (/^[A-Za-z0-9-]+$/.test(name) && value) out[name] = value;
+  });
+  return out;
 }
 
 let pendingDeleteTaskId = null;

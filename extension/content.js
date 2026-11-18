@@ -51,8 +51,9 @@
     }
   });
 
-  // Active status poller: query background every 1500ms so badges vanish instantly if app is closed
-  setInterval(() => {
+  // Active status poller: only the top frame polls (background already broadcasts every change
+  // to all frames), and at a relaxed rate. Previously every iframe polled every 1.5s.
+  if (window === window.top) setInterval(() => {
     try {
       chrome.runtime.sendMessage({ type: 'get_status' }, (resp) => {
         if (chrome.runtime.lastError || !resp) {
@@ -74,7 +75,7 @@
         updateAllBadgeVisibility();
       }
     }
-  }, 1500);
+  }, 4000);
 
   // ═══════ Detect Platform ═══════
   const KNOWN_PLATFORMS = [
@@ -403,6 +404,21 @@
     return null;
   }
 
+  // ═══════ Pick the best sniffed stream ═══════
+  // Newest manifest (HLS/DASH) wins because it carries every quality; otherwise the biggest
+  // full media file; otherwise simply the newest thing we saw.
+  function pickBestMedia(list) {
+    if (!list || !list.length) return null;
+    const newestFirst = list.slice().sort((a, b) => (b.time || 0) - (a.time || 0));
+    const manifest = newestFirst.find(m => m.kind === 'manifest' || /\.(m3u8|mpd)(\?|#|$)/i.test(m.url));
+    if (manifest) return manifest;
+    const files = newestFirst.filter(m => m.kind === 'file' || /\.(mp4|webm|m4v|mkv|mov|mp3|m4a)(\?|#|$)/i.test(m.url));
+    if (files.length) {
+      return files.slice().sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+    }
+    return newestFirst[0];
+  }
+
   // ═══════ Send Download Helper ═══════
   async function sendDownload(format, qualityLabel, videoEl) {
     const title = getVideoTitle();
@@ -424,8 +440,7 @@
         chrome.runtime.sendMessage({ type: 'get_tab_media' }, res);
       });
       if (tabMediaResp && tabMediaResp.media && tabMediaResp.media.length > 0) {
-        const mList = tabMediaResp.media;
-        const best = mList.slice().reverse().find(m => /\.(m3u8|mpd|mp4)(\?|$)/i.test(m.url)) || mList[mList.length - 1];
+        const best = pickBestMedia(tabMediaResp.media);
         if (best && best.url) sniffedUrl = best.url;
       }
     } catch (e) {}
@@ -473,7 +488,8 @@
       type: 'download_video',
       url: targetUrl,
       filename: filename,
-      format: format || 'bestvideo+bestaudio/best'
+      format: format || 'bestvideo+bestaudio/best',
+      referrer: location.href
     }, (resp) => {
       if (resp && resp.ok) {
         showToast(`Downloading ${qualityLabel || 'Video'}: "${title.substring(0, 25)}..."`);
