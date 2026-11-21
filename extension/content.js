@@ -15,9 +15,25 @@
     excludedDomains: ''
   };
 
+  // Helper: check whether current page host is in user's excluded domains list
+  function isCurrentPageExcluded() {
+    if (!extSettings.excludedDomains) return false;
+    try {
+      const currentHost = (location.hostname || '').toLowerCase();
+      if (!currentHost) return false;
+      const excludedList = extSettings.excludedDomains
+        .split(/[\s,;\n]+/)
+        .map(d => d.trim().toLowerCase())
+        .filter(Boolean);
+      return excludedList.some(d => currentHost === d || currentHost.endsWith('.' + d));
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Helper: should badges be visible?
   function shouldShowBadges() {
-    return showGrabber && appConnected;
+    return showGrabber && appConnected && !isCurrentPageExcluded();
   }
 
   // Helper: update all badge visibility based on current state

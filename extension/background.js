@@ -695,6 +695,7 @@ function processMediaRequest(details) {
   if (!settings.sniffMedia || !details.url || details.tabId <= 0) return;
   const rawUrl = details.url;
   if (!/^https?:/i.test(rawUrl)) return;
+  if (isDomainExcluded(rawUrl) || isDomainExcluded(details.initiator || details.documentUrl || tabUrls[details.tabId] || '')) return;
   if (MEDIA_NOISE.test(rawUrl) || MEDIA_SEGMENT.test(rawUrl)) return;
 
   const contentType = getHeader(details, 'content-type').toLowerCase();

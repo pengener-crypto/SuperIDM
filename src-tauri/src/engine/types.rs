@@ -72,6 +72,9 @@ pub struct DownloadMetadata {
     /// Optional extractor format ID (e.g., "bestaudio", "137") preserved for resume.
     #[serde(default)]
     pub format_id: Option<String>,
+    /// Optional custom HTTP headers (Referer, Cookie, Authorization, etc.) preserved across resume.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_headers: Option<Vec<(String, String)>>,
     /// Per-chunk state for segmented resume.
     pub chunks: Vec<ChunkInfo>,
     /// Timestamp of task creation (Unix millis).

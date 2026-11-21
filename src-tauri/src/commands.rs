@@ -242,6 +242,7 @@ pub async fn start_download(
             priority,
             category: if is_audio_cat { "Music".to_string() } else { "Videos".to_string() },
             format_id: format_id.clone(),
+            custom_headers: headers.clone(),
             chunks: Vec::new(),
             created_at: now,
             updated_at: now,
@@ -555,6 +556,7 @@ pub async fn start_download(
         priority,
         category,
         format_id: None,
+        custom_headers: headers.clone(),
         chunks: chunks.clone(),
         created_at: now,
         updated_at: now,
@@ -1059,6 +1061,7 @@ pub async fn resume_download(
         let (prog_tx, mut prog_rx) = mpsc::channel(128);
         let url_c = metadata.url.clone();
         let format_id_c = metadata.format_id.clone();
+        let media_headers_c: Vec<(String, String)> = metadata.custom_headers.clone().unwrap_or_default();
         let dest_dir_ext = dest_dir.clone();
         let dest_dir_watch = dest_dir.clone();
         let cancel_c = cancel_rx.clone();
@@ -1077,7 +1080,7 @@ pub async fn resume_download(
                 &url_c,
                 &dest_dir_ext,
                 format_id_c.as_deref(),
-                &[],
+                &media_headers_c,
                 rate_limit_bps,
                 max_retries_c,
                 prog_tx,
@@ -1222,6 +1225,9 @@ pub async fn resume_download(
             if resume_meta.last_modified.is_none() {
                 resume_meta.last_modified = sidecar.last_modified;
             }
+            if resume_meta.custom_headers.is_none() {
+                resume_meta.custom_headers = sidecar.custom_headers;
+            }
             let mut mgr = state.manager.write();
             if let Some(handle) = mgr.tasks.get_mut(&id) {
                 handle.metadata.chunks = resume_meta.chunks.clone();
@@ -1274,6 +1280,7 @@ pub async fn resume_download(
     let chunk_limits: downloader::ChunkLimitMap = Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()));
 
     let max_retries = state.manager.read().max_retries;
+    let resume_headers = resume_meta.custom_headers.clone();
     for chunk in &resume_meta.chunks {
         if chunk.completed {
             continue;
@@ -1284,6 +1291,7 @@ pub async fn resume_download(
         let file_path_c = file_path.clone();
         let throttler_c = throttler.clone();
         let cancel_rx_c = cancel_rx.clone();
+        let headers_c = resume_headers.clone();
         let tx = event_tx.clone();
         let limits_c = Some(chunk_limits.clone());
 
@@ -1296,7 +1304,7 @@ pub async fn resume_download(
                 throttler_c,
                 tx,
                 cancel_rx_c,
-                None,
+                headers_c,
                 limits_c,
                 max_retries,
             )
@@ -1309,7 +1317,7 @@ pub async fn resume_download(
         throttler: throttler.clone(),
         event_tx: event_tx.clone(),
         cancel_rx: cancel_rx.clone(),
-        custom_headers: None,
+        custom_headers: resume_headers,
         chunk_limits: chunk_limits.clone(),
         max_retries,
     };
@@ -1792,6 +1800,7 @@ pub async fn start_stream_download(
         priority: 1,
         category,
         format_id: None,
+        custom_headers: None,
         chunks: Vec::new(),
         created_at: now,
         updated_at: now,
@@ -1933,6 +1942,7 @@ pub async fn refresh_task_link(
                     priority: 0,
                     category: "Videos".to_string(),
                     format_id: None,
+                    custom_headers: None,
                     chunks: vec![],
                     created_at: now,
                     updated_at: now,

@@ -464,6 +464,10 @@ mod tests {
             priority: 0,
             category: "archive".to_string(),
             format_id: None,
+            custom_headers: Some(vec![
+                ("Referer".to_string(), "https://example.com/page".to_string()),
+                ("Authorization".to_string(), "Basic dXNlcjpwYXNz".to_string()),
+            ]),
             chunks: vec![
                 ChunkInfo {
                     index: 0,
@@ -511,6 +515,11 @@ mod tests {
         assert_eq!(loaded.etag, Some("\"abc123\"".to_string()));
         assert_eq!(loaded.chunks.len(), 2);
         assert_eq!(loaded.chunks[0].current_byte, 262144);
+        assert_eq!(loaded.custom_headers.as_ref().map(|h| h.len()), Some(2));
+        assert_eq!(
+            loaded.custom_headers.unwrap()[0],
+            ("Referer".to_string(), "https://example.com/page".to_string())
+        );
     }
 
     #[tokio::test]

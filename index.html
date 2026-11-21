@@ -1970,7 +1970,7 @@ async function addDL(rawUrl, opts = {}) {
   const { i, l, c, n } = getFI(url);
   const finalName = opts.filename || opts.name || (n && n !== 'download' && n.includes('.') && !/^[a-f0-9]{24,64}$/i.test(n) ? n : undefined);
   const conn = opts.conn || gMaxConn;
-  const cat = (opts.cat && opts.cat !== 'Auto-detect') ? opts.cat : c;
+  const cat = (opts.cat && opts.cat !== 'Auto' && opts.cat !== 'Auto-detect') ? opts.cat : c;
   const pri = opts.pri === 'High' ? 1 : 0;
   const simTot = opts.tot || 0;
 
@@ -2047,7 +2047,8 @@ async function addDL(rawUrl, opts = {}) {
       bwH: Array(10).fill(0),
       eta_secs: 0,
       progress: 0,
-      format: opts.format || undefined
+      format: opts.format || undefined,
+      headers: opts.headers || undefined
     };
     dls.unshift(dl);
     addLog('info', `[${isQ ? 'TASK QUEUED' : 'TASK ADDED'}] ${finalName || n} — ${conn} connections [${opts.pri || curPri}]`);
@@ -2654,15 +2655,8 @@ async function startDL() {
 
 async function queueDL() {
   const isAr = curLang === 'ar';
-  const inp = document.getElementById('urlInp');
-  const url = (inp?.value || '').trim();
-  if (!url) {
-    showT('error', isAr ? 'الرابط مطلوب' : 'URL Required', isAr ? 'يرجى إدخال رابط التنزيل لجدولته' : 'Please enter a download URL to queue');
-    inp?.focus();
-    return;
-  }
-  const conn = parseInt(document.getElementById('connSldr')?.value || '16');
-  const cat = document.getElementById('catSel')?.value || 'Auto-detect';
+  const conn = parseInt(document.getElementById('connSldr')?.value || String(gMaxConn));
+  const cat = document.getElementById('catSel')?.value || 'Auto';
 
   let customHeaders = {};
   const hdrText = document.getElementById('inpHeaders')?.value?.trim();
@@ -2676,7 +2670,74 @@ async function queueDL() {
   }
   const finalHeaders = Object.keys(customHeaders).length > 0 ? customHeaders : undefined;
 
-  addDL(url, { conn, pri: 'Low', cat, status: 'queued', headers: finalHeaders });
+  if (batchMode) {
+    const raw = document.getElementById('batchInp')?.value || '';
+    const lines = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+    let urls = [];
+    for (const line of lines) {
+      if (/\[[a-zA-Z0-9]+-[a-zA-Z0-9]+(?::[0-9]+)?\]/.test(line)) {
+        urls.push(...expandUrlPattern(line));
+      } else {
+        urls.push(line);
+      }
+    }
+    if (!urls.length) {
+      showT('error', isAr ? 'حقل الدفعات فارغ' : 'Batch Input Empty', isAr ? 'يرجى إدخال رابط واحد على الأقل لجدولته' : 'Please enter at least one URL to queue');
+      document.getElementById('batchInp')?.focus();
+      return;
+    }
+    for (const u of urls) {
+      await addDL(u, { conn, pri: curPri, cat, status: 'queued', headers: finalHeaders });
+    }
+    showT('info', isAr ? 'تمت جدولة الدفعة' : 'Batch Queued', isAr ? `تمت إضافة ${urls.length} مهمة إلى قائمة الانتظار` : `Queued ${urls.length} task(s) for later`);
+    closeAddModal();
+    setView('queued');
+    return;
+  }
+
+  const inp = document.getElementById('urlInp');
+  const raw = (inp?.value || '').trim();
+  const url = cleanTargetUrl(raw);
+  if (!url) {
+    showT('error', isAr ? 'الرابط مطلوب' : 'URL Required', isAr ? 'يرجى إدخال رابط التنزيل لجدولته' : 'Please enter a download URL to queue');
+    inp?.focus();
+    return;
+  }
+
+  if (/\[[a-zA-Z0-9]+-[a-zA-Z0-9]+(?::[0-9]+)?\]/.test(url)) {
+    const generated = expandUrlPattern(url);
+    if (generated.length > 1) {
+      for (const u of generated) {
+        await addDL(u, { conn, pri: curPri, cat, status: 'queued', headers: finalHeaders });
+      }
+      showT('info', isAr ? 'تمت جدولة الدفعة' : 'Batch Queued', isAr ? `تمت إضافة ${generated.length} مهمة إلى قائمة الانتظار` : `Queued ${generated.length} task(s) for later`);
+      closeAddModal();
+      setView('queued');
+      return;
+    }
+  }
+
+  const isDirect = typeof isLikelyDirectFile === 'function' ? isLikelyDirectFile(url) : false;
+  const isVideoSite = !isDirect && isVideoPlatformUrl(url);
+  let customFilename = undefined;
+  let selectedFormat = undefined;
+  if (currentExtractedInfo) {
+    const cleanTitle = (currentExtractedInfo.title || 'Video').replace(/[/\\?%*:|"<>]/g, '_').trim();
+    const sel = document.getElementById('extFormatSel');
+    selectedFormat = sel?.value || 'best';
+    const isAudioOnly = selectedFormat && (selectedFormat.includes('audio') || selectedFormat === 'bestaudio');
+    customFilename = cleanTitle + (isAudioOnly ? '.mp3' : '.mp4');
+  }
+
+  await addDL(url, {
+    conn,
+    pri: curPri,
+    cat: isVideoSite ? 'Videos' : cat,
+    filename: customFilename,
+    format: selectedFormat,
+    status: 'queued',
+    headers: finalHeaders
+  });
   showT('info', isAr ? 'تمت الجدولة' : 'Task Queued', isAr ? 'تمت إضافة التنزيل إلى قائمة الانتظار' : 'Download scheduled in queue');
   closeAddModal();
   setView('queued');
@@ -2857,7 +2918,9 @@ async function pauseDL(id, opts) {
   if (!silent) {
     showT('info', isAr ? 'تم الإيقاف المؤقت' : 'Download Paused', dl.filename || dl.name);
   }
-  setTimeout(processQueue, 100);
+  if (!(opts && opts.skipQueue)) {
+    setTimeout(processQueue, 100);
+  }
 }
 
 async function resumeDL(id, opts) {
@@ -2890,8 +2953,8 @@ async function resumeDL(id, opts) {
         format: dl.format || null,
         numConnections: Number(dl.connections || gMaxConn || 8),
         num_connections: Number(dl.connections || gMaxConn || 8),
-        priority: dl.priority || 'Normal',
-        category: dl.category || 'Auto-detect',
+        priority: dl.priority === 'High' ? 1 : 0,
+        category: (dl.category && dl.category !== 'Auto' && dl.category !== 'Auto-detect') ? dl.category : getFI(dl.url).c,
         headers: dl.headers || null
       }
     });
@@ -3459,29 +3522,56 @@ async function pauseAll() {
     showT('info', isAr ? 'إيقاف جميع التنزيلات' : 'Pause All', isAr ? 'لا توجد تنزيلات نشطة حالياً' : 'No active downloads to pause');
     return;
   }
-  await Promise.all(targets.map(d => pauseDL(d.id, { silent: true })));
+  await Promise.all(targets.map(d => pauseDL(d.id, { silent: true, skipQueue: true })));
   showT('info', isAr ? 'إيقاف جميع التنزيلات' : 'All Downloads Paused', isAr ? `تم إيقاف ${targets.length} مهمة مؤقتاً` : `Paused ${targets.length} active task(s)`);
   addLog('warn', `[PAUSE ALL] Paused ${targets.length} active downloads`);
 }
 
+function getPriorityRank(pri) {
+  return pri === 'High' ? 2 : (pri === 'Normal' ? 1 : 0);
+}
+
 async function resumeAll() {
   const isAr = curLang === 'ar';
-  const targets = dls.filter(d => d.status === 'paused' || d.status === 'queued' || d.status === 'error' || d.status === 'failed');
+  const targets = dls
+    .filter(d => d.status === 'paused' || d.status === 'queued' || d.status === 'error' || d.status === 'failed')
+    .sort((a, b) => {
+      const diff = getPriorityRank(b.priority) - getPriorityRank(a.priority);
+      return diff !== 0 ? diff : ((a.addedAt || 0) - (b.addedAt || 0));
+    });
   if (targets.length === 0) {
     showT('info', isAr ? 'استئناف جميع التنزيلات' : 'Resume All', isAr ? 'لا توجد مهام متوقفة للاستئناف' : 'No paused or failed tasks to resume');
     return;
   }
+  const activeNow = dls.filter(d => d.status === 'downloading').length;
+  const slots = Math.max(0, gMaxActive - activeNow);
+  const immediate = targets.slice(0, slots);
+  const overflow = targets.slice(slots);
+
   let okCount = 0;
-  for (const d of targets) {
+  for (const d of immediate) {
     const ok = await resumeDL(d.id, { silent: true });
     if (ok) okCount++;
   }
+  for (const d of overflow) {
+    if (d.status !== 'queued') {
+      d.status = 'queued';
+    }
+  }
+  if (overflow.length > 0) {
+    renderDLs();
+    updBdg();
+    updStats();
+    persistLocalDls();
+  }
   showT(
-    okCount > 0 ? 'success' : 'error',
+    (okCount > 0 || overflow.length > 0) ? 'success' : 'error',
     isAr ? 'استئناف جميع التنزيلات' : 'Resume All',
-    isAr ? `تم استئناف ${okCount} من أصل ${targets.length} مهمة` : `Resumed ${okCount} of ${targets.length} task(s)`
+    overflow.length > 0
+      ? (isAr ? `تم استئناف ${okCount} مهمة وجدولة ${overflow.length} بالانتظار (الحد الأقصى ${gMaxActive})` : `Resumed ${okCount} task(s), ${overflow.length} queued (max ${gMaxActive} simultaneous)`)
+      : (isAr ? `تم استئناف ${okCount} من أصل ${targets.length} مهمة` : `Resumed ${okCount} of ${targets.length} task(s)`)
   );
-  addLog('info', `[RESUME ALL] Resumed ${okCount}/${targets.length} tasks`);
+  addLog('info', `[RESUME ALL] Resumed ${okCount} task(s), ${overflow.length} queued`);
 }
 
 function clearDone() {
@@ -3950,6 +4040,10 @@ async function openAddModal(skipClipboard = false) {
   if (skipChk) {
     skipChk.checked = (localStorage.getItem('superidm_skip_download_prompt') === 'true');
   }
+  const cSldr = document.getElementById('connSldr');
+  const cVal = document.getElementById('connV');
+  if (cSldr) cSldr.value = gMaxConn;
+  if (cVal) cVal.textContent = gMaxConn;
   const inp = document.getElementById('urlInp');
   if (inp) {
     if (!skipClipboard && !inp.value && navigator.clipboard && navigator.clipboard.readText) {
@@ -4374,6 +4468,10 @@ function setConnectionsPerDl(val) {
   if (bwEl) bwEl.textContent = gMaxConn;
   const bwSldr = document.getElementById('maxConnBw');
   if (bwSldr) bwSldr.value = gMaxConn;
+  const modSldr = document.getElementById('connSldr');
+  if (modSldr) modSldr.value = gMaxConn;
+  const modEl = document.getElementById('connV');
+  if (modEl) modEl.textContent = gMaxConn;
   try { localStorage.setItem('superidm_conn_per_dl', String(gMaxConn)); } catch (e) {}
 }
 
@@ -4583,13 +4681,18 @@ async function processQueue() {
     if (active.length >= gMaxActive) return;
 
     const availableSlots = gMaxActive - active.length;
-    const queuedTasks = dls.filter(d => d.status === 'queued');
+    const queuedTasks = dls
+      .filter(d => d.status === 'queued')
+      .sort((a, b) => {
+        const diff = getPriorityRank(b.priority) - getPriorityRank(a.priority);
+        return diff !== 0 ? diff : ((a.addedAt || 0) - (b.addedAt || 0));
+      });
 
     for (let i = 0; i < Math.min(availableSlots, queuedTasks.length); i++) {
       const task = queuedTasks[i];
       if (!task) continue;
 
-      addLog('info', `[QUEUE] Launching: ${task.filename || task.name}`);
+      addLog('info', `[QUEUE] Launching: ${task.filename || task.name} [${task.priority || 'Normal'}]`);
       try {
         const taskId = await tauriCall('start_download', {
           request: {
@@ -4600,7 +4703,8 @@ async function processQueue() {
             numConnections: task.connections || gMaxConn,
             num_connections: task.connections || gMaxConn,
             priority: task.priority === 'High' ? 1 : 0,
-            category: task.category
+            category: task.category,
+            headers: task.headers || undefined
           },
           url: task.url,
           destination: task.destination || savePth,
@@ -4609,7 +4713,8 @@ async function processQueue() {
           numConnections: task.connections || gMaxConn,
           num_connections: task.connections || gMaxConn,
           priority: task.priority === 'High' ? 1 : 0,
-          category: task.category
+          category: task.category,
+          headers: task.headers || undefined
         });
 
         if (taskId) {
