@@ -50,6 +50,10 @@ pub struct DownloadManager {
     pub max_concurrent: usize,
     pub max_retries: usize,
     pub auto_extract: bool,
+    pub show_notifications: bool,
+    pub browser_file_extensions: String,
+    pub browser_excluded_domains: String,
+    pub browser_rules_updated_at: i64,
     /// Queue of download requests received from the browser extension via RPC.
     pub pending_rpc_downloads: Vec<crate::engine::rpc::RpcDownloadRequest>,
 }
@@ -83,6 +87,10 @@ impl DownloadManager {
             max_concurrent: MAX_CONCURRENT_DOWNLOADS,
             max_retries: MAX_CHUNK_RETRIES,
             auto_extract: true,
+            show_notifications: true,
+            browser_file_extensions: String::new(),
+            browser_excluded_domains: String::new(),
+            browser_rules_updated_at: 0,
             pending_rpc_downloads: Vec::new(),
         }
     }

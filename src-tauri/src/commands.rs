@@ -19,6 +19,24 @@ pub struct AppState {
     pub manager: Arc<RwLock<DownloadManager>>,
 }
 
+/// Validate and ensure a user-selected default save directory exists.
+fn validate_and_ensure_save_dir(raw_path: &str) -> Result<PathBuf, String> {
+    let trimmed = raw_path.trim();
+    if trimmed.is_empty() {
+        return Err("Save directory path cannot be empty".to_string());
+    }
+    if trimmed.contains('\0') {
+        return Err("Invalid null byte in save directory path".to_string());
+    }
+    let pb = PathBuf::from(trimmed);
+    if pb.exists() && !pb.is_dir() {
+        return Err(format!("Path exists but is not a directory: {}", pb.display()));
+    }
+    std::fs::create_dir_all(&pb)
+        .map_err(|e| format!("Failed to access/create save directory '{}': {}", pb.display(), e))?;
+    Ok(pb)
+}
+
 /// Get the system's default download directory.
 #[tauri::command]
 pub fn get_default_save_path(state: State<'_, AppState>) -> String {
@@ -28,6 +46,18 @@ pub fn get_default_save_path(state: State<'_, AppState>) -> String {
         .default_download_dir
         .to_string_lossy()
         .to_string()
+}
+
+/// Update the default download directory used for new downloads and fallbacks.
+#[tauri::command]
+pub fn set_default_save_path(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<String, String> {
+    let pb = validate_and_ensure_save_dir(&path)?;
+    let normalized = pb.to_string_lossy().to_string();
+    state.manager.write().default_download_dir = pb;
+    Ok(normalized)
 }
 
 /// Start a new download task.
@@ -867,13 +897,9 @@ async fn run_coordinator(
                     });
                 }
 
-                // Native Windows Toast Notification on download complete
-                use tauri_plugin_notification::NotificationExt;
-                let _ = app.notification()
-                    .builder()
-                    .title("SuperIDM — اكتمل التحميل")
-                    .body(format!("اكتمل تحميل الملف بنجاح: {}", task_fname))
-                    .show();
+                // Completion toast notification is dispatched cleanly via the frontend's
+                // localized `notify_download_complete` call (respecting `show_notifications`),
+                // preventing duplicate Windows Toasts on direct downloads.
 
                 break;
             } else {
@@ -1948,13 +1974,17 @@ pub async fn refresh_task_link(
     Ok(fresh_url)
 }
 
-/// Send a native Windows Toast notification on download complete.
+/// Send a native Windows Toast notification on download complete (when enabled).
 #[tauri::command]
 pub async fn notify_download_complete(
+    state: State<'_, AppState>,
     app: AppHandle,
     title: String,
     body: String,
 ) -> Result<(), String> {
+    if !state.manager.read().show_notifications {
+        return Ok(());
+    }
     use tauri_plugin_notification::NotificationExt;
     app.notification()
         .builder()
@@ -2428,6 +2458,38 @@ pub fn set_auto_extract(state: State<'_, AppState>, enabled: bool) -> bool {
     enabled
 }
 
+/// Control whether native completion notifications are shown.
+#[tauri::command]
+pub fn set_show_notifications(state: State<'_, AppState>, enabled: bool) -> bool {
+    let mut mgr = state.manager.write();
+    mgr.show_notifications = enabled;
+    enabled
+}
+
+/// Store desktop-configured browser extension capture rules so the extension can sync them via RPC.
+#[tauri::command]
+pub fn set_browser_rules(
+    state: State<'_, AppState>,
+    file_extensions: Option<String>,
+    excluded_domains: Option<String>,
+    updated_at: Option<i64>,
+    #[allow(non_snake_case)] fileExtensions: Option<String>,
+    #[allow(non_snake_case)] excludedDomains: Option<String>,
+    #[allow(non_snake_case)] updatedAt: Option<i64>,
+) -> i64 {
+    let exts = file_extensions.or(fileExtensions).unwrap_or_default().trim().to_string();
+    let excl = excluded_domains.or(excludedDomains).unwrap_or_default().trim().to_string();
+    let ts = updated_at
+        .or(updatedAt)
+        .filter(|v| *v > 0)
+        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+    let mut mgr = state.manager.write();
+    mgr.browser_file_extensions = exts;
+    mgr.browser_excluded_domains = excl;
+    mgr.browser_rules_updated_at = ts;
+    ts
+}
+
 /// Manually extract a downloaded archive file into a sibling folder.
 #[tauri::command]
 pub async fn extract_archive(
@@ -2561,6 +2623,20 @@ mod tests {
         let deleted = cleanup_task_files(&[main_file.clone()], true).await;
         assert!(!main_file.exists());
         assert!(!deleted.is_empty());
+    }
+
+    #[test]
+    fn test_validate_and_ensure_save_dir_creates_and_rejects_invalid() {
+        let tmp = TempDir::new().unwrap();
+        let nested = tmp.path().join("custom_downloads").join("sub");
+        let ensured = validate_and_ensure_save_dir(&nested.to_string_lossy()).expect("should create nested dir");
+        assert!(ensured.is_dir());
+
+        // Reject empty path and file-as-dir path
+        assert!(validate_and_ensure_save_dir("   ").is_err());
+        let file_path = tmp.path().join("not_a_dir.txt");
+        std::fs::write(&file_path, b"hi").unwrap();
+        assert!(validate_and_ensure_save_dir(&file_path.to_string_lossy()).is_err());
     }
 }
 

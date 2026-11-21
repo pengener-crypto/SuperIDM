@@ -498,6 +498,29 @@ async fn handle_http_request(
         );
     }
 
+    // GET /api/rules — Return desktop-configured browser extension capture rules (authenticated)
+    if method == "GET" && path == "/api/rules" {
+        let (exts, excl, updated_at) = {
+            let mgr = manager.read();
+            (
+                mgr.browser_file_extensions.clone(),
+                mgr.browser_excluded_domains.clone(),
+                mgr.browser_rules_updated_at,
+            )
+        };
+        let b = serde_json::json!({
+            "status": "ok",
+            "file_extensions": exts,
+            "excluded_domains": excl,
+            "updated_at": updated_at,
+        })
+        .to_string();
+        return format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{}\r\nCache-Control: no-store\r\nContent-Length: {}\r\n\r\n{}",
+            cors_header, b.len(), b
+        );
+    }
+
     // POST /api/download
     if method == "POST" && path == "/api/download" {
         if let Some(params) = body_json {
@@ -677,5 +700,35 @@ mod tests {
         let resp = handle_http_request(raw, &mgr, secret, dummy_peer()).await;
         assert!(resp.starts_with("HTTP/1.1 403 Forbidden"), "Expected 403, got: {}", resp);
         assert!(!resp.contains(secret));
+    }
+
+    #[tokio::test]
+    async fn test_api_rules_requires_auth_and_returns_desktop_rules() {
+        let mgr = dummy_manager();
+        let secret = "sidm_test_secret_token_123456";
+        {
+            let mut m = mgr.write();
+            m.browser_file_extensions = "ZIP MP4 ISO".to_string();
+            m.browser_excluded_domains = "example.com internal.local".to_string();
+            m.browser_rules_updated_at = 1_777_777_777_000;
+        }
+
+        // Without token -> 401 Unauthorized
+        let unauth = "GET /api/rules HTTP/1.1\r\nHost: 127.0.0.1:6801\r\n\r\n";
+        let unauth_resp = handle_http_request(unauth, &mgr, secret, dummy_peer()).await;
+        assert!(unauth_resp.starts_with("HTTP/1.1 401 Unauthorized"), "Expected 401, got: {}", unauth_resp);
+
+        // With valid token -> 200 OK with exact rules
+        let authed = format!(
+            "GET /api/rules HTTP/1.1\r\nHost: 127.0.0.1:6801\r\nX-SuperIDM-Token: {}\r\n\r\n",
+            secret
+        );
+        let resp = handle_http_request(&authed, &mgr, secret, dummy_peer()).await;
+        assert!(resp.starts_with("HTTP/1.1 200 OK"), "Expected 200 OK, got: {}", resp);
+        let body = resp.split("\r\n\r\n").nth(1).unwrap_or("");
+        let json: serde_json::Value = serde_json::from_str(body).expect("valid json");
+        assert_eq!(json["file_extensions"], "ZIP MP4 ISO");
+        assert_eq!(json["excluded_domains"], "example.com internal.local");
+        assert_eq!(json["updated_at"], 1_777_777_777_000_i64);
     }
 }

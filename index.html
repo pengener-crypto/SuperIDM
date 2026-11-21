@@ -498,11 +498,11 @@ html[dir="rtl"] .flex.items-baseline {
       <div class="grid grid-cols-2 gap-5 mb-4">
         <div>
           <label id="schedLblStart" class="text-[11px] text-on-surface-variant uppercase tracking-wider block mb-2" style="font-family:'JetBrains Mono'">Start Time</label>
-          <input type="time" id="schedStart" value="22:00" class="bg-surface-container-high border border-outline-variant text-on-surface rounded px-3 py-2 text-[13px] outline-none focus:border-primary-container w-full font-mono"/>
+          <input type="time" id="schedStart" value="22:00" onchange="saveSchedTimes()" class="bg-surface-container-high border border-outline-variant text-on-surface rounded px-3 py-2 text-[13px] outline-none focus:border-primary-container w-full font-mono"/>
         </div>
         <div>
           <label id="schedLblStop" class="text-[11px] text-on-surface-variant uppercase tracking-wider block mb-2" style="font-family:'JetBrains Mono'">Stop Time</label>
-          <input type="time" id="schedStop" value="06:00" class="bg-surface-container-high border border-outline-variant text-on-surface rounded px-3 py-2 text-[13px] outline-none focus:border-primary-container w-full font-mono"/>
+          <input type="time" id="schedStop" value="06:00" onchange="saveSchedTimes()" class="bg-surface-container-high border border-outline-variant text-on-surface rounded px-3 py-2 text-[13px] outline-none focus:border-primary-container w-full font-mono"/>
         </div>
       </div>
       <div class="flex items-center gap-3">
@@ -515,7 +515,7 @@ html[dir="rtl"] .flex.items-baseline {
       <div id="schedLblPost" class="text-[11px] text-on-surface-variant uppercase tracking-wider mb-4" style="font-family:'JetBrains Mono'">Post-completion actions</div>
       <div class="space-y-4">
         <div class="flex items-center justify-between"><span id="schedLblPostExt" class="text-[13px] text-on-surface" style="font-family:Inter">Auto-extract archives after download</span><label class="tgl-sw"><input type="checkbox" id="autoExtSched" checked/><span class="tgl-sl"></span></label></div>
-        <div class="flex items-center justify-between"><span id="schedLblPostToast" class="text-[13px] text-on-surface" style="font-family:Inter">Show completion toast notification</span><label class="tgl-sw"><input type="checkbox" id="showToastOpt" checked/><span class="tgl-sl"></span></label></div>
+        <div class="flex items-center justify-between"><span id="schedLblPostToast" class="text-[13px] text-on-surface" style="font-family:Inter">Show completion toast notification</span><label class="tgl-sw"><input type="checkbox" id="showToastOpt" checked onchange="toggleShowToast()"/><span class="tgl-sl"></span></label></div>
         <div class="flex items-center justify-between"><span id="schedLblPostClip" class="text-[13px] text-on-surface" style="font-family:Inter">Clipboard URL monitoring</span><label class="tgl-sw"><input type="checkbox" id="clipMon" checked onchange="toggleClipMon()"/><span class="tgl-sl"></span></label></div>
         <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface flex items-center gap-2" style="font-family:Inter"><span id="schedLblPostShutdown">Shut down PC after batch completes</span><span class="text-[10px] text-primary font-mono bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded" id="schedShutdownBadge">60s countdown</span></span><label class="tgl-sw"><input type="checkbox" id="shutdownPcOpt" onchange="toggleShutdownAfterBatch(this.checked)"/><span class="tgl-sl"></span></label></div>
       </div>
@@ -1575,17 +1575,20 @@ function bindTauriEvents() {
 
           const rawProg = p.progress !== undefined ? p.progress : (dl.total_bytes > 0 ? dl.downloaded_bytes / dl.total_bytes : 0);
           if (isComp) {
+            const alreadyComplete = dl.status === 'complete';
             dl.status = 'complete';
             dl.progress = 1.0;
             if (dl.total_bytes > 0) dl.downloaded_bytes = dl.total_bytes;
             else if (dl.downloaded_bytes > 0) dl.total_bytes = dl.downloaded_bytes;
             dl.speed = 0;
             persistLocalDls();
-            addLog('success', `[COMPLETED] ${dl.filename || dl.name} — ${fmtSz(dl.total_bytes)}`);
-            playCompletionChime();
-            if (document.getElementById('showToastOpt')?.checked) showCompT(dl);
-            processQueue();
-            onDownloadCompletedForBatch();
+            if (!alreadyComplete) {
+              addLog('success', `[COMPLETED] ${dl.filename || dl.name} — ${fmtSz(dl.total_bytes)}`);
+              playCompletionChime();
+              if (document.getElementById('showToastOpt')?.checked) showCompT(dl);
+              processQueue();
+              onDownloadCompletedForBatch();
+            }
             renderDLs();
           } else {
             // Strictly monotonic: progress never retreats
@@ -1824,7 +1827,9 @@ async function syncFromBackend() {
           dl.status = newStatus;
           hasNewTasks = true;
           if (wasDownloading && newStatus === 'complete') {
+            addLog('success', `[COMPLETED] ${dl.filename || dl.name} — ${fmtSz(dl.total_bytes)}`);
             playCompletionChime();
+            if (document.getElementById('showToastOpt')?.checked) showCompT(dl);
             processQueue();
             onDownloadCompletedForBatch();
             const autoShow = localStorage.getItem('superidm_auto_show_progress') !== 'false';
@@ -4188,16 +4193,33 @@ function togBatch() {
 async function chgSavePath() {
   const isAr = curLang === 'ar';
   let selected = null;
+  let usedNativeDialog = false;
   if (hasTauriIPC() && window.__TAURI__ && window.__TAURI__.dialog) {
     try {
+      usedNativeDialog = true;
       selected = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: isAr ? 'اختر مجلد الحفظ' : 'Select Save Folder' });
-    } catch(e) { console.warn(e); }
+    } catch(e) {
+      usedNativeDialog = false;
+      console.warn(e);
+    }
   }
-  if (!selected) {
+  if (!selected && !usedNativeDialog) {
     selected = prompt(isAr ? 'أدخل مسار مجلد حفظ التنزيلات:' : 'Enter download destination directory:', savePth);
   }
-  if (selected && selected.trim()) {
-    savePth = selected.trim();
+  if (selected && typeof selected === 'string' && selected.trim()) {
+    let nextPath = selected.trim();
+    if (hasTauriIPC()) {
+      try {
+        const confirmed = await tauriCall('set_default_save_path', { path: nextPath });
+        if (confirmed && typeof confirmed === 'string') nextPath = confirmed;
+      } catch (e) {
+        showT('error', isAr ? 'مسار غير صالح' : 'Invalid Save Path', String(e));
+        addLog('error', `[SETTINGS] Rejected save path '${nextPath}': ${e}`);
+        return;
+      }
+    }
+    savePth = nextPath;
+    try { localStorage.setItem('superidm_save_path', savePth); } catch (e) {}
     const defPath = document.getElementById('defSavePath');
     if (defPath) defPath.textContent = savePth;
     const modPath = document.getElementById('modalPath');
@@ -4253,7 +4275,6 @@ function showT(type, title, msg) {
 function showCompT(dl) {
   const isAr = curLang === 'ar';
   showT('success', isAr ? 'اكتمل التحميل' : 'Download Finished', `${dl.filename || dl.name} (${fmtSz(dl.total_bytes)})`);
-  playCompletionChime();
   if (hasTauriIPC()) {
     const title = isAr ? 'SuperIDM — اكتمل التحميل' : 'SuperIDM — Download Complete';
     const body = `${dl.filename || dl.name} (${fmtSz(dl.total_bytes)})`;
@@ -4406,8 +4427,31 @@ function toggleForceHttps() {
   showT('info', isAr ? 'حماية HTTPS' : 'HTTPS Enforcement', en ? (isAr ? 'تم فرض اتصال HTTPS الآمن' : 'Force HTTPS active') : (isAr ? 'تم السماح باتصالات HTTP العادية' : 'Standard HTTP allowed'));
 }
 
+function toggleShowToast() {
+  const isAr = curLang === 'ar';
+  const el = document.getElementById('showToastOpt');
+  const en = el?.checked ?? true;
+  try { localStorage.setItem('superidm_show_toast', String(en)); } catch (e) {}
+  if (hasTauriIPC()) {
+    tauriCall('set_show_notifications', { enabled: en }).catch(() => {});
+  }
+  addLog('info', `[SETTINGS] Completion notifications ${en ? 'enabled' : 'disabled'}`);
+  if (en) {
+    showT('info', isAr ? 'إشعارات الاكتمال' : 'Completion Notifications', isAr ? 'تم تفعيل إشعارات اكتمال التحميل' : 'Completion notifications enabled');
+  }
+}
+
 function loadSettings() {
   try {
+    const savedSavePath = localStorage.getItem('superidm_save_path');
+    if (savedSavePath && savedSavePath.trim()) {
+      savePth = savedSavePath.trim();
+      const dP = document.getElementById('defSavePath');
+      if (dP) dP.textContent = savePth;
+      const mP = document.getElementById('modalPath');
+      if (mP) mP.textContent = savePth;
+    }
+
     const savedMaxSim = localStorage.getItem('superidm_max_sim');
     if (savedMaxSim) {
       gMaxActive = parseInt(savedMaxSim) || 3;
@@ -4493,6 +4537,34 @@ function loadSettings() {
         if (autoExtSched) autoExtSched.checked = checked;
         if (hasTauriIPC()) tauriCall('set_auto_extract', { enabled: checked }).catch(() => {});
       };
+    }
+
+    // Scheduler, Clipboard Monitor, and Completion Toast persistence
+    const savedSchedStart = localStorage.getItem('superidm_sched_start');
+    if (savedSchedStart) {
+      const el = document.getElementById('schedStart');
+      if (el) el.value = savedSchedStart;
+    }
+    const savedSchedStop = localStorage.getItem('superidm_sched_stop');
+    if (savedSchedStop) {
+      const el = document.getElementById('schedStop');
+      if (el) el.value = savedSchedStop;
+    }
+    const savedSchedEn = localStorage.getItem('superidm_sched_en');
+    if (savedSchedEn !== null) {
+      const el = document.getElementById('schedEn');
+      if (el) el.checked = savedSchedEn === 'true';
+      updateSched(true);
+    }
+    const savedShowToast = localStorage.getItem('superidm_show_toast');
+    if (savedShowToast !== null) {
+      const el = document.getElementById('showToastOpt');
+      if (el) el.checked = savedShowToast === 'true';
+    }
+    const savedClipMon = localStorage.getItem('superidm_clip_mon');
+    if (savedClipMon !== null) {
+      const el = document.getElementById('clipMon');
+      if (el) el.checked = savedClipMon === 'true';
     }
 
     loadBrowserRules();
@@ -5403,19 +5475,37 @@ function clrLogs() {
 }
 
 // ════════ SCHEDULER ════════
-function updateSched() {
+let lastSchedStartKey = '';
+let lastSchedStopKey = '';
+
+function saveSchedTimes() {
+  const sStart = document.getElementById('schedStart')?.value || '22:00';
+  const sStop = document.getElementById('schedStop')?.value || '06:00';
+  try {
+    localStorage.setItem('superidm_sched_start', sStart);
+    localStorage.setItem('superidm_sched_stop', sStop);
+  } catch (e) {}
+  lastSchedStartKey = '';
+  lastSchedStopKey = '';
+  addLog('info', `[SCHEDULER] Schedule times updated: start=${sStart}, stop=${sStop}`);
+}
+
+function updateSched(silent = false) {
   const isAr = curLang === 'ar';
-  const en = document.getElementById('schedEn')?.checked;
+  const en = Boolean(document.getElementById('schedEn')?.checked);
+  try { localStorage.setItem('superidm_sched_en', String(en)); } catch (e) {}
   const st = document.getElementById('schedSt');
   if (st) {
     st.textContent = en
       ? (isAr ? 'مفعّل' : 'Active')
       : (isAr ? 'غير مفعّل' : 'Inactive');
     st.className = en
-      ? 'text-[11px] text-primary-container ml-2 px-2 py-0.5 bg-primary-container/20 rounded font-semibold'
-      : 'text-[11px] text-on-surface-variant ml-2 px-2 py-0.5 bg-surface-container-highest rounded';
+      ? 'text-[11px] text-primary-container ml-2 px-2 py-0.5 bg-primary-container/20 rounded font-semibold font-mono'
+      : 'text-[11px] text-on-surface-variant ml-2 px-2 py-0.5 bg-surface-container-highest rounded font-mono';
   }
-  showT('info', isAr ? 'تحديث الجدولة' : 'Scheduler Updated', en ? (isAr ? 'تم تفعيل الجدولة الزمنية' : 'Scheduler is now active') : (isAr ? 'تم إيقاف الجدولة الزمنية' : 'Scheduler disabled'));
+  if (!silent) {
+    showT('info', isAr ? 'تحديث الجدولة' : 'Scheduler Updated', en ? (isAr ? 'تم تفعيل الجدولة الزمنية' : 'Scheduler is now active') : (isAr ? 'تم إيقاف الجدولة الزمنية' : 'Scheduler disabled'));
+  }
 }
 
 function chkSched() {
@@ -5423,11 +5513,20 @@ function chkSched() {
   if (!en) return;
   const now = new Date();
   const curTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const minuteKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()} ${curTime}`;
   const sStart = document.getElementById('schedStart')?.value || '22:00';
   const sStop = document.getElementById('schedStop')?.value || '06:00';
 
-  if (curTime === sStart) resumeAll();
-  if (curTime === sStop) pauseAll();
+  if (curTime === sStart && lastSchedStartKey !== minuteKey) {
+    lastSchedStartKey = minuteKey;
+    addLog('info', `[SCHEDULER] Triggered scheduled start (${sStart})`);
+    resumeAll();
+  }
+  if (curTime === sStop && lastSchedStopKey !== minuteKey) {
+    lastSchedStopKey = minuteKey;
+    addLog('info', `[SCHEDULER] Triggered scheduled stop (${sStop})`);
+    pauseAll();
+  }
 }
 
 // ════════ CLIPBOARD MONITOR ════════
@@ -5470,7 +5569,8 @@ function accClip() {
 }
 
 function toggleClipMon() {
-  const en = document.getElementById('clipMon')?.checked;
+  const en = Boolean(document.getElementById('clipMon')?.checked);
+  try { localStorage.setItem('superidm_clip_mon', String(en)); } catch (e) {}
   if (en) {
     if (!clipInt) clipInt = setInterval(chkClip, 2500);
   } else {
@@ -5650,30 +5750,61 @@ let tauriInitializedOnce = false;
 function initTauriState() {
   bindTauriEvents();
   if (hasTauriIPC()) {
-    tauriCall('get_default_save_path').then(path => {
-      if (path && typeof path === 'string') {
-        savePth = path;
-        const dP = document.getElementById('defSavePath');
-        if (dP) dP.textContent = path;
-        const mP = document.getElementById('modalPath');
-        if (mP) mP.textContent = path;
-      }
-    }).catch(() => {});
-
     if (!tauriInitializedOnce) {
       tauriInitializedOnce = true;
+
+      // Sync custom saved path to Rust ONCE, or query Rust's system Downloads dir if none saved
+      let savedPath = null;
+      try { savedPath = localStorage.getItem('superidm_save_path'); } catch (e) {}
+      const applyPathToUI = (p) => {
+        if (p && typeof p === 'string') {
+          savePth = p;
+          const dP = document.getElementById('defSavePath');
+          if (dP) dP.textContent = p;
+          const mP = document.getElementById('modalPath');
+          if (mP) mP.textContent = p;
+        }
+      };
+      if (savedPath && savedPath.trim()) {
+        tauriCall('set_default_save_path', { path: savedPath.trim() })
+          .then(applyPathToUI)
+          .catch(() => tauriCall('get_default_save_path').then(applyPathToUI).catch(() => {}));
+      } else {
+        tauriCall('get_default_save_path').then(applyPathToUI).catch(() => {});
+      }
+
       const savedRetries = parseInt(document.getElementById('retrySldr')?.value || '3');
       const savedMinTray = document.getElementById('minTrayOpt')?.checked ?? true;
       const savedAutoExt = document.getElementById('autoExtSched')?.checked ?? true;
+      const savedShowToast = document.getElementById('showToastOpt')?.checked ?? true;
       const savedThrottleMb = parseInt(document.getElementById('throttleDn')?.value || '0');
       tauriCall('set_max_concurrent', { maxConcurrent: gMaxActive, max_concurrent: gMaxActive }).catch(() => {});
       tauriCall('set_max_retries', { maxRetries: savedRetries, max_retries: savedRetries }).catch(() => {});
       tauriCall('set_minimize_to_tray', { enabled: savedMinTray }).catch(() => {});
       tauriCall('set_auto_extract', { enabled: savedAutoExt }).catch(() => {});
+      tauriCall('set_show_notifications', { enabled: savedShowToast }).catch(() => {});
       if (savedThrottleMb > 0) {
         const limitBps = savedThrottleMb * 1048576;
         tauriCall('set_global_throttle', { limitBytesPerSec: limitBps, limit_bytes_per_sec: limitBps }).catch(() => {});
       }
+
+      // Push previously saved desktop browser capture rules with their original timestamp
+      try {
+        const savedRulesTs = parseInt(localStorage.getItem('superidm_rules_updated_at') || '0');
+        if (savedRulesTs > 0) {
+          const exts = localStorage.getItem('superidm_file_extensions') || DEFAULT_BROWSER_EXTS;
+          const excl = localStorage.getItem('superidm_excluded_domains') || '';
+          tauriCall('set_browser_rules', {
+            fileExtensions: exts,
+            file_extensions: exts,
+            excludedDomains: excl,
+            excluded_domains: excl,
+            updatedAt: savedRulesTs,
+            updated_at: savedRulesTs
+          }).catch(() => {});
+        }
+      } catch (e) {}
+
       tauriCall('get_app_version').then(ver => {
         if (ver && typeof ver === 'string') {
           const vEl = document.getElementById('stAppVersionVal');
@@ -5695,8 +5826,10 @@ setTimeout(() => checkAppUpdate(false), 8000);
 setInterval(initTauriState, 1500);
 setInterval(syncFromBackend, 600);
 setInterval(localTick, 350);
-setInterval(chkSched, 60000);
-clipInt = setInterval(chkClip, 2500);
+setInterval(chkSched, 15000);
+if (document.getElementById('clipMon')?.checked !== false) {
+  clipInt = setInterval(chkClip, 2500);
+}
 
 addLog('info', '[INIT] SuperIDM v2.7.6 Engine started');
 addLog('info', '[READY] All buttons, modals, and download engine are 100% active');
@@ -5964,14 +6097,27 @@ function saveBrowserRules() {
   const exclEl = document.getElementById('stExcludedDomainsInput');
   const exts = extsEl ? extsEl.value.trim() : DEFAULT_BROWSER_EXTS;
   const excluded = exclEl ? exclEl.value.trim() : '';
+  const ts = Date.now();
 
   localStorage.setItem('superidm_file_extensions', exts);
   localStorage.setItem('superidm_excluded_domains', excluded);
+  localStorage.setItem('superidm_rules_updated_at', String(ts));
+
+  if (hasTauriIPC()) {
+    tauriCall('set_browser_rules', {
+      fileExtensions: exts,
+      file_extensions: exts,
+      excludedDomains: excluded,
+      excluded_domains: excluded,
+      updatedAt: ts,
+      updated_at: ts
+    }).catch(() => {});
+  }
 
   const btn = document.getElementById('btnSaveBrowserRules');
   if (btn) {
     const origHTML = btn.innerHTML;
-    btn.innerHTML = `<span class="material-symbols-outlined text-[14px]">check</span> <span>${curLang === 'ar' ? 'تم الحفظ! ✅' : 'Saved! ✅'}</span>`;
+    btn.innerHTML = `<span class="material-symbols-outlined text-[14px]">check</span> <span>${curLang === 'ar' ? 'تم الحفظ والمزامنة! ✅' : 'Saved & Synced! ✅'}</span>`;
     btn.classList.add('bg-emerald-600');
     setTimeout(() => {
       btn.innerHTML = origHTML;
@@ -5979,7 +6125,7 @@ function saveBrowserRules() {
     }, 1800);
   }
 
-  showT('success', curLang === 'ar' ? 'تكامل المتصفحات' : 'Browser Integration', curLang === 'ar' ? 'تم حفظ إعدادات وصيغ الالتقاط بنجاح' : 'Capture rules saved successfully');
+  showT('success', curLang === 'ar' ? 'تكامل المتصفحات' : 'Browser Integration', curLang === 'ar' ? 'تم حفظ ومزامنة قواعد الالتقاط مع إضافة المتصفح' : 'Capture rules saved & synced to browser extension');
 }
 
 function resetBrowserExts() {
@@ -6146,6 +6292,8 @@ window.toggleTaskbarSpeed = toggleTaskbarSpeed;
 window.toggleMinTray = toggleMinTray;
 window.toggleSoundAlert = toggleSoundAlert;
 window.toggleForceHttps = toggleForceHttps;
+window.toggleShowToast = toggleShowToast;
+window.saveSchedTimes = saveSchedTimes;
 window.toggleShutdownAfterBatch = toggleShutdownAfterBatch;
 window.onDownloadCompletedForBatch = onDownloadCompletedForBatch;
 window.cancelScheduledShutdown = cancelScheduledShutdown;

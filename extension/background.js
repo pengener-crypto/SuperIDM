@@ -21,6 +21,8 @@ let ws = null;
 let wsConnected = false;
 let rpcToken = '';
 let settings = Object.assign({}, DEFAULT_SETTINGS);
+let lastDesktopRulesTs = 0;
+let lastRulesSyncAt = 0;
 // Per-tab sniffed media
 const tabMedia = {};
 
@@ -55,9 +57,12 @@ function isExtensionSupported(url, filename) {
 
 // ───── Token & Settings Persistence ─────
 async function initAuthAndSettings() {
-  const data = await chrome.storage.local.get(['superidm_settings', 'superidm_rpc_token']);
+  const data = await chrome.storage.local.get(['superidm_settings', 'superidm_rpc_token', 'superidm_desktop_rules_ts']);
   if (data.superidm_settings) {
     settings = Object.assign({}, DEFAULT_SETTINGS, data.superidm_settings);
+  }
+  if (typeof data.superidm_desktop_rules_ts === 'number') {
+    lastDesktopRulesTs = data.superidm_desktop_rules_ts;
   }
 
   if (data.superidm_rpc_token) {
@@ -78,7 +83,54 @@ async function initAuthAndSettings() {
 const authInitPromise = initAuthAndSettings();
 
 function saveSettings() {
-  chrome.storage.local.set({ superidm_settings: settings, superidm_rpc_token: rpcToken });
+  chrome.storage.local.set({
+    superidm_settings: settings,
+    superidm_rpc_token: rpcToken,
+    superidm_desktop_rules_ts: lastDesktopRulesTs
+  });
+}
+
+function broadcastSettingsUpdate() {
+  chrome.tabs.query({}, (tabs) => {
+    if (!tabs) return;
+    tabs.forEach(tab => {
+      if (tab.id > 0) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'settings_update',
+          settings: settings,
+          showVideoGrabber: settings.showVideoGrabber
+        }).catch(() => {});
+      }
+    });
+  });
+}
+
+async function syncDesktopBrowserRules(force = false) {
+  if (!rpcToken) return;
+  const now = Date.now();
+  if (!force && (now - lastRulesSyncAt) < 4000) return;
+  lastRulesSyncAt = now;
+  try {
+    const res = await fetchWithTimeout(RPC_HTTP_URL + '/api/rules', {
+      method: 'GET',
+      cache: 'no-store',
+      headers: { 'X-SuperIDM-Token': rpcToken }
+    }, 2000);
+    if (!res.ok) return;
+    const json = await res.json();
+    const remoteTs = Number(json && json.updated_at ? json.updated_at : 0);
+    if (remoteTs > 0 && remoteTs > lastDesktopRulesTs) {
+      lastDesktopRulesTs = remoteTs;
+      if (typeof json.file_extensions === 'string' && json.file_extensions.trim()) {
+        settings.fileExtensions = json.file_extensions.trim();
+      }
+      if (typeof json.excluded_domains === 'string') {
+        settings.excludedDomains = json.excluded_domains.trim();
+      }
+      saveSettings();
+      broadcastSettingsUpdate();
+    }
+  } catch (e) { /* desktop app offline or older version without /api/rules */ }
 }
 
 // ═══════ Automatic Pairing ═══════
@@ -179,6 +231,7 @@ async function connectWS() {
         }));
       }
       broadcastStatus();
+      syncDesktopBrowserRules(true);
       console.log('[SuperIDM] Secure connection established with desktop app');
     };
 
@@ -739,6 +792,9 @@ async function refreshConnectionState() {
       connectWS();
     }
   }
+  if (ready) {
+    syncDesktopBrowserRules(false);
+  }
   return wsConnected;
 }
 
@@ -756,25 +812,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'update_settings') {
-    if (msg.settings) Object.assign(settings, msg.settings);
+    if (msg.settings) {
+      if (msg.settings.fileExtensions !== undefined || msg.settings.excludedDomains !== undefined) {
+        lastDesktopRulesTs = Math.max(lastDesktopRulesTs, Date.now());
+      }
+      Object.assign(settings, msg.settings);
+    }
     if (msg.token) {
       rpcToken = msg.token;
       if (ws) { ws.close(); } // Reconnect with new token
     }
     saveSettings();
-    // Notify all content scripts with updated full settings
-    chrome.tabs.query({}, (tabs) => {
-      if (!tabs) return;
-      tabs.forEach(tab => {
-        if (tab.id > 0) {
-          chrome.tabs.sendMessage(tab.id, {
-            type: 'settings_update',
-            settings: settings,
-            showVideoGrabber: settings.showVideoGrabber
-          }).catch(() => {});
-        }
-      });
-    });
+    broadcastSettingsUpdate();
     sendResponse({ ok: true, settings });
     return true;
   }

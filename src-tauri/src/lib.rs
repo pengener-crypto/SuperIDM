@@ -69,6 +69,7 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::get_default_save_path,
+            commands::set_default_save_path,
             commands::start_download,
             commands::pause_download,
             commands::resume_download,
@@ -103,6 +104,8 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             commands::set_max_retries,
             commands::set_minimize_to_tray,
             commands::set_auto_extract,
+            commands::set_show_notifications,
+            commands::set_browser_rules,
             commands::extract_archive,
             commands::schedule_system_shutdown,
             commands::cancel_system_shutdown,
