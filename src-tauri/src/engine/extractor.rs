@@ -951,6 +951,8 @@ impl MediaExtractor {
         dest_dir: &std::path::Path,
         format_id: Option<&str>,
         extra_headers: &[(String, String)],
+        rate_limit_bps: u64,
+        max_retries: usize,
         progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>, // (progress 0..1, speed bps, downloaded bytes, total bytes, eta_secs, is_completed, final_filename)
         cancel_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<std::path::PathBuf, String> {
@@ -961,7 +963,7 @@ impl MediaExtractor {
             }
         }
 
-        let first = Self::run_ytdlp_download(client, url, dest_dir, format_id, extra_headers, progress_tx.clone(), cancel_rx.clone()).await;
+        let first = Self::run_ytdlp_download(client, url, dest_dir, format_id, extra_headers, rate_limit_bps, max_retries, progress_tx.clone(), cancel_rx.clone()).await;
         let first_err = match first {
             Ok(p) => return Ok(p),
             Err(e) => e,
@@ -978,9 +980,31 @@ impl MediaExtractor {
                 return Err(first_err);
             }
         }
-        Self::run_ytdlp_download(client, url, dest_dir, format_id, extra_headers, progress_tx, cancel_rx)
+        Self::run_ytdlp_download(client, url, dest_dir, format_id, extra_headers, rate_limit_bps, max_retries, progress_tx, cancel_rx)
             .await
             .map_err(|e| if e == first_err { e } else { format!("{} (after engine update; first attempt: {})", e, first_err) })
+    }
+
+    /// Build yt-dlp transfer tuning args (`--concurrent-fragments`, `--retries`, `--fragment-retries`,
+    /// and `--limit-rate` when a global bandwidth cap is configured).
+    pub fn ytdlp_transfer_args(rate_limit_bps: u64, max_retries: usize) -> Vec<String> {
+        let retries = max_retries.min(20).to_string();
+        let frags = if rate_limit_bps > 0 { "2" } else { "8" };
+        let mut args = vec![
+            "--concurrent-fragments".to_string(),
+            frags.to_string(),
+            "--socket-timeout".to_string(),
+            "30".to_string(),
+            "--retries".to_string(),
+            retries.clone(),
+            "--fragment-retries".to_string(),
+            retries,
+        ];
+        if rate_limit_bps > 0 {
+            args.push("--limit-rate".to_string());
+            args.push(rate_limit_bps.to_string());
+        }
+        args
     }
 
     /// Headers the browser extension captured (Referer / Origin / Cookie) that yt-dlp needs to
@@ -1039,6 +1063,8 @@ impl MediaExtractor {
         dest_dir: &std::path::Path,
         format_id: Option<&str>,
         extra_headers: &[(String, String)],
+        rate_limit_bps: u64,
+        max_retries: usize,
         progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>,
         mut cancel_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<std::path::PathBuf, String> {
@@ -1119,13 +1145,11 @@ impl MediaExtractor {
             .arg("--no-simulate")
             .arg("--print")
             .arg("before_dl:SUPERIDM_SIZES:%(requested_formats.0.filesize,requested_formats.0.filesize_approx,filesize,filesize_approx)s:%(requested_formats.1.filesize,requested_formats.1.filesize_approx)s")
-            .arg("--continue")
-            // Parallel fragment downloading for DASH/HLS/fragmented streams
-            .arg("--concurrent-fragments").arg("8")
-            // Never hang forever on a dead socket; retry transient network errors instead.
-            .arg("--socket-timeout").arg("30")
-            .arg("--retries").arg("10")
-            .arg("--fragment-retries").arg("10");
+            .arg("--continue");
+
+        for arg in Self::ytdlp_transfer_args(rate_limit_bps, max_retries) {
+            cmd.arg(arg);
+        }
 
         if has_ffmpeg {
             if is_audio_only_req {
@@ -2292,6 +2316,20 @@ impl MediaExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ytdlp_transfer_args() {
+        let unlimited = MediaExtractor::ytdlp_transfer_args(0, 3);
+        assert!(unlimited.windows(2).any(|w| w == ["--concurrent-fragments", "8"]));
+        assert!(unlimited.windows(2).any(|w| w == ["--retries", "3"]));
+        assert!(!unlimited.iter().any(|a| a == "--limit-rate"));
+
+        let capped = MediaExtractor::ytdlp_transfer_args(2_097_152, 7);
+        assert!(capped.windows(2).any(|w| w == ["--concurrent-fragments", "2"]));
+        assert!(capped.windows(2).any(|w| w == ["--retries", "7"]));
+        assert!(capped.windows(2).any(|w| w == ["--fragment-retries", "7"]));
+        assert!(capped.windows(2).any(|w| w == ["--limit-rate", "2097152"]));
+    }
 
     #[test]
     fn test_ytdlp_header_pairs_filtering() {

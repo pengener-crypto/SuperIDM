@@ -48,6 +48,8 @@ pub struct DownloadManager {
     pub throttler: BandwidthThrottler,
     pub default_download_dir: PathBuf,
     pub max_concurrent: usize,
+    pub max_retries: usize,
+    pub auto_extract: bool,
     /// Queue of download requests received from the browser extension via RPC.
     pub pending_rpc_downloads: Vec<crate::engine::rpc::RpcDownloadRequest>,
 }
@@ -79,6 +81,8 @@ impl DownloadManager {
             throttler: BandwidthThrottler::new(0), // unlimited
             default_download_dir: download_dir,
             max_concurrent: MAX_CONCURRENT_DOWNLOADS,
+            max_retries: MAX_CHUNK_RETRIES,
+            auto_extract: true,
             pending_rpc_downloads: Vec::new(),
         }
     }
@@ -260,6 +264,7 @@ pub async fn download_chunk_with_retry(
     cancel_rx: watch::Receiver<bool>,
     custom_headers: Option<Vec<(String, String)>>,
     chunk_limits: Option<ChunkLimitMap>,
+    max_retries: usize,
 ) {
     let mut current_byte = chunk.current_byte;
     let end_byte = chunk.end_byte;
@@ -342,7 +347,7 @@ pub async fn download_chunk_with_retry(
         let is_rate_limited = status_code == Some(429);
 
         retry_count += 1;
-        let will_retry = !is_expired && retry_count <= MAX_CHUNK_RETRIES;
+        let will_retry = !is_expired && retry_count <= max_retries;
         let reported_err = if is_expired {
             format!(
                 "{} — Link or authentication token expired (use Refresh Link).",
@@ -362,8 +367,8 @@ pub async fn download_chunk_with_retry(
 
         if !will_retry {
             eprintln!(
-                "Chunk {} stopped after {} attempt(s): {}",
-                chunk_index, retry_count, reported_err
+                "Chunk {} stopped after {} attempt(s) (limit {}): {}",
+                chunk_index, retry_count, max_retries, reported_err
             );
             return;
         }
@@ -374,7 +379,7 @@ pub async fn download_chunk_with_retry(
             "Chunk {} retry {}/{} in {}ms: {}",
             chunk_index,
             retry_count,
-            MAX_CHUNK_RETRIES,
+            max_retries,
             delay.as_millis(),
             reported_err
         );
@@ -901,7 +906,7 @@ mod tests {
             let (cl, u, p, th, t, cr, lm) = (client.clone(), url.clone(), path.clone(),
                 throttler.clone(), tx.clone(), cancel_rx.clone(), Some(limits.clone()));
             tokio::spawn(async move {
-                download_chunk_with_retry(cl, u, c, p, th, t, cr, None, lm).await;
+                download_chunk_with_retry(cl, u, c, p, th, t, cr, None, lm, MAX_CHUNK_RETRIES).await;
             });
         };
         for c in chunks.clone() { spawn(c); }

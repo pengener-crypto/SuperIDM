@@ -1626,6 +1626,21 @@ function bindTauriEvents() {
         showT('error', curLang === 'ar' ? 'فشل التنزيل' : 'Download Failed', msg);
       });
 
+      listenFn('archive_extracted', (event) => {
+        const p = event.payload || event;
+        if (!p) return;
+        const isAr = (curLang === 'ar');
+        const fname = p.filename || 'Archive';
+        const cnt = Number(p.files_count || 0);
+        const dir = p.extracted_dir || '';
+        addLog('success', `[AUTO-EXTRACT] Extracted ${fname} (${cnt} file(s)) -> ${dir}`);
+        showT(
+          'success',
+          isAr ? 'تم فك الضغط تلقائياً' : 'Archive Extracted',
+          isAr ? `${fname} — تم استخراج ${cnt} ملف في ${dir}` : `${fname} — extracted ${cnt} file(s) to ${dir}`
+        );
+      });
+
       listenFn('engine_notice', (event) => {
         const p = event.payload || event;
         if (!p) return;
@@ -3014,6 +3029,9 @@ function showRowCtxMenu(ev, id) {
   }
   if (isComp) {
     parts.push(item('launch', isAr ? 'فتح الملف' : 'Open File', 'text-emerald-400', `openFileById('${safeId}')`));
+    if (/\.(zip|tar|tgz|tar\.gz|gz)$/i.test(dl.filename || dl.destination || '')) {
+      parts.push(item('folder_zip', isAr ? 'فك ضغط الأرشيف' : 'Extract Archive', 'text-cyan-400', `extractArchiveById('${safeId}')`));
+    }
   }
   parts.push(item('folder_open', isAr ? 'فتح المجلد في Explorer' : 'Open Folder', 'text-on-surface', `openFolder('${safeId}')`));
   if (dl.url) {
@@ -4194,11 +4212,12 @@ async function applyThrottle() {
   const val = parseInt(document.getElementById('throttleDn')?.value || '0');
   const lbl = document.getElementById('throttleDnVal');
   if (lbl) lbl.textContent = val === 0 ? (curLang === 'ar' ? 'بدون حد' : 'Unlimited') : val + ' MB/s';
+  try { localStorage.setItem('superidm_throttle_mb', String(val)); } catch (e) {}
   const limitBps = val === 0 ? 0 : val * 1048576;
   if (hasTauriIPC()) {
-    await tauriCall('set_global_throttle', { limitBytesPerSec: limitBps });
+    await tauriCall('set_global_throttle', { limitBytesPerSec: limitBps, limit_bytes_per_sec: limitBps });
   }
-  addLog('info', `[THROTTLE] Bandwidth limit set to ${val === 0 ? 'Unlimited' : val + ' MB/s'}`);
+  addLog('info', `[THROTTLE] Bandwidth limit set to ${val === 0 ? 'Unlimited' : val + ' MB/s'} (applies to direct & video downloads)`);
 }
 
 // ════════ TOAST NOTIFICATIONS ════════
@@ -4338,10 +4357,14 @@ function setConnectionsPerDl(val) {
 }
 
 function setAutoRetry(val) {
+  const n = Math.max(0, Math.min(10, parseInt(val) || 0));
   const el = document.getElementById('retryV');
-  if (el) el.textContent = val;
-  try { localStorage.setItem('superidm_auto_retry', String(val)); } catch (e) {}
-  addLog('info', `[SETTINGS] Auto-retry set to ${val} attempt(s)`);
+  if (el) el.textContent = n;
+  try { localStorage.setItem('superidm_auto_retry', String(n)); } catch (e) {}
+  if (hasTauriIPC()) {
+    tauriCall('set_max_retries', { maxRetries: n, max_retries: n }).catch(() => {});
+  }
+  addLog('info', `[SETTINGS] Auto-retry set to ${n} attempt(s)`);
 }
 
 function toggleTaskbarSpeed() {
@@ -4358,7 +4381,10 @@ function toggleMinTray() {
   const el = document.getElementById('minTrayOpt');
   const en = el?.checked ?? true;
   try { localStorage.setItem('superidm_min_tray', String(en)); } catch (e) {}
-  showT('info', isAr ? 'شريط النظام' : 'System Tray', en ? (isAr ? 'تم تفعيل التصغير إلى شريط النظام' : 'Minimize to tray active') : (isAr ? 'تم تعطيل التصغير إلى شريط النظام' : 'System tray disabled'));
+  if (hasTauriIPC()) {
+    tauriCall('set_minimize_to_tray', { enabled: en }).catch(() => {});
+  }
+  showT('info', isAr ? 'شريط النظام' : 'System Tray', en ? (isAr ? 'سيتم تصغير البرنامج إلى شريط النظام عند الإغلاق' : 'Closing window minimizes to tray') : (isAr ? 'سيتم إغلاق البرنامج بالكامل عند الضغط على ×' : 'Closing window exits SuperIDM'));
 }
 
 function toggleSoundAlert() {
@@ -4405,11 +4431,20 @@ function loadSettings() {
     }
 
     const savedRetry = localStorage.getItem('superidm_auto_retry');
-    if (savedRetry) {
+    if (savedRetry !== null) {
       const sldr = document.getElementById('retrySldr');
       const val = document.getElementById('retryV');
       if (sldr) sldr.value = savedRetry;
       if (val) val.textContent = savedRetry;
+    }
+
+    const savedThrottle = localStorage.getItem('superidm_throttle_mb');
+    if (savedThrottle !== null) {
+      const tVal = Math.max(0, Math.min(100, parseInt(savedThrottle) || 0));
+      const tSldr = document.getElementById('throttleDn');
+      const tLbl = document.getElementById('throttleDnVal');
+      if (tSldr) tSldr.value = tVal;
+      if (tLbl) tLbl.textContent = tVal === 0 ? (curLang === 'ar' ? 'بدون حد' : 'Unlimited') : tVal + ' MB/s';
     }
 
     const savedTaskbar = localStorage.getItem('superidm_taskbar_speed');
@@ -4447,6 +4482,7 @@ function loadSettings() {
         const checked = autoExtSched.checked;
         try { localStorage.setItem('superidm_auto_ext', String(checked)); } catch (e) {}
         if (autoExtMod) autoExtMod.checked = checked;
+        if (hasTauriIPC()) tauriCall('set_auto_extract', { enabled: checked }).catch(() => {});
       };
     }
     if (autoExtMod) {
@@ -4455,6 +4491,7 @@ function loadSettings() {
         const checked = autoExtMod.checked;
         try { localStorage.setItem('superidm_auto_ext', String(checked)); } catch (e) {}
         if (autoExtSched) autoExtSched.checked = checked;
+        if (hasTauriIPC()) tauriCall('set_auto_extract', { enabled: checked }).catch(() => {});
       };
     }
 
@@ -5625,7 +5662,18 @@ function initTauriState() {
 
     if (!tauriInitializedOnce) {
       tauriInitializedOnce = true;
+      const savedRetries = parseInt(document.getElementById('retrySldr')?.value || '3');
+      const savedMinTray = document.getElementById('minTrayOpt')?.checked ?? true;
+      const savedAutoExt = document.getElementById('autoExtSched')?.checked ?? true;
+      const savedThrottleMb = parseInt(document.getElementById('throttleDn')?.value || '0');
       tauriCall('set_max_concurrent', { maxConcurrent: gMaxActive, max_concurrent: gMaxActive }).catch(() => {});
+      tauriCall('set_max_retries', { maxRetries: savedRetries, max_retries: savedRetries }).catch(() => {});
+      tauriCall('set_minimize_to_tray', { enabled: savedMinTray }).catch(() => {});
+      tauriCall('set_auto_extract', { enabled: savedAutoExt }).catch(() => {});
+      if (savedThrottleMb > 0) {
+        const limitBps = savedThrottleMb * 1048576;
+        tauriCall('set_global_throttle', { limitBytesPerSec: limitBps, limit_bytes_per_sec: limitBps }).catch(() => {});
+      }
       tauriCall('get_app_version').then(ver => {
         if (ver && typeof ver === 'string') {
           const vEl = document.getElementById('stAppVersionVal');
@@ -6070,6 +6118,26 @@ async function triggerImmediateShutdown() {
   }
 }
 
+async function extractArchiveById(id) {
+  const dl = dls.find(d => String(d.id) === String(id));
+  if (!dl) return;
+  const isAr = (curLang === 'ar');
+  const p = dl.destination || '';
+  if (!hasTauriIPC() || !p) return;
+  showT('info', isAr ? 'جارٍ فك الضغط...' : 'Extracting Archive...', dl.filename || dl.name);
+  try {
+    const res = await tauriCall('extract_archive', { path: p, filePath: p, file_path: p });
+    const cnt = Number(res?.files_count || 0);
+    const dir = res?.extracted_dir || '';
+    addLog('success', `[EXTRACT] ${dl.filename || dl.name} (${cnt} file(s)) -> ${dir}`);
+    showT('success', isAr ? 'تم فك الضغط بنجاح' : 'Archive Extracted', isAr ? `تم استخراج ${cnt} ملف في ${dir}` : `Extracted ${cnt} file(s) to ${dir}`);
+  } catch (e) {
+    addLog('error', `[EXTRACT ERROR] ${String(e)}`);
+    showT('error', isAr ? 'فشل فك الضغط' : 'Extraction Failed', String(e));
+  }
+}
+
+window.extractArchiveById = extractArchiveById;
 window.APP_VERSION = APP_VERSION;
 window.setMaxSimDownloads = setMaxSimDownloads;
 window.setConnectionsPerDl = setConnectionsPerDl;

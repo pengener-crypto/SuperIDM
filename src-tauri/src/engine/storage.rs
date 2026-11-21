@@ -324,6 +324,125 @@ pub fn resolve_unique_filename(dest_dir: &Path, filename: &str) -> String {
     format!("{}_{}.dat", stem, &uuid::Uuid::new_v4().to_string()[..8])
 }
 
+/// Check if a file path has an archive extension supported by built-in auto-extraction.
+pub fn is_supported_archive(path: &Path) -> bool {
+    let lower = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    lower.ends_with(".zip")
+        || lower.ends_with(".tar")
+        || lower.ends_with(".tar.gz")
+        || lower.ends_with(".tgz")
+        || lower.ends_with(".gz")
+}
+
+/// Safely extract a `.zip`, `.tar`, `.tar.gz`/`.tgz`, or `.gz` archive into a sibling folder
+/// named after the archive stem. Uses `enclosed_name()` on ZIP entries to prevent Zip-Slip.
+pub fn extract_archive_to_folder(archive_path: &Path) -> Result<(std::path::PathBuf, usize), String> {
+    if !archive_path.is_file() {
+        return Err(format!("Archive file not found: {}", archive_path.display()));
+    }
+    let parent = archive_path
+        .parent()
+        .ok_or_else(|| "Archive has no parent directory".to_string())?;
+    let fname = archive_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "Invalid archive filename".to_string())?;
+    let lower = fname.to_ascii_lowercase();
+
+    let stem = if lower.ends_with(".tar.gz") {
+        &fname[..fname.len() - 7]
+    } else {
+        archive_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("extracted")
+    };
+
+    // Single-file `.gz` (not `.tar.gz`)
+    if lower.ends_with(".gz") && !lower.ends_with(".tar.gz") {
+        let out_name = if stem.is_empty() { "extracted.bin" } else { stem };
+        let out_path = parent.join(resolve_unique_filename(parent, out_name));
+        let src = std::fs::File::open(archive_path)
+            .map_err(|e| format!("Failed to open gzip archive: {}", e))?;
+        let mut decoder = flate2::read::GzDecoder::new(src);
+        let mut out_file = std::fs::File::create(&out_path)
+            .map_err(|e| format!("Failed to create decompressed file: {}", e))?;
+        std::io::copy(&mut decoder, &mut out_file)
+            .map_err(|e| format!("Failed to decompress gzip archive: {}", e))?;
+        return Ok((parent.to_path_buf(), 1));
+    }
+
+    // Choose target folder `<parent>/<stem>` (avoiding collision with an existing regular file)
+    let mut target_dir = parent.join(stem);
+    if target_dir.is_file() {
+        target_dir = parent.join(format!("{}_extracted", stem));
+    }
+    std::fs::create_dir_all(&target_dir)
+        .map_err(|e| format!("Failed to create extract directory {}: {}", target_dir.display(), e))?;
+
+    if lower.ends_with(".zip") {
+        let file = std::fs::File::open(archive_path)
+            .map_err(|e| format!("Failed to open ZIP archive: {}", e))?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| format!("Invalid ZIP archive: {}", e))?;
+        let mut extracted_files = 0usize;
+        for i in 0..archive.len() {
+            let mut entry = archive
+                .by_index(i)
+                .map_err(|e| format!("Failed to read ZIP entry #{}: {}", i, e))?;
+            // Strict Zip-Slip defense: skip any entry with `..` or absolute path components
+            let rel_path = match entry.enclosed_name() {
+                Some(p) => p.to_path_buf(),
+                None => continue,
+            };
+            let out_path = target_dir.join(&rel_path);
+            if entry.is_dir() {
+                std::fs::create_dir_all(&out_path)
+                    .map_err(|e| format!("Failed to create dir {}: {}", out_path.display(), e))?;
+            } else {
+                if let Some(p) = out_path.parent() {
+                    std::fs::create_dir_all(p)
+                        .map_err(|e| format!("Failed to create dir {}: {}", p.display(), e))?;
+                }
+                let mut out_f = std::fs::File::create(&out_path)
+                    .map_err(|e| format!("Failed to write {}: {}", out_path.display(), e))?;
+                std::io::copy(&mut entry, &mut out_f)
+                    .map_err(|e| format!("Failed to extract {}: {}", out_path.display(), e))?;
+                extracted_files += 1;
+            }
+        }
+        return Ok((target_dir, extracted_files));
+    }
+
+    if lower.ends_with(".tar") || lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+        let mut cmd = std::process::Command::new("tar");
+        cmd.arg("-xf").arg(archive_path).arg("-C").arg(&target_dir);
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to run tar extractor: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(format!("tar extraction failed: {}", stderr));
+        }
+        let count = std::fs::read_dir(&target_dir)
+            .map(|rd| rd.filter_map(Result::ok).count())
+            .unwrap_or(1);
+        return Ok((target_dir, count));
+    }
+
+    Err(format!("Unsupported archive format: {}", fname))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,6 +582,34 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let space = get_available_disk_space(dir.path()).unwrap();
         assert!(space > 1_000_000); // At least 1MB free on test volume
+    }
+
+    #[test]
+    fn test_extract_zip_archive_safe_and_blocks_zipslip() {
+        use std::io::Write;
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("bundle.zip");
+
+        {
+            let file = std::fs::File::create(&zip_path).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            let opts = zip::write::SimpleFileOptions::default();
+            writer.start_file("hello.txt", opts).unwrap();
+            writer.write_all(b"superidm ok").unwrap();
+            writer.start_file("sub/nested.txt", opts).unwrap();
+            writer.write_all(b"nested ok").unwrap();
+            // Malicious path traversal entry must be skipped safely
+            writer.start_file("../evil.txt", opts).unwrap();
+            writer.write_all(b"blocked").unwrap();
+            writer.finish().unwrap();
+        }
+
+        assert!(is_supported_archive(&zip_path));
+        let (out_dir, count) = extract_archive_to_folder(&zip_path).unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(std::fs::read_to_string(out_dir.join("hello.txt")).unwrap(), "superidm ok");
+        assert_eq!(std::fs::read_to_string(out_dir.join("sub").join("nested.txt")).unwrap(), "nested ok");
+        assert!(!dir.path().join("evil.txt").exists());
     }
 }
 

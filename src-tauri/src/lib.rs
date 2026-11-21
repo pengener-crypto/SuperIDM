@@ -17,6 +17,16 @@ use tauri::{Emitter, Manager, WindowEvent};
 
 /// Shared flag: when `true`, the app is allowed to fully exit.
 static SHOULD_EXIT: AtomicBool = AtomicBool::new(false);
+/// Shared preference synced from Settings: minimize window to system tray on close.
+static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(true);
+
+pub fn set_minimize_to_tray_flag(enabled: bool) {
+    MINIMIZE_TO_TRAY.store(enabled, Ordering::SeqCst);
+}
+
+pub fn get_minimize_to_tray_flag() -> bool {
+    MINIMIZE_TO_TRAY.load(Ordering::SeqCst)
+}
 
 /// Run the SuperIDM Tauri application.
 ///
@@ -90,6 +100,10 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             commands::export_diagnostic_report,
             commands::get_app_version,
             commands::set_max_concurrent,
+            commands::set_max_retries,
+            commands::set_minimize_to_tray,
+            commands::set_auto_extract,
+            commands::extract_archive,
             commands::schedule_system_shutdown,
             commands::cancel_system_shutdown,
         ])
@@ -259,9 +273,12 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Like IDM: always minimize to system tray so browser interception stays active.
-                api.prevent_close();
-                let _ = window.hide();
+                if MINIMIZE_TO_TRAY.load(Ordering::SeqCst) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                } else {
+                    SHOULD_EXIT.store(true, Ordering::SeqCst);
+                }
             }
         })
         .build(tauri::generate_context!())

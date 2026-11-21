@@ -262,14 +262,21 @@ pub async fn start_download(
         }
 
         // Spawn platform stream extractor
+        let (throttler_ext, max_retries_ext) = {
+            let mgr = state.manager.read();
+            (mgr.throttler.clone(), mgr.max_retries)
+        };
         let mgr_err_arc = state.manager.clone();
         tokio::spawn(async move {
+            let rate_limit_bps = throttler_ext.get_limit().await;
             let res = crate::engine::extractor::MediaExtractor::download_media_stream(
                 &client_c,
                 &url_c,
                 &dest_dir_ext,
                 format_id_c.as_deref(),
                 &media_headers_c,
+                rate_limit_bps,
+                max_retries_ext,
                 prog_tx,
                 cancel_c,
             ).await;
@@ -543,7 +550,10 @@ pub async fn start_download(
     }
 
     // Spawn chunk workers with shared event channel and dynamic limit tracking
-    let throttler = state.manager.read().throttler.clone();
+    let (throttler, max_retries) = {
+        let mgr = state.manager.read();
+        (mgr.throttler.clone(), mgr.max_retries)
+    };
     let (event_tx, event_rx) = mpsc::channel::<WorkerEvent>(4096);
     let chunk_limits: downloader::ChunkLimitMap = Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()));
 
@@ -572,6 +582,7 @@ pub async fn start_download(
                 cancel_rx_c,
                 headers_c,
                 limits_c,
+                max_retries,
             )
             .await;
         });
@@ -584,6 +595,7 @@ pub async fn start_download(
         cancel_rx: cancel_rx.clone(),
         custom_headers: headers.clone(),
         chunk_limits: chunk_limits.clone(),
+        max_retries,
     };
 
     // Spawn Coordinator task
@@ -639,6 +651,7 @@ pub struct CoordinatorContext {
     pub cancel_rx: watch::Receiver<bool>,
     pub custom_headers: Option<Vec<(String, String)>>,
     pub chunk_limits: downloader::ChunkLimitMap,
+    pub max_retries: usize,
 }
 
 /// Download Coordinator Loop that processes worker events, updates metadata,
@@ -720,6 +733,7 @@ async fn run_coordinator(
                                     let c_cancel = ctx.cancel_rx.clone();
                                     let c_headers = ctx.custom_headers.clone();
                                     let c_limits = Some(ctx.chunk_limits.clone());
+                                    let c_retries = ctx.max_retries;
 
                                     handle.metadata.chunks.push(new_chunk);
 
@@ -734,6 +748,7 @@ async fn run_coordinator(
                                             c_cancel,
                                             c_headers,
                                             c_limits,
+                                            c_retries,
                                         ).await;
                                     });
                                 }
@@ -806,13 +821,51 @@ async fn run_coordinator(
                 }
                 let _ = app.emit("download_progress", &pl);
                 let _ = storage::delete_part_json(&file_path).await;
-                let (task_fname, all_tasks): (String, Vec<DownloadMetadata>) = {
+                let (task_fname, all_tasks, should_auto_extract): (String, Vec<DownloadMetadata>, bool) = {
                     let mgr = manager.read();
                     let fname = mgr.tasks.get(&task_id).map(|h| h.metadata.filename.clone()).unwrap_or_else(|| "الملف".to_string());
                     let tasks: Vec<DownloadMetadata> = mgr.tasks.values().map(|h| h.metadata.clone()).collect();
-                    (fname, tasks)
+                    (fname, tasks, mgr.auto_extract)
                 };
                 let _ = storage::save_tasks_db(&all_tasks).await;
+
+                // Auto-extract supported archives (.zip, .tar, .tar.gz, .tgz, .gz) when enabled
+                if should_auto_extract && storage::is_supported_archive(&file_path) {
+                    let fp_extract = file_path.clone();
+                    let app_ext = app.clone();
+                    let tid_ext = task_id.clone();
+                    let fname_ext = task_fname.clone();
+                    tokio::spawn(async move {
+                        match tokio::task::spawn_blocking(move || storage::extract_archive_to_folder(&fp_extract)).await {
+                            Ok(Ok((extracted_dir, files_count))) => {
+                                crate::engine::extractor::record_engine_log(format!(
+                                    "[auto-extract] Extracted {} ({} file(s)) -> {}",
+                                    fname_ext,
+                                    files_count,
+                                    extracted_dir.display()
+                                ));
+                                let _ = app_ext.emit("archive_extracted", serde_json::json!({
+                                    "id": tid_ext,
+                                    "filename": fname_ext,
+                                    "extracted_dir": extracted_dir.to_string_lossy().to_string(),
+                                    "files_count": files_count,
+                                }));
+                            }
+                            Ok(Err(e)) => {
+                                crate::engine::extractor::record_engine_log(format!(
+                                    "[auto-extract] Failed for {}: {}",
+                                    fname_ext, e
+                                ));
+                            }
+                            Err(e) => {
+                                crate::engine::extractor::record_engine_log(format!(
+                                    "[auto-extract] Task join error for {}: {}",
+                                    fname_ext, e
+                                ));
+                            }
+                        }
+                    });
+                }
 
                 // Native Windows Toast Notification on download complete
                 use tauri_plugin_notification::NotificationExt;
@@ -984,17 +1037,23 @@ pub async fn resume_download(
         let dest_dir_watch = dest_dir.clone();
         let cancel_c = cancel_rx.clone();
 
-        let client_c = state.manager.read().http_client.clone();
+        let (client_c, throttler_c, max_retries_c) = {
+            let mgr = state.manager.read();
+            (mgr.http_client.clone(), mgr.throttler.clone(), mgr.max_retries)
+        };
         let mgr_err_arc = state.manager.clone();
         let app_err = app.clone();
         let task_id_err = id.clone();
         tokio::spawn(async move {
+            let rate_limit_bps = throttler_c.get_limit().await;
             if let Err(e) = crate::engine::extractor::MediaExtractor::download_media_stream(
                 &client_c,
                 &url_c,
                 &dest_dir_ext,
                 format_id_c.as_deref(),
                 &[],
+                rate_limit_bps,
+                max_retries_c,
                 prog_tx,
                 cancel_c,
             ).await {
@@ -1188,6 +1247,7 @@ pub async fn resume_download(
     let (event_tx, event_rx) = mpsc::channel::<WorkerEvent>(4096);
     let chunk_limits: downloader::ChunkLimitMap = Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()));
 
+    let max_retries = state.manager.read().max_retries;
     for chunk in &resume_meta.chunks {
         if chunk.completed {
             continue;
@@ -1212,6 +1272,7 @@ pub async fn resume_download(
                 cancel_rx_c,
                 None,
                 limits_c,
+                max_retries,
             )
             .await;
         });
@@ -1224,6 +1285,7 @@ pub async fn resume_download(
         cancel_rx: cancel_rx.clone(),
         custom_headers: None,
         chunk_limits: chunk_limits.clone(),
+        max_retries,
     };
 
     let manager_arc = state.manager.clone();
@@ -2186,7 +2248,7 @@ pub async fn export_diagnostic_report(
         .await
         .map_err(|e| format!("Engine probe failed: {}", e))?;
 
-    let (tasks_snapshot, download_dir, active_tasks, max_concurrent, throttler) = {
+    let (tasks_snapshot, download_dir, active_tasks, max_concurrent, max_retries_cfg, auto_extract_cfg, throttler) = {
         let mgr = state.manager.read();
         let list: Vec<String> = mgr
             .tasks
@@ -2211,6 +2273,8 @@ pub async fn export_diagnostic_report(
             mgr.default_download_dir.clone(),
             mgr.active_count(),
             mgr.max_concurrent,
+            mgr.max_retries,
+            mgr.auto_extract,
             mgr.throttler.clone(),
         )
     };
@@ -2245,8 +2309,13 @@ pub async fn export_diagnostic_report(
         download_dir.to_string_lossy()
     ));
     report.push_str(&format!(
-        "Concurrency:  {} active / {} max | Throttle: {}\n",
-        active_tasks, max_concurrent, limit_str
+        "Concurrency:  {} active / {} max | Throttle: {} | Retries: {} | Auto-Extract: {} | Min-to-Tray: {}\n",
+        active_tasks,
+        max_concurrent,
+        limit_str,
+        max_retries_cfg,
+        auto_extract_cfg,
+        crate::get_minimize_to_tray_flag()
     ));
     report.push_str("============================================================\n\n");
 
@@ -2329,6 +2398,55 @@ pub fn set_max_concurrent(
     let mut mgr = state.manager.write();
     mgr.max_concurrent = clamped;
     clamped
+}
+
+/// Update auto-retry attempt limit for direct chunks and yt-dlp streams (0..=10).
+#[tauri::command]
+pub fn set_max_retries(
+    state: State<'_, AppState>,
+    max_retries: Option<usize>,
+    #[allow(non_snake_case)] maxRetries: Option<usize>,
+) -> usize {
+    let clamped = max_retries.or(maxRetries).unwrap_or(3).min(10);
+    let mut mgr = state.manager.write();
+    mgr.max_retries = clamped;
+    clamped
+}
+
+/// Control whether closing the window minimizes SuperIDM to the system tray or exits cleanly.
+#[tauri::command]
+pub fn set_minimize_to_tray(enabled: bool) -> bool {
+    crate::set_minimize_to_tray_flag(enabled);
+    enabled
+}
+
+/// Control whether supported downloaded archives (.zip, .tar, .tar.gz, .tgz, .gz) auto-extract.
+#[tauri::command]
+pub fn set_auto_extract(state: State<'_, AppState>, enabled: bool) -> bool {
+    let mut mgr = state.manager.write();
+    mgr.auto_extract = enabled;
+    enabled
+}
+
+/// Manually extract a downloaded archive file into a sibling folder.
+#[tauri::command]
+pub async fn extract_archive(
+    path: Option<String>,
+    file_path: Option<String>,
+    #[allow(non_snake_case)] filePath: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let raw = path
+        .or(file_path)
+        .or(filePath)
+        .ok_or_else(|| "Missing archive path".to_string())?;
+    let p = PathBuf::from(raw);
+    let (extracted_dir, files_count) = tokio::task::spawn_blocking(move || storage::extract_archive_to_folder(&p))
+        .await
+        .map_err(|e| format!("Extraction worker failed: {}", e))??;
+    Ok(serde_json::json!({
+        "extracted_dir": extracted_dir.to_string_lossy().to_string(),
+        "files_count": files_count,
+    }))
 }
 
 /// Schedule a safe OS shutdown after a grace countdown (clamped to 10..=600 seconds, or 0 for immediate).
