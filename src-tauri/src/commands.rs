@@ -1918,7 +1918,7 @@ pub async fn refresh_task_link(
     };
 
     let fresh_url = if let Some(trimmed) = provided_new.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        trimmed.to_string()
+        crate::engine::extractor::MediaExtractor::clean_target_url(trimmed)
     } else {
         let (source_url, mut placeholder) = {
             let mgr = state.manager.read();

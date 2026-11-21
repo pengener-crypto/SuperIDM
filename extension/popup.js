@@ -54,7 +54,7 @@ function loadSettings(settings) {
   if ($('#togIntercept')) $('#togIntercept').checked = settings.interceptDownloads !== false;
   if ($('#togGrabber')) $('#togGrabber').checked = settings.showVideoGrabber !== false;
   if ($('#togSniff')) $('#togSniff').checked = settings.sniffMedia !== false;
-  if ($('#minSize')) $('#minSize').value = settings.minFileSizeMB || 1;
+  if ($('#minSize')) $('#minSize').value = (settings.minFileSizeMB !== undefined && settings.minFileSizeMB !== null) ? settings.minFileSizeMB : 1;
 
   if ($('#fileExtsInput')) {
     $('#fileExtsInput').value = settings.fileExtensions || DEFAULT_EXTENSIONS;
@@ -76,7 +76,10 @@ function gatherSettings() {
     interceptDownloads: $('#togIntercept') ? $('#togIntercept').checked : true,
     showVideoGrabber: $('#togGrabber') ? $('#togGrabber').checked : true,
     sniffMedia: $('#togSniff') ? $('#togSniff').checked : true,
-    minFileSizeMB: parseInt($('#minSize')?.value) || 1,
+    minFileSizeMB: (() => {
+      const n = parseInt($('#minSize')?.value, 10);
+      return Number.isFinite(n) && n >= 0 ? n : 1;
+    })(),
     fileExtensions: $('#fileExtsInput')?.value.trim() || DEFAULT_EXTENSIONS,
     excludedDomains: $('#excludedDomainsInput')?.value.trim() || ''
   };

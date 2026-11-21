@@ -3404,16 +3404,22 @@ function updateIdmModal(dl) {
     }
   }
 
-  // Render segment bars (IDM Chunk visualization)
+  // Render segment bars (IDM Chunk visualization — supports ChunkProgressSnapshot & ChunkInfo)
   if (segEl) {
     const chunks = dl.chunks || [];
     if (chunks.length > 0) {
-      segEl.innerHTML = chunks.map(c => {
-        const cTotal = (c.end_byte - c.start_byte) + 1;
-        const cDone = c.completed || (c.current_byte > c.end_byte);
-        const cPct = cDone ? 100 : (cTotal > 0 ? Math.min(100, Math.round(((c.current_byte - c.start_byte) / cTotal) * 100)) : 0);
-        const bg = cDone ? 'bg-primary' : (cPct > 0 ? 'bg-primary/50 animate-pulse' : 'bg-surface-container-highest');
-        return `<div class="flex-1 ${bg} h-full rounded-sm" title="Chunk: ${cPct}%"></div>`;
+      segEl.innerHTML = chunks.map((c, idx) => {
+        const cTotal = (typeof c.total === 'number')
+          ? c.total
+          : ((typeof c.end_byte === 'number' && typeof c.start_byte === 'number') ? (c.end_byte - c.start_byte) + 1 : 0);
+        const cDownloaded = (typeof c.downloaded === 'number')
+          ? c.downloaded
+          : ((typeof c.current_byte === 'number' && typeof c.start_byte === 'number') ? Math.max(0, c.current_byte - c.start_byte) : 0);
+        const cDone = Boolean(c.completed) || (cTotal > 0 && cDownloaded >= cTotal);
+        const cPct = cDone ? 100 : (cTotal > 0 ? Math.min(99, Math.round((cDownloaded / cTotal) * 100)) : 0);
+        const fillCls = cDone ? 'bg-primary' : (cPct > 0 ? 'bg-primary/70 animate-pulse' : '');
+        const label = `Chunk #${(c.index ?? idx) + 1}: ${cPct}%`;
+        return `<div class="flex-1 bg-surface-container-highest h-full rounded-sm overflow-hidden" title="${label}"><div class="h-full ${fillCls} transition-all duration-200" style="width:${cPct}%"></div></div>`;
       }).join('');
     } else {
       const segCount = connCount;
@@ -3702,20 +3708,43 @@ function updateDLRowDOM(d) {
 
   const segEl = document.getElementById(`dlseg-${d.id}`);
   if (segEl) {
-    const connN = Math.max(8, d.connections || 16);
-    const segHtml = Array(connN).fill(0).map((_, i) => {
-      const sp = (i + 1) / connN * 100;
-      if (pct >= sp) return '<div class="seg done"></div>';
-      if (d.status === 'downloading' && pct >= (i / connN * 100)) return '<div class="seg act"></div>';
-      return '<div class="seg empty"></div>';
-    }).join('');
-    segEl.innerHTML = segHtml;
+    segEl.innerHTML = buildRowSegsHtml(d, pct);
+  }
+
+  const bwhEl = document.getElementById(`dlbwh-${d.id}`);
+  if (bwhEl && d.expanded) {
+    bwhEl.innerHTML = (d.bwH || []).map(v => `<div style="height:${Math.max(3, Math.min(100, (v / 8) * 100))}%" class="flex-1 bg-primary-container/50 rounded-sm"></div>`).join('');
   }
 
   if (row.dataset.status !== d.status) {
     row.dataset.status = d.status;
     renderDLs();
   }
+}
+
+function buildRowSegsHtml(d, pct) {
+  const chunks = d.chunks || [];
+  if (chunks.length > 1) {
+    return chunks.map(c => {
+      const cTotal = (typeof c.total === 'number')
+        ? c.total
+        : ((typeof c.end_byte === 'number' && typeof c.start_byte === 'number') ? (c.end_byte - c.start_byte) + 1 : 0);
+      const cDownloaded = (typeof c.downloaded === 'number')
+        ? c.downloaded
+        : ((typeof c.current_byte === 'number' && typeof c.start_byte === 'number') ? Math.max(0, c.current_byte - c.start_byte) : 0);
+      const cDone = Boolean(c.completed) || (cTotal > 0 && cDownloaded >= cTotal);
+      if (cDone) return '<div class="seg done"></div>';
+      if (d.status === 'downloading' && cDownloaded > 0) return '<div class="seg act"></div>';
+      return '<div class="seg empty"></div>';
+    }).join('');
+  }
+  const connN = Math.max(8, d.connections || 16);
+  return Array(connN).fill(0).map((_, i) => {
+    const sp = (i + 1) / connN * 100;
+    if (pct >= sp) return '<div class="seg done"></div>';
+    if (d.status === 'downloading' && pct >= (i / connN * 100)) return '<div class="seg act"></div>';
+    return '<div class="seg empty"></div>';
+  }).join('');
 }
 
 // ════════ HTML SANITIZER ════════
@@ -3766,13 +3795,7 @@ function renderDLs() {
 
   el.innerHTML = list.map(d => {
     const pct = Math.min(100, Math.max(0, Math.round((d.progress || (d.total_bytes > 0 ? d.downloaded_bytes / d.total_bytes : 0)) * 100)));
-    const connN = Math.max(8, d.connections || 16);
-    const segs = Array(connN).fill(0).map((_, i) => {
-      const sp = (i + 1) / connN * 100;
-      if (pct >= sp) return 'done';
-      if (d.status === 'downloading' && pct >= (i / connN * 100)) return 'act';
-      return 'empty';
-    });
+    const segsHtml = buildRowSegsHtml(d, pct);
 
     const isAct = d.status === 'downloading';
     const isComp = d.status === 'complete';
@@ -3820,7 +3843,7 @@ function renderDLs() {
             <span id="dlst-${safeId}" class="text-[10px] px-1.5 py-0.2 rounded border ${stBg}" style="font-family:'JetBrains Mono'">${stLbl}</span>
           </div>
           <div class="flex items-center gap-2 mt-1">
-            <div id="dlseg-${safeId}" class="seg-bar">${segs.map(s => `<div class="seg ${s}"></div>`).join('')}</div>
+            <div id="dlseg-${safeId}" class="seg-bar">${segsHtml}</div>
             <span id="dlsz-${safeId}" dir="ltr" class="text-[11px] text-on-surface-variant flex-shrink-0" style="font-family:'JetBrains Mono'">${szLabel}</span>
           </div>
         </div>
@@ -3850,7 +3873,7 @@ function renderDLs() {
           <div class="text-on-surface">${(d.connections === 1 && (d.category === 'Videos' || d.category === 'Music')) ? (isAr ? 'محرك استخراج ودمج البث' : 'Media Stream Extractor') : `${d.connections || 1} ${isAr ? 'اتصالات متوازية' : 'parallel connections'}`}</div>
           ${(isPsd || isErr) ? `<div class="pt-1"><button onclick="event.stopPropagation(); openRefreshLinkModal('${safeId}')" class="px-2 py-0.5 bg-primary-container/20 hover:bg-primary-container/30 border border-primary-container/40 rounded text-[11px] text-primary flex items-center gap-1 font-sans"><span class="material-symbols-outlined text-[13px]">autorenew</span><span>${isAr ? 'تحديث الرابط المنتهي' : 'Refresh Expired Link'}</span></button></div>` : `<div class="text-primary-container text-[11px]">${isAr ? 'الأولوية' : 'Priority'}: ${priDisplay}</div>`}
         </div>
-        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">${isAr ? 'استهلاك الباندويث (10 ثوانٍ)' : '10s Bandwidth History'}</div><div class="flex items-end gap-0.5 h-7 pt-1">${(d.bwH || []).map(v => `<div style="height:${Math.max(3, Math.min(100, (v / 8) * 100))}%" class="flex-1 bg-primary-container/50 rounded-sm"></div>`).join('')}</div></div>
+        <div class="space-y-1"><div class="text-on-surface-variant text-[10px] uppercase">${isAr ? 'استهلاك الباندويث (10 ثوانٍ)' : '10s Bandwidth History'}</div><div id="dlbwh-${safeId}" class="flex items-end gap-0.5 h-7 pt-1">${(d.bwH || []).map(v => `<div style="height:${Math.max(3, Math.min(100, (v / 8) * 100))}%" class="flex-1 bg-primary-container/50 rounded-sm"></div>`).join('')}</div></div>
       </div>
     </div>`;
   }).join('');
@@ -5494,7 +5517,9 @@ async function checkAppUpdate(manual = false) {
       showT(
         'info',
         isAr ? `تحديث جديد متاح (v${info.latest_version})` : `Update Available (v${info.latest_version})`,
-        isAr ? 'جارٍ فتح رابط التحميل المباشر للنسخة الجديدة...' : 'Opening direct installer download...'
+        manual
+          ? (isAr ? 'جارٍ فتح رابط التحميل المباشر للنسخة الجديدة...' : 'Opening direct installer download...')
+          : (isAr ? 'افتح الإعدادات واضغط "فحص تحديث البرنامج" للتنزيل.' : 'Open Settings -> Check App Update to install.')
       );
       if (manual && info.download_url) {
         await tauriCall('open_external_url', { url: info.download_url });
@@ -5640,11 +5665,13 @@ async function chkClip() {
   if (!en) return;
   try {
     if (navigator.clipboard && navigator.clipboard.readText) {
-      const text = await navigator.clipboard.readText();
+      const rawText = await navigator.clipboard.readText();
+      const text = cleanTargetUrl((rawText || '').trim());
       if (text && text !== lastClip && (text.startsWith('http://') || text.startsWith('https://'))) {
         lastClip = text;
         const fi = getFI(text);
-        if (fi.c !== 'Other' || text.includes('.bin') || text.includes('.zip') || text.includes('.iso')) {
+        const isMedia = isVideoPlatformUrl(text) || isPlaylistUrl(text);
+        if (isMedia || fi.c !== 'Other' || text.includes('.bin') || text.includes('.zip') || text.includes('.iso')) {
           clipPnd = text;
           const p = document.getElementById('clipPrompt');
           const t = document.getElementById('clipUrlTxt');

@@ -576,7 +576,8 @@ if (onDeterminingEvent && typeof onDeterminingEvent.addListener === 'function') 
 
     // Check file extension or size threshold
     const hasMatchingExt = isExtensionSupported(item.url, item.filename);
-    const minBytes = (settings.minFileSizeMB || 1) * 1024 * 1024;
+    const minSizeMb = (typeof settings.minFileSizeMB === 'number' && settings.minFileSizeMB >= 0) ? settings.minFileSizeMB : 1;
+    const minBytes = minSizeMb * 1024 * 1024;
     if (!hasMatchingExt && item.totalBytes > 0 && item.totalBytes < minBytes) {
       suggest();
       return;
@@ -632,7 +633,8 @@ if (onDeterminingEvent && typeof onDeterminingEvent.addListener === 'function') 
     if (isDomainExcluded(item.url) || (item.referrer && isDomainExcluded(item.referrer))) return;
 
     const hasMatchingExt = isExtensionSupported(item.url, item.filename);
-    const minBytes = (settings.minFileSizeMB || 1) * 1024 * 1024;
+    const minSizeMb = (typeof settings.minFileSizeMB === 'number' && settings.minFileSizeMB >= 0) ? settings.minFileSizeMB : 1;
+    const minBytes = minSizeMb * 1024 * 1024;
     if (!hasMatchingExt && item.totalBytes > 0 && item.totalBytes < minBytes) return;
 
     let dlUrl = item.url;
