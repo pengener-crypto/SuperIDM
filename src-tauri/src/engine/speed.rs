@@ -33,10 +33,7 @@ pub struct SpeedMeter {
 impl SpeedMeter {
     /// Create a new SpeedMeter with a 1.5-second sliding window.
     pub fn new() -> Self {
-        Self {
-            samples: VecDeque::with_capacity(512),
-            window_secs: 1.5,
-        }
+        Self::with_params(1.5, 0.25)
     }
 
     /// Create with custom window duration.

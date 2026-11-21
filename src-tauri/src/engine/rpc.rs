@@ -540,9 +540,9 @@ async fn dispatch_method(
                 return serde_json::json!({ "status": "error", "message": "Missing 'url' parameter" });
             }
 
-            // Only allow valid HTTP, HTTPS, FTP, or media URLs
-            if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("ftp://") {
-                return serde_json::json!({ "status": "error", "message": "Invalid URL scheme" });
+            // Only allow valid HTTP or HTTPS URLs (FTP is not supported by the HTTP engine)
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                return serde_json::json!({ "status": "error", "message": "Invalid URL scheme (only HTTP and HTTPS are supported)" });
             }
 
             // Path Traversal Defense: strictly sanitize filename

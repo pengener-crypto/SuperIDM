@@ -9,6 +9,8 @@ use reqwest::Client;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc, watch};
 
+use super::recovery::RecoveryEngine;
+use super::session::{SessionConfig, DEFAULT_USER_AGENT};
 use super::speed::SpeedMeter;
 use super::storage;
 use super::throttler::BandwidthThrottler;
@@ -58,8 +60,6 @@ pub struct TaskHandle {
     pub cancel_token: watch::Sender<bool>,
 }
 
-const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-
 impl DownloadManager {
     pub fn new(download_dir: PathBuf) -> Self {
         let client = Client::builder()
@@ -94,10 +94,15 @@ impl DownloadManager {
 
 /// Probe a URL before starting download to discover file metadata.
 pub async fn probe_url(client: &Client, raw_url: &str) -> Result<ProbeResult, String> {
-    let url = if !raw_url.starts_with("http://") && !raw_url.starts_with("https://") && !raw_url.starts_with("ftp://") {
-        format!("https://{}", raw_url)
+    let trimmed = raw_url.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("ftp://") || lower.starts_with("ftps://") {
+        return Err("FTP/FTPS protocol is not supported; please use an HTTP or HTTPS URL.".to_string());
+    }
+    let url = if !lower.starts_with("http://") && !lower.starts_with("https://") {
+        format!("https://{}", trimmed)
     } else {
-        raw_url.to_string()
+        trimmed.to_string()
     };
 
     let mut content_length = 0u64;
@@ -305,7 +310,7 @@ pub async fn download_chunk_with_retry(
             return;
         }
 
-        let err = match result {
+        let (err, status_code) = match result {
             Ok(outcome) => {
                 current_byte = outcome.next_offset;
                 let cur_limit = chunk_limit.load(Ordering::SeqCst);
@@ -320,45 +325,61 @@ pub async fn download_chunk_with_retry(
                     // Server closed early but we made progress: reconnect from the new offset.
                     continue;
                 }
-                format!(
-                    "Chunk {} stream ended early with no progress at offset {}",
-                    chunk_index, current_byte
+                (
+                    format!(
+                        "Chunk {} stream ended early with no progress at offset {}",
+                        chunk_index, current_byte
+                    ),
+                    None,
                 )
             }
-            Err(e) => e,
+            Err(e) => (e.message, e.status_code),
         };
 
+        let is_expired = status_code
+            .map(RecoveryEngine::is_token_expired)
+            .unwrap_or(false);
+        let is_rate_limited = status_code == Some(429);
+
         retry_count += 1;
-        let will_retry = retry_count <= MAX_CHUNK_RETRIES;
+        let will_retry = !is_expired && retry_count <= MAX_CHUNK_RETRIES;
+        let reported_err = if is_expired {
+            format!(
+                "{} — Link or authentication token expired (use Refresh Link).",
+                err
+            )
+        } else {
+            err
+        };
 
         let _ = event_tx
             .send(WorkerEvent::ChunkError {
                 chunk_index,
-                error: err.clone(),
+                error: reported_err.clone(),
                 will_retry,
             })
             .await;
 
         if !will_retry {
             eprintln!(
-                "Chunk {} exhausted {} retries: {}",
-                chunk_index, MAX_CHUNK_RETRIES, err
+                "Chunk {} stopped after {} attempt(s): {}",
+                chunk_index, retry_count, reported_err
             );
             return;
         }
 
-        // Exponential backoff with jitter
-        let base_ms = RETRY_BASE_DELAY_MS * 2u64.pow(retry_count as u32 - 1);
-        let jitter_ms = (rand::random::<u64>() % (base_ms / 2 + 1)) as i64
-            - (base_ms as i64 / 4);
-        let delay_ms = (base_ms as i64 + jitter_ms).max(100) as u64;
+        let delay = RecoveryEngine::calculate_backoff(retry_count, is_rate_limited);
 
         eprintln!(
             "Chunk {} retry {}/{} in {}ms: {}",
-            chunk_index, retry_count, MAX_CHUNK_RETRIES, delay_ms, err
+            chunk_index,
+            retry_count,
+            MAX_CHUNK_RETRIES,
+            delay.as_millis(),
+            reported_err
         );
 
-        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+        tokio::time::sleep(delay).await;
     }
 }
 
@@ -368,6 +389,20 @@ struct StreamOutcome {
     next_offset: u64,
     /// Server sent the whole body (200 OK, no range) and it ended cleanly.
     full_body_eof: bool,
+}
+
+struct ChunkStreamError {
+    message: String,
+    status_code: Option<u16>,
+}
+
+impl From<String> for ChunkStreamError {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            status_code: None,
+        }
+    }
 }
 
 /// Stream a chunk range from the server, writing data at correct offsets.
@@ -385,11 +420,31 @@ async fn download_chunk_stream(
     cancel_rx: &watch::Receiver<bool>,
     custom_headers: &Option<Vec<(String, String)>>,
     chunk_limit: &Arc<AtomicU64>,
-) -> Result<StreamOutcome, String> {
-    let mut req = client
-        .get(url)
-        .header("User-Agent", DEFAULT_USER_AGENT)
-        .header("Accept", "*/*");
+) -> Result<StreamOutcome, ChunkStreamError> {
+    let mut session = SessionConfig::new()
+        .with_user_agent(DEFAULT_USER_AGENT)
+        .with_inferred_headers(url);
+
+    // Apply custom headers (Authorization, Cookie, Referer, Origin, User-Agent, etc.)
+    if let Some(headers) = custom_headers {
+        for (key, value) in headers {
+            if key.eq_ignore_ascii_case("cookie") {
+                session.parse_cookie_header(value);
+            } else if key.eq_ignore_ascii_case("user-agent") {
+                session = session.with_user_agent(value.as_str());
+            } else if key.eq_ignore_ascii_case("referer") {
+                session.referer = Some(value.clone());
+            } else if key.eq_ignore_ascii_case("origin") {
+                session.origin = Some(value.clone());
+            } else if key.eq_ignore_ascii_case("authorization") {
+                session.authorization = Some(value.clone());
+            } else {
+                session.custom_headers.push((key.clone(), value.clone()));
+            }
+        }
+    }
+
+    let mut req = client.get(url).headers(session.build_headers());
 
     if end_byte > start_byte {
         let range_header = format!("bytes={}-{}", start_byte, end_byte);
@@ -399,13 +454,6 @@ async fn download_chunk_stream(
         req = req.header("Range", range_header);
     }
 
-    // Add custom headers (Authorization, Cookie, etc.)
-    if let Some(headers) = custom_headers {
-        for (key, value) in headers {
-            req = req.header(key.as_str(), value.as_str());
-        }
-    }
-
     let resp = req
         .send()
         .await
@@ -413,10 +461,13 @@ async fn download_chunk_stream(
 
     let status = resp.status();
     if status.as_u16() != 206 && status.as_u16() != 200 {
-        return Err(format!(
-            "Server returned {} for chunk {} (start_byte: {}, end_byte: {})",
-            status, chunk_index, start_byte, end_byte
-        ));
+        return Err(ChunkStreamError {
+            message: format!(
+                "Server returned {} for chunk {} (start_byte: {}, end_byte: {})",
+                status, chunk_index, start_byte, end_byte
+            ),
+            status_code: Some(status.as_u16()),
+        });
     }
 
     // If server returned 200 OK (full body from byte 0) instead of 206 Partial Content,
@@ -428,7 +479,7 @@ async fn download_chunk_stream(
             return Err(format!(
                 "Server ignored Range for chunk {} (got 200 instead of 206)",
                 chunk_index
-            ));
+            ).into());
         }
         0
     } else {
@@ -445,7 +496,7 @@ async fn download_chunk_stream(
                 return Err(format!(
                     "Content-Range mismatch for chunk {}: asked {}, got {}",
                     chunk_index, start_byte, rs
-                ));
+                ).into());
             }
         }
         start_byte
@@ -888,5 +939,13 @@ mod tests {
         assert_eq!(actual.len(), expected.len());
         let first_diff = actual.iter().zip(expected.iter()).position(|(a, b)| a != b);
         assert_eq!(first_diff, None, "file differs from reference at byte {:?}", first_diff);
+    }
+
+    #[tokio::test]
+    async fn test_probe_rejects_ftp_scheme() {
+        let client = Client::new();
+        let res = probe_url(&client, "ftp://ftp.example.com/archive.zip").await;
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("not supported"));
     }
 }

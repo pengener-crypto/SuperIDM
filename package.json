@@ -6,7 +6,10 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "sync-version": "python sync_version.py",
+    "verify": "python scripts/verify_all.py",
+    "build:ext": "python build_extension_zips.py && python build_firefox_extension.py"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

@@ -116,6 +116,8 @@ pub struct NewDownloadRequest {
     pub destination: String,
     #[serde(default)]
     pub filename: Option<String>,
+    #[serde(default, alias = "format_id")]
+    pub format: Option<String>,
     #[serde(default, alias = "num_connections")]
     pub num_connections: Option<usize>,
     #[serde(default)]
@@ -184,16 +186,6 @@ pub const DEFAULT_CONNECTIONS: usize = 8;
 
 /// Maximum number of concurrent download tasks.
 pub const MAX_CONCURRENT_DOWNLOADS: usize = 5;
-
-/// Type of download stream.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum StreamType {
-    Direct,
-    Hls,
-    Dash,
-    ExtractedVideo,
-}
 
 /// Extracted media quality/format option.
 #[derive(Debug, Clone, Serialize, Deserialize)]

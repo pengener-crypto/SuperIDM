@@ -517,7 +517,7 @@ html[dir="rtl"] .flex.items-baseline {
         <div class="flex items-center justify-between"><span id="schedLblPostExt" class="text-[13px] text-on-surface" style="font-family:Inter">Auto-extract archives after download</span><label class="tgl-sw"><input type="checkbox" id="autoExtSched" checked/><span class="tgl-sl"></span></label></div>
         <div class="flex items-center justify-between"><span id="schedLblPostToast" class="text-[13px] text-on-surface" style="font-family:Inter">Show completion toast notification</span><label class="tgl-sw"><input type="checkbox" id="showToastOpt" checked/><span class="tgl-sl"></span></label></div>
         <div class="flex items-center justify-between"><span id="schedLblPostClip" class="text-[13px] text-on-surface" style="font-family:Inter">Clipboard URL monitoring</span><label class="tgl-sw"><input type="checkbox" id="clipMon" checked onchange="toggleClipMon()"/><span class="tgl-sl"></span></label></div>
-        <div class="flex items-center justify-between opacity-70"><span class="text-[13px] text-on-surface flex items-center gap-2" style="font-family:Inter"><span id="schedLblPostShutdown">Shut down PC after batch completes</span><span class="text-[10px] text-primary font-mono bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded" id="schedShutdownBadge">Coming Soon</span></span><label class="tgl-sw cursor-not-allowed"><input type="checkbox" id="shutdownPcOpt" disabled/><span class="tgl-sl opacity-50"></span></label></div>
+        <div class="flex items-center justify-between"><span class="text-[13px] text-on-surface flex items-center gap-2" style="font-family:Inter"><span id="schedLblPostShutdown">Shut down PC after batch completes</span><span class="text-[10px] text-primary font-mono bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded" id="schedShutdownBadge">60s countdown</span></span><label class="tgl-sw"><input type="checkbox" id="shutdownPcOpt" onchange="toggleShutdownAfterBatch(this.checked)"/><span class="tgl-sl"></span></label></div>
       </div>
     </div>
   </div>
@@ -778,10 +778,10 @@ html[dir="rtl"] .flex.items-baseline {
           </button>
         </div>
         <div class="grid grid-cols-4 gap-4 text-[13px]" style="font-family:'JetBrains Mono'">
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div class="text-primary" dir="ltr">2.7.6</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblVer" class="text-[11px] text-on-surface-variant mb-1">Version</div><div id="stAppVersionVal" class="text-primary" dir="ltr">2.7.6</div></div>
           <div class="bg-surface-container-low rounded p-3"><div id="stLblEngine" class="text-[11px] text-on-surface-variant mb-1">Engine</div><div class="text-on-surface" dir="ltr">SuperIDM/Rust+Tokio</div></div>
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblProto" class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface" dir="ltr">HTTP/HTTPS/FTP</div></div>
-          <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div class="text-on-surface-variant" dir="ltr">2026.11.18</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblProto" class="text-[11px] text-on-surface-variant mb-1">Protocols</div><div class="text-on-surface" dir="ltr">HTTP/HTTPS/HLS/DASH</div></div>
+          <div class="bg-surface-container-low rounded p-3"><div id="stLblBuild" class="text-[11px] text-on-surface-variant mb-1">Build</div><div id="stAppBuildDate" class="text-on-surface-variant" dir="ltr">2026.11.21</div></div>
         </div>
       </div>
     </div>
@@ -1343,6 +1343,29 @@ html[dir="rtl"] .flex.items-baseline {
   </div>
 </div>
 
+<!-- ══ SHUTDOWN COUNTDOWN MODAL ══ -->
+<div id="shutdownCountdownModal" class="fixed inset-0 z-[120] hidden items-center justify-center p-4" style="background:rgba(17,19,23,.82);backdrop-filter:blur(8px);z-index:120">
+  <div class="glass-panel w-full max-w-md rounded-xl shadow-2xl flex flex-col modal-enter overflow-hidden border border-red-500/50" style="max-width:440px">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-outline-variant/60 bg-surface-container-low">
+      <div class="flex items-center gap-2.5">
+        <span class="material-symbols-outlined text-[20px] text-red-400">power_settings_new</span>
+        <h3 id="shutdownModalTitle" class="text-[14px] font-bold text-on-surface">إيقاف تشغيل الكمبيوتر</h3>
+      </div>
+      <button type="button" onclick="cancelScheduledShutdown()" class="w-7 h-7 rounded flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors">
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
+    </div>
+    <div class="p-5 flex flex-col items-center text-center gap-3">
+      <div id="shutdownCountdownSecs" class="text-[36px] font-bold font-mono text-red-400 leading-none">60s</div>
+      <p id="shutdownModalDesc" class="text-[12.5px] text-on-surface-variant leading-relaxed">اكتملت جميع التنزيلات في الدفعة. سيتم إيقاف تشغيل الجهاز تلقائياً بعد انتهاء العد التنازلي.</p>
+    </div>
+    <div class="flex items-center justify-end gap-2 px-4 py-3 border-t border-outline-variant/60 bg-surface-container-low">
+      <button type="button" id="btnShutdownNow" onclick="triggerImmediateShutdown()" class="px-3 py-1.5 rounded text-[12px] font-medium text-red-400 hover:bg-red-500/15 border border-red-500/40 transition-colors">إيقاف الآن</button>
+      <button type="button" id="btnCancelShutdown" onclick="cancelScheduledShutdown()" class="px-4 py-1.5 rounded text-[12px] font-semibold bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container shadow transition-colors">إلغاء إيقاف التشغيل</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ ROW CONTEXT MENU ══ -->
 <div id="rowCtxMenu" class="fixed z-[115] hidden min-w-[220px] glass-panel border border-outline-variant/80 rounded-lg shadow-2xl py-1.5 text-[12px] select-none" style="z-index:115;min-width:220px" onclick="event.stopPropagation()"></div>
 
@@ -1562,6 +1585,7 @@ function bindTauriEvents() {
             playCompletionChime();
             if (document.getElementById('showToastOpt')?.checked) showCompT(dl);
             processQueue();
+            onDownloadCompletedForBatch();
             renderDLs();
           } else {
             // Strictly monotonic: progress never retreats
@@ -1787,6 +1811,7 @@ async function syncFromBackend() {
           if (wasDownloading && newStatus === 'complete') {
             playCompletionChime();
             processQueue();
+            onDownloadCompletedForBatch();
             const autoShow = localStorage.getItem('superidm_auto_show_progress') !== 'false';
             if (autoShow) {
               showIdmModal(String(t.id));
@@ -1909,11 +1934,16 @@ function loadLocalDls() {
 async function addDL(rawUrl, opts = {}) {
   if (!rawUrl || !rawUrl.trim()) return;
   let url = cleanTargetUrl(rawUrl.trim());
+  if (/^ftps?:\/\//i.test(url)) {
+    const isAr = (curLang === 'ar');
+    showT('error', isAr ? 'بروتوكول غير مدعوم' : 'Unsupported Protocol', isAr ? 'روابط FTP غير مدعومة حالياً، يرجى استخدام رابط HTTP أو HTTPS.' : 'FTP URLs are not supported; please use an HTTP or HTTPS link.');
+    return;
+  }
   const forceHttps = document.getElementById('forceHttpsOpt')?.checked ?? true;
   if (forceHttps && url.startsWith('http://')) {
     url = 'https://' + url.substring(7);
   }
-  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('ftp://')) {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
     url = 'https://' + url;
   }
 
@@ -3903,7 +3933,7 @@ async function openAddModal(skipClipboard = false) {
       try {
         const text = await navigator.clipboard.readText();
         const cl = cleanTargetUrl(text);
-        if (!inp.value && cl && (cl.startsWith('http://') || cl.startsWith('https://') || cl.startsWith('ftp://'))) {
+        if (!inp.value && cl && (cl.startsWith('http://') || cl.startsWith('https://'))) {
           inp.value = cl;
         }
       } catch (e) {}
@@ -4287,6 +4317,9 @@ function setMaxSimDownloads(val) {
   const el = document.getElementById('maxSimV');
   if (el) el.textContent = gMaxActive;
   try { localStorage.setItem('superidm_max_sim', String(gMaxActive)); } catch (e) {}
+  if (hasTauriIPC()) {
+    tauriCall('set_max_concurrent', { maxConcurrent: gMaxActive, max_concurrent: gMaxActive }).catch(() => {});
+  }
   processQueue();
   updStats();
 }
@@ -4586,7 +4619,7 @@ const I18N = {
     schedLblPostToast: 'إظهار إشعار تنبيه عند الاكتمال',
     schedLblPostClip: 'مراقبة الحافظة والروابط المنسوخة تلقائياً',
     schedLblPostShutdown: 'إيقاف تشغيل الكمبيوتر بعد اكتمال الدفعة',
-    schedShutdownBadge: 'قريباً',
+    schedShutdownBadge: 'مهلة أمان 60ث',
 
     // Settings View
     stHdrDlDefaults: 'إعدادات التنزيل الافتراضية',
@@ -4863,7 +4896,7 @@ const I18N = {
     schedLblPostToast: 'Show completion toast notification',
     schedLblPostClip: 'Clipboard URL monitoring',
     schedLblPostShutdown: 'Shut down PC after batch completes',
-    schedShutdownBadge: 'Coming Soon',
+    schedShutdownBadge: '60s countdown',
 
     // Settings View
     stHdrDlDefaults: 'Download Defaults',
@@ -5367,7 +5400,7 @@ async function chkClip() {
   try {
     if (navigator.clipboard && navigator.clipboard.readText) {
       const text = await navigator.clipboard.readText();
-      if (text && text !== lastClip && (text.startsWith('http://') || text.startsWith('https://') || text.startsWith('ftp://'))) {
+      if (text && text !== lastClip && (text.startsWith('http://') || text.startsWith('https://'))) {
         lastClip = text;
         const fi = getFI(text);
         if (fi.c !== 'Other' || text.includes('.bin') || text.includes('.zip') || text.includes('.iso')) {
@@ -5574,6 +5607,9 @@ renderDLs();
 
 bindTauriEvents();
 
+const APP_VERSION = '2.7.6';
+let tauriInitializedOnce = false;
+
 function initTauriState() {
   bindTauriEvents();
   if (hasTauriIPC()) {
@@ -5586,6 +5622,17 @@ function initTauriState() {
         if (mP) mP.textContent = path;
       }
     }).catch(() => {});
+
+    if (!tauriInitializedOnce) {
+      tauriInitializedOnce = true;
+      tauriCall('set_max_concurrent', { maxConcurrent: gMaxActive, max_concurrent: gMaxActive }).catch(() => {});
+      tauriCall('get_app_version').then(ver => {
+        if (ver && typeof ver === 'string') {
+          const vEl = document.getElementById('stAppVersionVal');
+          if (vEl) vEl.textContent = ver;
+        }
+      }).catch(() => {});
+    }
 
     if (!lastEngineStatus) {
       refreshEngineStatusUI();
@@ -5893,6 +5940,148 @@ function resetBrowserExts() {
   saveBrowserRules();
 }
 
+// ════════ POST-DOWNLOAD SAFE PC SHUTDOWN ════════
+let shutdownCountdownTimer = null;
+let shutdownCountdownRemaining = 60;
+let shutdownTriggeredForBatch = false;
+
+function toggleShutdownAfterBatch(enabled) {
+  const isAr = (curLang === 'ar');
+  shutdownTriggeredForBatch = false;
+  if (enabled) {
+    addLog('warn', '[SCHEDULER] Post-batch PC shutdown armed (60s countdown after last download)');
+    showT(
+      'warn',
+      isAr ? 'إيقاف التشغيل التلقائي مفعّل' : 'Auto-Shutdown Armed',
+      isAr ? 'سيتم إيقاف تشغيل الجهاز بعد انتهاء جميع التنزيلات الحالية (مع مهلة إلغاء 60 ثانية).' : 'PC will shut down after all active/queued downloads finish (with a 60s cancel countdown).'
+    );
+  } else {
+    cancelScheduledShutdown(true);
+    addLog('info', '[SCHEDULER] Post-batch PC shutdown disarmed');
+  }
+}
+
+function onDownloadCompletedForBatch() {
+  const opt = document.getElementById('shutdownPcOpt');
+  if (!opt || !opt.checked || shutdownTriggeredForBatch) return;
+  // Wait briefly for processQueue() to promote any queued item first
+  setTimeout(() => {
+    if (!opt.checked || shutdownTriggeredForBatch) return;
+    const stillWorking = dls.some(d => d.status === 'downloading' || d.status === 'queued');
+    if (!stillWorking) {
+      startBatchShutdownCountdown();
+    }
+  }, 600);
+}
+
+async function startBatchShutdownCountdown() {
+  const isAr = (curLang === 'ar');
+  shutdownTriggeredForBatch = true;
+  shutdownCountdownRemaining = 60;
+
+  // Disarm one-shot toggle immediately so reopening later never triggers unexpectedly
+  const opt = document.getElementById('shutdownPcOpt');
+  if (opt) opt.checked = false;
+
+  if (hasTauriIPC()) {
+    try {
+      await tauriCall('schedule_system_shutdown', { delaySecs: 60, delay_secs: 60 });
+      addLog('warn', '[SHUTDOWN] OS shutdown scheduled in 60 seconds (all downloads completed)');
+    } catch (e) {
+      shutdownTriggeredForBatch = false;
+      addLog('error', `[SHUTDOWN ERROR] ${String(e)}`);
+      showT('error', isAr ? 'تعذر جدولة إيقاف التشغيل' : 'Shutdown Failed', String(e));
+      return;
+    }
+  }
+
+  const modal = document.getElementById('shutdownCountdownModal');
+  const titleEl = document.getElementById('shutdownModalTitle');
+  const descEl = document.getElementById('shutdownModalDesc');
+  const secsEl = document.getElementById('shutdownCountdownSecs');
+  const nowBtn = document.getElementById('btnShutdownNow');
+  const cancelBtn = document.getElementById('btnCancelShutdown');
+
+  if (titleEl) titleEl.textContent = isAr ? 'إيقاف تشغيل الكمبيوتر' : 'Shutting Down PC';
+  if (descEl) descEl.textContent = isAr
+    ? 'اكتملت جميع التنزيلات في الدفعة. سيتم إيقاف تشغيل الجهاز تلقائياً بعد انتهاء العد التنازلي.'
+    : 'All batch downloads completed. Your PC will shut down automatically when the countdown reaches zero.';
+  if (nowBtn) nowBtn.textContent = isAr ? 'إيقاف الآن' : 'Shut Down Now';
+  if (cancelBtn) cancelBtn.textContent = isAr ? 'إلغاء إيقاف التشغيل' : 'Cancel Shutdown';
+  if (secsEl) secsEl.textContent = `${shutdownCountdownRemaining}s`;
+
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => cancelBtn?.focus(), 40);
+  }
+
+  if (shutdownCountdownTimer) clearInterval(shutdownCountdownTimer);
+  shutdownCountdownTimer = setInterval(() => {
+    shutdownCountdownRemaining = Math.max(0, shutdownCountdownRemaining - 1);
+    if (secsEl) secsEl.textContent = `${shutdownCountdownRemaining}s`;
+    if (shutdownCountdownRemaining <= 0 && shutdownCountdownTimer) {
+      clearInterval(shutdownCountdownTimer);
+      shutdownCountdownTimer = null;
+    }
+  }, 1000);
+}
+
+async function cancelScheduledShutdown(silent = false) {
+  const isAr = (curLang === 'ar');
+  if (shutdownCountdownTimer) {
+    clearInterval(shutdownCountdownTimer);
+    shutdownCountdownTimer = null;
+  }
+  const modal = document.getElementById('shutdownCountdownModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+  const opt = document.getElementById('shutdownPcOpt');
+  if (opt) opt.checked = false;
+  const wasActive = shutdownTriggeredForBatch;
+  shutdownTriggeredForBatch = false;
+
+  if (hasTauriIPC() && wasActive) {
+    try {
+      await tauriCall('cancel_system_shutdown');
+      addLog('info', '[SHUTDOWN] Scheduled OS shutdown cancelled by user');
+    } catch (e) {
+      addLog('warn', `[SHUTDOWN CANCEL] ${String(e)}`);
+    }
+  }
+  if (!silent && wasActive) {
+    showT('info', isAr ? 'تم إلغاء إيقاف التشغيل' : 'Shutdown Cancelled', isAr ? 'تم إلغاء إيقاف تشغيل الجهاز بنجاح.' : 'Scheduled PC shutdown has been cancelled.');
+  }
+}
+
+async function triggerImmediateShutdown() {
+  if (shutdownCountdownTimer) {
+    clearInterval(shutdownCountdownTimer);
+    shutdownCountdownTimer = null;
+  }
+  if (hasTauriIPC()) {
+    try {
+      await tauriCall('schedule_system_shutdown', { delaySecs: 3, delay_secs: 3 });
+    } catch (e) {
+      showT('error', curLang === 'ar' ? 'خطأ' : 'Error', String(e));
+    }
+  }
+}
+
+window.APP_VERSION = APP_VERSION;
+window.setMaxSimDownloads = setMaxSimDownloads;
+window.setConnectionsPerDl = setConnectionsPerDl;
+window.setAutoRetry = setAutoRetry;
+window.toggleTaskbarSpeed = toggleTaskbarSpeed;
+window.toggleMinTray = toggleMinTray;
+window.toggleSoundAlert = toggleSoundAlert;
+window.toggleForceHttps = toggleForceHttps;
+window.toggleShutdownAfterBatch = toggleShutdownAfterBatch;
+window.onDownloadCompletedForBatch = onDownloadCompletedForBatch;
+window.cancelScheduledShutdown = cancelScheduledShutdown;
+window.triggerImmediateShutdown = triggerImmediateShutdown;
 window.EDGE_STORE_URL = EDGE_STORE_URL;
 window.CHROME_STORE_URL = CHROME_STORE_URL;
 window.FIREFOX_STORE_URL = FIREFOX_STORE_URL;
@@ -5948,6 +6137,10 @@ window.addEventListener('scroll', () => hideRowCtxMenu(), true);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     hideRowCtxMenu();
+    const sdModal = document.getElementById('shutdownCountdownModal');
+    if (sdModal && !sdModal.classList.contains('hidden')) {
+      cancelScheduledShutdown();
+    }
     const delModal = document.getElementById('deleteConfirmModal');
     if (delModal && !delModal.classList.contains('hidden')) {
       closeDeleteConfirmModal();

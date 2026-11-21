@@ -44,79 +44,115 @@ pub async fn start_download(
         &request
     };
 
-    let raw_url = req_obj
-        .get("url")
-        .and_then(|v| v.as_str())
+    // Fast path using typed NewDownloadRequest, with flexible fallback for string priority / map headers
+    let typed_req = serde_json::from_value::<NewDownloadRequest>(req_obj.clone()).ok();
+
+    let raw_url = typed_req
+        .as_ref()
+        .map(|r| r.url.as_str())
+        .or_else(|| req_obj.get("url").and_then(|v| v.as_str()))
         .ok_or_else(|| "Missing 'url' parameter in download request".to_string())?;
     let url = crate::engine::extractor::MediaExtractor::clean_target_url(raw_url);
 
-    let destination = req_obj
-        .get("destination")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let destination = typed_req
+        .as_ref()
+        .map(|r| r.destination.clone())
+        .unwrap_or_else(|| {
+            req_obj
+                .get("destination")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        });
 
-    let filename = req_obj
-        .get("filename")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    let filename = typed_req
+        .as_ref()
+        .and_then(|r| r.filename.clone())
+        .or_else(|| {
+            req_obj
+                .get("filename")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        });
 
-    let format_id = req_obj
-        .get("format")
-        .or_else(|| req_obj.get("format_id"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    let format_id = typed_req
+        .as_ref()
+        .and_then(|r| r.format.clone())
+        .or_else(|| {
+            req_obj
+                .get("format")
+                .or_else(|| req_obj.get("format_id"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        });
 
-    let num_connections = req_obj
-        .get("numConnections")
-        .or_else(|| req_obj.get("num_connections"))
-        .and_then(|v| {
-            v.as_u64()
-                .map(|n| n as usize)
-                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    let num_connections = typed_req
+        .as_ref()
+        .and_then(|r| r.num_connections)
+        .or_else(|| {
+            req_obj
+                .get("numConnections")
+                .or_else(|| req_obj.get("num_connections"))
+                .and_then(|v| {
+                    v.as_u64()
+                        .map(|n| n as usize)
+                        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+                })
         })
         .unwrap_or(DEFAULT_CONNECTIONS);
 
-    let priority = req_obj
-        .get("priority")
-        .and_then(|v| {
-            v.as_u64()
-                .map(|n| n as u8)
-                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    let priority = typed_req
+        .as_ref()
+        .and_then(|r| r.priority)
+        .or_else(|| {
+            req_obj.get("priority").and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as u8)
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
         })
         .unwrap_or(0);
 
-    let category = req_obj
-        .get("category")
-        .and_then(|v| v.as_str())
-        .unwrap_or("General")
-        .to_string();
+    let category = typed_req
+        .as_ref()
+        .and_then(|r| r.category.clone())
+        .unwrap_or_else(|| {
+            req_obj
+                .get("category")
+                .and_then(|v| v.as_str())
+                .unwrap_or("General")
+                .to_string()
+        });
 
-    let headers: Option<Vec<(String, String)>> = req_obj.get("headers").and_then(|h| {
-        if let Some(arr) = h.as_array() {
-            let mut list = Vec::new();
-            for item in arr {
-                if let Some(pair) = item.as_array() {
-                    if pair.len() >= 2 {
-                        if let (Some(k), Some(v)) = (pair[0].as_str(), pair[1].as_str()) {
-                            list.push((k.to_string(), v.to_string()));
+    let headers: Option<Vec<(String, String)>> = typed_req
+        .and_then(|r| r.headers)
+        .or_else(|| {
+            req_obj.get("headers").and_then(|h| {
+                if let Some(arr) = h.as_array() {
+                    let mut list = Vec::new();
+                    for item in arr {
+                        if let Some(pair) = item.as_array() {
+                            if pair.len() >= 2 {
+                                if let (Some(k), Some(v)) = (pair[0].as_str(), pair[1].as_str()) {
+                                    list.push((k.to_string(), v.to_string()));
+                                }
+                            }
                         }
                     }
+                    Some(list)
+                } else if let Some(map) = h.as_object() {
+                    let mut list = Vec::new();
+                    for (k, v) in map {
+                        if let Some(val_str) = v.as_str() {
+                            list.push((k.clone(), val_str.to_string()));
+                        }
+                    }
+                    Some(list)
+                } else {
+                    None
                 }
-            }
-            Some(list)
-        } else if let Some(map) = h.as_object() {
-            let mut list = Vec::new();
-            for (k, v) in map {
-                if let Some(val_str) = v.as_str() {
-                    list.push((k.clone(), val_str.to_string()));
-                }
-            }
-            Some(list)
-        } else {
-            None
-        }
-    });
+            })
+        });
 
     let task_id = Uuid::new_v4().to_string();
 
@@ -1083,17 +1119,81 @@ pub async fn resume_download(
         return Ok(());
     }
 
-    // Direct multi-chunk resume with work stealing support
+    // Direct multi-chunk resume with sidecar recovery, ETag consistency check, and work stealing
     let file_path = PathBuf::from(&metadata.destination);
+    let mut resume_meta = metadata.clone();
+
+    // 1. Recover fresher chunk offsets from `.part.json` sidecar if present
+    if let Ok(Some(sidecar)) = storage::load_part_json(&file_path).await {
+        if sidecar.url == resume_meta.url
+            && !sidecar.chunks.is_empty()
+            && sidecar.downloaded_bytes() > resume_meta.downloaded_bytes()
+        {
+            resume_meta.chunks = sidecar.chunks;
+            resume_meta.total_bytes = sidecar.total_bytes.max(resume_meta.total_bytes);
+            if resume_meta.etag.is_none() {
+                resume_meta.etag = sidecar.etag;
+            }
+            if resume_meta.last_modified.is_none() {
+                resume_meta.last_modified = sidecar.last_modified;
+            }
+            let mut mgr = state.manager.write();
+            if let Some(handle) = mgr.tasks.get_mut(&id) {
+                handle.metadata.chunks = resume_meta.chunks.clone();
+                handle.metadata.total_bytes = resume_meta.total_bytes;
+            }
+        }
+    }
+
+    // 2. Verify remote file hasn't changed on the server (ETag / Last-Modified / Content-Length)
+    if let Ok(probe) = downloader::probe_url(&client, &resume_meta.url).await {
+        if !downloader::validate_consistency(&resume_meta, &probe) {
+            crate::engine::extractor::record_engine_log(format!(
+                "[resume] Remote file changed on server for {}; resetting chunks for clean download",
+                resume_meta.filename
+            ));
+            let new_total = probe.content_length;
+            let new_chunks = if new_total > 0 {
+                let effective_conns = if probe.supports_range { resume_meta.num_connections } else { 1 };
+                chunker::calculate_chunks(new_total, effective_conns)
+            } else {
+                vec![ChunkInfo {
+                    index: 0,
+                    start_byte: 0,
+                    end_byte: 0,
+                    current_byte: 0,
+                    completed: false,
+                    retry_count: 0,
+                }]
+            };
+            if new_total > 0 {
+                let _ = storage::preallocate_file(&file_path, new_total).await;
+            }
+            resume_meta.total_bytes = new_total;
+            resume_meta.etag = probe.etag;
+            resume_meta.last_modified = probe.last_modified;
+            resume_meta.supports_range = probe.supports_range;
+            resume_meta.chunks = new_chunks;
+            let mut mgr = state.manager.write();
+            if let Some(handle) = mgr.tasks.get_mut(&id) {
+                handle.metadata.total_bytes = resume_meta.total_bytes;
+                handle.metadata.etag = resume_meta.etag.clone();
+                handle.metadata.last_modified = resume_meta.last_modified.clone();
+                handle.metadata.supports_range = resume_meta.supports_range;
+                handle.metadata.chunks = resume_meta.chunks.clone();
+            }
+        }
+    }
+
     let (event_tx, event_rx) = mpsc::channel::<WorkerEvent>(4096);
     let chunk_limits: downloader::ChunkLimitMap = Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()));
 
-    for chunk in &metadata.chunks {
+    for chunk in &resume_meta.chunks {
         if chunk.completed {
             continue;
         }
         let client_c = client.clone();
-        let url_c = metadata.url.clone();
+        let url_c = resume_meta.url.clone();
         let chunk_c = chunk.clone();
         let file_path_c = file_path.clone();
         let throttler_c = throttler.clone();
@@ -2086,7 +2186,7 @@ pub async fn export_diagnostic_report(
         .await
         .map_err(|e| format!("Engine probe failed: {}", e))?;
 
-    let (tasks_snapshot, download_dir) = {
+    let (tasks_snapshot, download_dir, active_tasks, max_concurrent, throttler) = {
         let mgr = state.manager.read();
         let list: Vec<String> = mgr
             .tasks
@@ -2094,18 +2194,32 @@ pub async fn export_diagnostic_report(
             .map(|h| {
                 let m = &h.metadata;
                 format!(
-                    "  - [{}] {:?} | {} | dld={} / tot={} | conns={} | url={}",
+                    "  - [{}] {:?} | {} | {} / {} ({}) | conns={} | url={}",
                     &m.id[..m.id.len().min(8)],
                     m.status,
                     m.filename,
-                    m.downloaded_bytes(),
-                    m.total_bytes,
+                    crate::engine::speed::format_bytes(m.downloaded_bytes()),
+                    crate::engine::speed::format_bytes(m.total_bytes),
+                    h.speed_meter.speed_formatted(),
                     m.num_connections,
                     m.url
                 )
             })
             .collect();
-        (list, mgr.default_download_dir.clone())
+        (
+            list,
+            mgr.default_download_dir.clone(),
+            mgr.active_count(),
+            mgr.max_concurrent,
+            mgr.throttler.clone(),
+        )
+    };
+
+    let limit_bps = throttler.get_limit().await;
+    let limit_str = if limit_bps == 0 {
+        "Unlimited".to_string()
+    } else {
+        crate::engine::speed::format_bytes_per_sec(limit_bps as f64)
     };
 
     let backend_logs = crate::engine::extractor::recent_engine_log();
@@ -2129,6 +2243,10 @@ pub async fn export_diagnostic_report(
     report.push_str(&format!(
         "Download Dir: {}\n",
         download_dir.to_string_lossy()
+    ));
+    report.push_str(&format!(
+        "Concurrency:  {} active / {} max | Throttle: {}\n",
+        active_tasks, max_concurrent, limit_str
     ));
     report.push_str("============================================================\n\n");
 
@@ -2192,6 +2310,93 @@ pub async fn export_diagnostic_report(
         "report": report,
         "status": status,
     }))
+}
+
+/// Return the authoritative compiled application version from Cargo.toml.
+#[tauri::command]
+pub fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Update maximum simultaneous downloads tracked by the backend manager.
+#[tauri::command]
+pub fn set_max_concurrent(
+    state: State<'_, AppState>,
+    max_concurrent: Option<usize>,
+    #[allow(non_snake_case)] maxConcurrent: Option<usize>,
+) -> usize {
+    let clamped = max_concurrent.or(maxConcurrent).unwrap_or(MAX_CONCURRENT_DOWNLOADS).clamp(1, 16);
+    let mut mgr = state.manager.write();
+    mgr.max_concurrent = clamped;
+    clamped
+}
+
+/// Schedule a safe OS shutdown after a grace countdown (clamped to 10..=600 seconds, or 0 for immediate).
+#[tauri::command]
+pub fn schedule_system_shutdown(
+    delay_secs: Option<u64>,
+    #[allow(non_snake_case)] delaySecs: Option<u64>,
+) -> Result<u64, String> {
+    let delay = delay_secs.or(delaySecs).unwrap_or(60).min(600);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // Abort any previously queued shutdown before scheduling a fresh countdown.
+        let _ = std::process::Command::new("shutdown")
+            .args(["/a"])
+            .creation_flags(0x08000000)
+            .output();
+        let output = std::process::Command::new("shutdown")
+            .args([
+                "/s",
+                "/t",
+                &delay.to_string(),
+                "/c",
+                "SuperIDM: All downloads completed. Shutting down PC.",
+            ])
+            .creation_flags(0x08000000)
+            .output()
+            .map_err(|e| format!("Failed to invoke Windows shutdown: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let detail = if !stderr.is_empty() { stderr } else { stdout };
+            return Err(format!("Windows shutdown command failed: {}", detail));
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mins = ((delay + 59) / 60).max(1);
+        let status = std::process::Command::new("shutdown")
+            .args(["-h", &format!("+{}", mins)])
+            .status()
+            .map_err(|e| format!("Failed to schedule shutdown: {}", e))?;
+        if !status.success() {
+            return Err("System shutdown command exited with an error".to_string());
+        }
+    }
+    Ok(delay)
+}
+
+/// Cancel a previously scheduled OS shutdown (`shutdown /a` on Windows).
+#[tauri::command]
+pub fn cancel_system_shutdown() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("shutdown")
+            .args(["/a"])
+            .creation_flags(0x08000000)
+            .output()
+            .map_err(|e| format!("Failed to cancel Windows shutdown: {}", e))?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = std::process::Command::new("shutdown")
+            .args(["-c"])
+            .output();
+    }
+    Ok(())
 }
 
 #[cfg(test)]

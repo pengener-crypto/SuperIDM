@@ -88,6 +88,10 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             commands::get_engine_status,
             commands::check_app_update,
             commands::export_diagnostic_report,
+            commands::get_app_version,
+            commands::set_max_concurrent,
+            commands::schedule_system_shutdown,
+            commands::cancel_system_shutdown,
         ])
         .setup(move |app| {
             let manager_clone = manager.clone();

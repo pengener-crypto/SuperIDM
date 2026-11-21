@@ -51,7 +51,7 @@ impl SessionConfig {
         for item in raw.split(';') {
             let part = item.trim();
             if let Some((k, v)) = part.split_once('=') {
-                self.cookies.insert(k.trim().to_string(), v.trim().to_string());
+                self.add_cookie(k.trim(), v.trim());
             }
         }
     }
