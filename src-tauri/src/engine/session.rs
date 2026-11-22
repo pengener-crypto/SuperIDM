@@ -31,7 +31,8 @@ impl SessionConfig {
             if self.origin.is_none() {
                 if let Some(host) = parsed.host_str() {
                     let scheme = parsed.scheme();
-                    self.origin = Some(format!("{}://{}", scheme, host));
+                    let port_part = parsed.port().map(|p| format!(":{}", p)).unwrap_or_default();
+                    self.origin = Some(format!("{}://{}{}", scheme, host, port_part));
                 }
             }
             if self.referer.is_none() {

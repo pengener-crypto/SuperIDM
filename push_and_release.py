@@ -115,9 +115,10 @@ def build_release_body(version: str) -> str:
         "- `SuperIDM_Setup.exe` — Windows Installer (NSIS, Certified for Microsoft Store)\n"
         "- `SuperIDM.exe` — Standalone Portable Windows Executable\n"
         f"- `SuperIDM_{version}_x64.msix` — Windows MSIX Modern App Package (Microsoft Store Ready, Bundled Extractor Core)\n"
-        f"- `SuperIDM_Chrome_Store_v{version}.zip` — Chrome Web Store & Edge Add-ons Package (Auto-Pairing Enabled)\n"
+        f"- `SuperIDM_Chrome_Store_v{version}.zip` — Chrome Web Store Package (Auto-Pairing Enabled)\n"
+        f"- `SuperIDM_Edge_Store_v{version}.zip` — Microsoft Edge Add-ons Store Package (Auto-Pairing Enabled)\n"
         f"- `SuperIDM_Firefox_v{version}.zip` — Mozilla Firefox (AMO) WebExtension Package (Gecko & Auto-Pairing Enabled)\n"
-        f"- `SuperIDM_Extension_v{version}.zip` — Chromium Extension Package"
+        f"- `SuperIDM_Extension_v{version}.zip` — Chromium Extension Package (Manual Sideloading)"
     )
 
 
@@ -241,37 +242,43 @@ def main() -> int:
 
     rel, existing_assets = get_or_update_release(headers, version)
 
-    desktop_dir = r"C:\Users\Haider Nasrat\Desktop"
-    cleanup_stale_desktop_backups(desktop_dir)
+    desktop_dir = os.path.join(os.path.expanduser("~"), "Desktop")
+    if os.path.isdir(desktop_dir):
+        cleanup_stale_desktop_backups(desktop_dir)
 
     nsis_exe = os.path.join(BASE_DIR, rf"src-tauri\target\release\bundle\nsis\SuperIDM_{version}_x64-setup.exe")
     portable_exe = os.path.join(BASE_DIR, r"src-tauri\target\release\super-idm.exe")
     msix_file = os.path.join(BASE_DIR, f"SuperIDM_{version}_x64.msix")
     ext_zip = os.path.join(BASE_DIR, f"SuperIDM_Extension_v{version}.zip")
     chrome_store_zip = os.path.join(BASE_DIR, f"SuperIDM_Chrome_Store_v{version}.zip")
+    edge_store_zip = os.path.join(BASE_DIR, f"SuperIDM_Edge_Store_v{version}.zip")
     firefox_zip = os.path.join(BASE_DIR, f"SuperIDM_Firefox_v{version}.zip")
 
     desktop_setup = os.path.join(desktop_dir, "SuperIDM_Setup.exe")
     desktop_portable = os.path.join(desktop_dir, "SuperIDM.exe")
     desktop_msix = os.path.join(desktop_dir, f"SuperIDM_{version}_x64.msix")
 
-    for src, dst in [(nsis_exe, desktop_setup), (portable_exe, desktop_portable), (msix_file, desktop_msix)]:
-        if os.path.exists(src):
-            try:
-                shutil.copy2(src, dst)
-            except PermissionError:
-                print(f"Notice: {os.path.basename(dst)} is currently in use; uploading from build target.")
+    if os.path.isdir(desktop_dir):
+        for src, dst in [(nsis_exe, desktop_setup), (portable_exe, desktop_portable), (msix_file, desktop_msix)]:
+            if os.path.exists(src):
+                try:
+                    shutil.copy2(src, dst)
+                except OSError:
+                    print(f"Notice: {os.path.basename(dst)} is currently in use; uploading from build target.")
 
     setup_url = upload_asset(token, headers, rel, existing_assets, nsis_exe if os.path.exists(nsis_exe) else desktop_setup, "SuperIDM_Setup.exe")
     portable_url = upload_asset(token, headers, rel, existing_assets, portable_exe if os.path.exists(portable_exe) else desktop_portable, "SuperIDM.exe")
-    if os.path.exists(msix_file):
-        upload_asset(token, headers, rel, existing_assets, msix_file, f"SuperIDM_{version}_x64.msix")
-    if os.path.exists(ext_zip):
-        upload_asset(token, headers, rel, existing_assets, ext_zip, f"SuperIDM_Extension_v{version}.zip")
-    if os.path.exists(chrome_store_zip):
-        upload_asset(token, headers, rel, existing_assets, chrome_store_zip, f"SuperIDM_Chrome_Store_v{version}.zip")
-    if os.path.exists(firefox_zip):
-        upload_asset(token, headers, rel, existing_assets, firefox_zip, f"SuperIDM_Firefox_v{version}.zip")
+    for asset_path, asset_name in [
+        (msix_file, f"SuperIDM_{version}_x64.msix"),
+        (ext_zip, f"SuperIDM_Extension_v{version}.zip"),
+        (chrome_store_zip, f"SuperIDM_Chrome_Store_v{version}.zip"),
+        (edge_store_zip, f"SuperIDM_Edge_Store_v{version}.zip"),
+        (firefox_zip, f"SuperIDM_Firefox_v{version}.zip"),
+    ]:
+        if os.path.exists(asset_path):
+            upload_asset(token, headers, rel, existing_assets, asset_path, asset_name)
+        else:
+            print(f"WARNING: Expected release asset missing: {asset_name}", file=sys.stderr)
 
     print("\n================== DEPLOYMENT SUMMARY ==================")
     print(f"Release Version: v{version} (Release ID: {rel.get('id')})")

@@ -196,15 +196,24 @@
     return null;
   }
 
-  // 4. Tag video elements with resolved reel metadata
-  function tagVideosInDom() {
+  // 4. Tag video elements with resolved reel/post metadata (throttled to avoid heavy CPU burn)
+  let lastTagRun = 0;
+  function tagVideosInDom(force = false) {
+    const now = Date.now();
+    if (!force && (now - lastTagRun) < 1200) return;
+    lastTagRun = now;
+    const pathKindMatch = location.pathname.match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i);
     const videos = document.querySelectorAll('video');
     videos.forEach(v => {
-      // Find code
       const code = findCodeInElementOrCard(v);
       if (code) {
+        const kind = (pathKindMatch && pathKindMatch[2] === code && pathKindMatch[1].toLowerCase() === 'p')
+          ? 'p'
+          : (pathKindMatch && pathKindMatch[2] === code && pathKindMatch[1].toLowerCase() === 'tv')
+            ? 'tv'
+            : 'reel';
         v.dataset.superidmCode = code;
-        v.dataset.superidmUrl = `https://www.instagram.com/reel/${code}/`;
+        v.dataset.superidmUrl = `https://www.instagram.com/${kind}/${code}/`;
         const item = reelsStore.get(code);
         if (item && item.caption) {
           v.dataset.superidmTitle = item.author ? `${item.author} - ${item.caption}` : item.caption;
@@ -213,59 +222,67 @@
     });
   }
 
-  // Listen for video events and DOM changes
-  document.addEventListener('play', tagVideosInDom, true);
-  document.addEventListener('playing', tagVideosInDom, true);
-  document.addEventListener('timeupdate', tagVideosInDom, true);
-  document.addEventListener('mouseenter', tagVideosInDom, true);
+  // Listen for video events and DOM changes (filtered & throttled)
+  document.addEventListener('play', () => tagVideosInDom(true), true);
+  document.addEventListener('playing', () => tagVideosInDom(false), true);
+  document.addEventListener('timeupdate', () => tagVideosInDom(false), true);
+  document.addEventListener('mouseenter', (e) => {
+    if (e.target && (e.target.tagName === 'VIDEO' || (e.target.querySelector && e.target.querySelector('video')))) {
+      tagVideosInDom(false);
+    }
+  }, true);
 
   // 5. Hook window.history to detect reel navigation
   const origPushState = history.pushState;
   history.pushState = function (...args) {
     const res = origPushState.apply(this, args);
-    setTimeout(tagVideosInDom, 50);
+    setTimeout(() => tagVideosInDom(true), 50);
     return res;
   };
   const origReplaceState = history.replaceState;
   history.replaceState = function (...args) {
     const res = origReplaceState.apply(this, args);
-    setTimeout(tagVideosInDom, 50);
+    setTimeout(() => tagVideosInDom(true), 50);
     return res;
   };
 
-  // 6. Respond to content script inquiry events
+  // 6. Respond to content script inquiry events (uses primitive/JSON string detail for Firefox XrayVision compatibility)
   document.addEventListener('superidm:request_reel_info', (e) => {
-    tagVideosInDom();
-    const reqId = e.detail?.reqId;
+    tagVideosInDom(true);
+    const reqId = typeof e.detail === 'string' ? e.detail : (e.detail && e.detail.reqId ? String(e.detail.reqId) : '');
     const targetVideo = (reqId && document.querySelector(`video[data-superidm-req="${reqId}"]`))
       || document.querySelector('video:hover')
       || document.querySelector('video');
 
     let code = targetVideo?.dataset?.superidmCode || findCodeInElementOrCard(targetVideo);
-    if (!code) {
-      // Check address bar fallback
-      const m = location.pathname.match(/\/(reel|reels|p)\/([A-Za-z0-9_-]{9,15})/i);
-      if (m) code = m[2];
+    let kind = 'reel';
+    const pathMatch = location.pathname.match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i);
+    if (!code && pathMatch) {
+      code = pathMatch[2];
+    }
+    if (pathMatch && code === pathMatch[2]) {
+      const k = pathMatch[1].toLowerCase();
+      if (k === 'p' || k === 'tv') kind = k;
     }
 
     const item = code ? reelsStore.get(code) : null;
-    const resolvedUrl = code ? `https://www.instagram.com/reel/${code}/` : null;
-    const resolvedTitle = item?.caption ? (item.author ? `${item.author} - ${item.caption}` : item.caption) : null;
+    const resolvedUrl = targetVideo?.dataset?.superidmUrl || (code ? `https://www.instagram.com/${kind}/${code}/` : null);
+    const resolvedTitle = item?.caption ? (item.author ? `${item.author} - ${item.caption}` : item.caption) : (targetVideo?.dataset?.superidmTitle || null);
 
     document.dispatchEvent(new CustomEvent('superidm:response_reel_info', {
-      detail: {
+      detail: JSON.stringify({
         reqId,
         code,
         url: resolvedUrl,
         title: resolvedTitle
-      }
+      })
     }));
   });
 
   // Initial tag pass
   if (document.readyState !== 'loading') {
-    tagVideosInDom();
+    tagVideosInDom(true);
   } else {
-    document.addEventListener('DOMContentLoaded', tagVideosInDom);
+    document.addEventListener('DOMContentLoaded', () => tagVideosInDom(true));
   }
 })();

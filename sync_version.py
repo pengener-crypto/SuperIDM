@@ -83,6 +83,13 @@ def _sync_rules(version: str, build_date: str | None = None):
             "extension/popup.html",
             [(r"(<span>SuperIDM v)\d+\.\d+\.\d+(</span>)", rf"\g<1>{version}\g<2>")],
         ),
+        (
+            "package-lock.json",
+            [
+                (r'(\A\{\s*\n\s*"name"\s*:\s*"[^"]+",\s*\n\s*"version"\s*:\s*")\d+\.\d+\.\d+(")', rf"\g<1>{version}\g<2>"),
+                (r'(""\s*:\s*\{\s*\n\s*"name"\s*:\s*"[^"]+",\s*\n\s*"version"\s*:\s*")\d+\.\d+\.\d+(")', rf"\g<1>{version}\g<2>"),
+            ],
+        ),
         ("index.html", html_rules),
         ("dist/index.html", html_rules),
     ]
@@ -97,6 +104,9 @@ def apply_or_check(check_only: bool = False, update_date: bool = False) -> list[
     for rel_path, rules in _sync_rules(version, build_date):
         full_path = os.path.join(BASE_DIR, rel_path)
         if not os.path.exists(full_path):
+            # dist/ is gitignored and generated at build time, so don't fail clean CI checkouts
+            if rel_path.startswith("dist/"):
+                continue
             issues.append(f"MISSING: {rel_path}")
             continue
 

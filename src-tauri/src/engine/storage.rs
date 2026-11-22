@@ -84,20 +84,25 @@ pub async fn save_part_json_atomic(
     metadata: &DownloadMetadata,
 ) -> Result<(), String> {
     let part_path = part_json_path(download_path);
-    let tmp_path = part_path.with_extension("json.tmp");
+    let tmp_path = std::path::PathBuf::from(format!(
+        "{}.{}.tmp",
+        part_path.to_string_lossy(),
+        uuid::Uuid::new_v4().simple()
+    ));
 
     let json = serde_json::to_string_pretty(metadata)
         .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
 
-    // Write to temporary file first
+    // Write to a unique temporary file first to avoid concurrent write races
     fs::write(&tmp_path, json.as_bytes())
         .await
         .map_err(|e| format!("Failed to write temp sidecar {}: {}", tmp_path.display(), e))?;
 
     // Atomic rename over the real .part.json
-    fs::rename(&tmp_path, &part_path)
-        .await
-        .map_err(|e| format!("Failed to rename {} -> {}: {}", tmp_path.display(), part_path.display(), e))?;
+    if let Err(e) = fs::rename(&tmp_path, &part_path).await {
+        let _ = fs::remove_file(&tmp_path).await;
+        return Err(format!("Failed to rename {} -> {}: {}", tmp_path.display(), part_path.display(), e));
+    }
 
     Ok(())
 }
@@ -177,14 +182,20 @@ pub async fn scan_for_part_files(dir: &Path) -> Result<Vec<DownloadMetadata>, St
     Ok(results)
 }
 
+static TASKS_DB_LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+
 /// Save all tasks to the permanent database file (%APPDATA%\SuperIDM\tasks_db.json).
 pub async fn save_tasks_db(tasks: &[DownloadMetadata]) -> Result<(), String> {
+    let _guard = TASKS_DB_LOCK
+        .get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await;
     let config_dir = dirs::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("SuperIDM");
     let _ = fs::create_dir_all(&config_dir).await;
     let db_path = config_dir.join("tasks_db.json");
-    let tmp_path = config_dir.join("tasks_db.json.tmp");
+    let tmp_path = config_dir.join(format!("tasks_db.{}.json.tmp", uuid::Uuid::new_v4().simple()));
 
     let json = serde_json::to_string_pretty(tasks)
         .map_err(|e| format!("Failed to serialize tasks db: {}", e))?;
@@ -193,10 +204,30 @@ pub async fn save_tasks_db(tasks: &[DownloadMetadata]) -> Result<(), String> {
         .await
         .map_err(|e| format!("Failed to write tmp tasks db: {}", e))?;
 
-    fs::rename(&tmp_path, &db_path)
-        .await
-        .map_err(|e| format!("Failed to commit tasks db: {}", e))?;
+    if let Err(e) = fs::rename(&tmp_path, &db_path).await {
+        let _ = fs::remove_file(&tmp_path).await;
+        return Err(format!("Failed to commit tasks db: {}", e));
+    }
 
+    Ok(())
+}
+
+/// Synchronous version of `save_tasks_db` used during clean application exit.
+pub fn save_tasks_db_sync(tasks: &[DownloadMetadata]) -> Result<(), String> {
+    let config_dir = dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("SuperIDM");
+    let _ = std::fs::create_dir_all(&config_dir);
+    let db_path = config_dir.join("tasks_db.json");
+    let tmp_path = config_dir.join(format!("tasks_db.{}.json.tmp", uuid::Uuid::new_v4().simple()));
+    let json = serde_json::to_string_pretty(tasks)
+        .map_err(|e| format!("Failed to serialize tasks db: {}", e))?;
+    std::fs::write(&tmp_path, json.as_bytes())
+        .map_err(|e| format!("Failed to write tmp tasks db: {}", e))?;
+    if let Err(e) = std::fs::rename(&tmp_path, &db_path) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(format!("Failed to commit tasks db: {}", e));
+    }
     Ok(())
 }
 
@@ -298,8 +329,8 @@ pub fn resolve_unique_filename(dest_dir: &Path, filename: &str) -> String {
     let target = dest_dir.join(filename);
     let part_sidecar = part_json_path(&target);
 
-    // If file doesn't exist, or if an active .part.json exists (indicating resume), keep current name
-    if !target.exists() || part_sidecar.exists() {
+    // Only reuse the exact filename when neither the file nor an active/paused .part.json exists
+    if !target.exists() && !part_sidecar.exists() {
         return filename.to_string();
     }
 
@@ -316,7 +347,7 @@ pub fn resolve_unique_filename(dest_dir: &Path, filename: &str) -> String {
         let candidate_path = dest_dir.join(&candidate_name);
         let candidate_sidecar = part_json_path(&candidate_path);
 
-        if !candidate_path.exists() || candidate_sidecar.exists() {
+        if !candidate_path.exists() && !candidate_sidecar.exists() {
             return candidate_name;
         }
     }
@@ -420,6 +451,38 @@ pub fn extract_archive_to_folder(archive_path: &Path) -> Result<(std::path::Path
     }
 
     if lower.ends_with(".tar") || lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+        // Tar-Slip defense: list archive entries first and reject path traversal / absolute paths
+        let mut list_cmd = std::process::Command::new("tar");
+        list_cmd.arg("-tf").arg(archive_path);
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            list_cmd.creation_flags(0x08000000);
+        }
+        let list_out = list_cmd
+            .output()
+            .map_err(|e| format!("Failed to inspect tar archive: {}", e))?;
+        if !list_out.status.success() {
+            let stderr = String::from_utf8_lossy(&list_out.stderr).trim().to_string();
+            return Err(format!("tar inspection failed: {}", stderr));
+        }
+        let entries_stdout = String::from_utf8_lossy(&list_out.stdout);
+        for raw_entry in entries_stdout.lines() {
+            let entry = raw_entry.trim();
+            if entry.is_empty() {
+                continue;
+            }
+            if entry.starts_with('/') || entry.starts_with('\\') {
+                return Err(format!("Unsafe absolute path in tar archive blocked: {}", entry));
+            }
+            let p = Path::new(entry);
+            for comp in p.components() {
+                if matches!(comp, std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)) {
+                    return Err(format!("Unsafe path traversal entry in tar archive blocked: {}", entry));
+                }
+            }
+        }
+
         let mut cmd = std::process::Command::new("tar");
         cmd.arg("-xf").arg(archive_path).arg("-C").arg(&target_dir);
         #[cfg(target_os = "windows")]
@@ -434,9 +497,21 @@ pub fn extract_archive_to_folder(archive_path: &Path) -> Result<(std::path::Path
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             return Err(format!("tar extraction failed: {}", stderr));
         }
-        let count = std::fs::read_dir(&target_dir)
-            .map(|rd| rd.filter_map(Result::ok).count())
-            .unwrap_or(1);
+        fn count_files_recursive(dir: &Path) -> usize {
+            let mut total = 0;
+            if let Ok(rd) = std::fs::read_dir(dir) {
+                for entry in rd.flatten() {
+                    let p = entry.path();
+                    if p.is_dir() {
+                        total += count_files_recursive(&p);
+                    } else {
+                        total += 1;
+                    }
+                }
+            }
+            total
+        }
+        let count = count_files_recursive(&target_dir).max(1);
         return Ok((target_dir, count));
     }
 

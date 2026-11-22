@@ -112,53 +112,58 @@ impl RpcServer {
                     let mut content_length: Option<usize> = None;
                     let mut header_end: Option<usize> = None;
 
-                    loop {
-                        let n = match stream.read(&mut temp).await {
-                            Ok(n) if n > 0 => n,
-                            _ => break,
-                        };
+                    let read_res = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                        loop {
+                            let n = match stream.read(&mut temp).await {
+                                Ok(n) if n > 0 => n,
+                                _ => break,
+                            };
 
-                        if buffer.len() + n > MAX_PAYLOAD {
-                            let resp_413 = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: application/json\r\nContent-Length: 41\r\nConnection: close\r\n\r\n{\"error\":\"Payload exceeds 2MB threshold\"}";
-                            let _ = stream.write_all(resp_413.as_bytes()).await;
-                            let _ = stream.shutdown().await;
-                            return;
-                        }
+                            if buffer.len() + n > MAX_PAYLOAD {
+                                let resp_413 = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: application/json\r\nContent-Length: 41\r\nConnection: close\r\n\r\n{\"error\":\"Payload exceeds 2MB threshold\"}";
+                                let _ = stream.write_all(resp_413.as_bytes()).await;
+                                let _ = stream.shutdown().await;
+                                return false;
+                            }
 
-                        buffer.extend_from_slice(&temp[..n]);
+                            buffer.extend_from_slice(&temp[..n]);
 
-                        if header_end.is_none() {
-                            if let Some(pos) = buffer.windows(4).position(|w| w == b"\r\n\r\n") {
-                                header_end = Some(pos + 4);
-                                let headers_str = String::from_utf8_lossy(&buffer[..pos]);
-                                for line in headers_str.lines() {
-                                    if line.to_lowercase().starts_with("content-length:") {
-                                        if let Some((_, v)) = line.split_once(':') {
-                                            if let Ok(cl) = v.trim().parse::<usize>() {
-                                                if cl > MAX_PAYLOAD {
-                                                    let resp_413 = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: application/json\r\nContent-Length: 41\r\nConnection: close\r\n\r\n{\"error\":\"Payload exceeds 2MB threshold\"}";
-                                                    let _ = stream.write_all(resp_413.as_bytes()).await;
-                                                    let _ = stream.shutdown().await;
-                                                    return;
+                            if header_end.is_none() {
+                                if let Some(pos) = buffer.windows(4).position(|w| w == b"\r\n\r\n") {
+                                    header_end = Some(pos + 4);
+                                    let headers_str = String::from_utf8_lossy(&buffer[..pos]);
+                                    for line in headers_str.lines() {
+                                        if line.to_lowercase().starts_with("content-length:") {
+                                            if let Some((_, v)) = line.split_once(':') {
+                                                if let Ok(cl) = v.trim().parse::<usize>() {
+                                                    if cl > MAX_PAYLOAD {
+                                                        let resp_413 = "HTTP/1.1 413 Payload Too Large\r\nContent-Type: application/json\r\nContent-Length: 41\r\nConnection: close\r\n\r\n{\"error\":\"Payload exceeds 2MB threshold\"}";
+                                                        let _ = stream.write_all(resp_413.as_bytes()).await;
+                                                        let _ = stream.shutdown().await;
+                                                        return false;
+                                                    }
+                                                    content_length = Some(cl);
                                                 }
-                                                content_length = Some(cl);
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        if let (Some(h_end), Some(c_len)) = (header_end, content_length) {
-                            if buffer.len() >= h_end + c_len {
+                            if let (Some(h_end), Some(c_len)) = (header_end, content_length) {
+                                if buffer.len() >= h_end + c_len {
+                                    break;
+                                }
+                            } else if header_end.is_some() && content_length.is_none() {
                                 break;
                             }
-                        } else if header_end.is_some() && content_length.is_none() {
-                            break;
                         }
-                    }
+                        true
+                    })
+                    .await;
 
-                    if buffer.is_empty() {
+                    if !matches!(read_res, Ok(true)) || buffer.is_empty() {
+                        let _ = stream.shutdown().await;
                         return;
                     }
 
@@ -243,7 +248,13 @@ fn generate_and_save_token(path: &Path) -> String {
 fn sync_token_to_extension(token: &str) {
     let json_content = serde_json::json!({ "token": token }).to_string();
 
-    // Check Desktop SuperIDM-Extension folder
+    // Sync to %APPDATA%\SuperIDM\extension if extracted
+    let embedded_ext = crate::engine::browser_integration::get_embedded_extension_dir();
+    if embedded_ext.exists() {
+        let _ = std::fs::write(embedded_ext.join("rpc_token.json"), &json_content);
+    }
+
+    // Also sync to Desktop SuperIDM-Extension unpacked folder if present
     if let Some(desktop) = dirs::desktop_dir() {
         let desktop_ext = desktop.join("SuperIDM-Extension");
         if desktop_ext.exists() {
@@ -316,7 +327,16 @@ async fn handle_ws_connection(
                             }
                         }
 
-                        let result = dispatch_method(method, &params, manager).await;
+                        let result = if method == "superidm.ping" {
+                            serde_json::json!({
+                                "status": "ok",
+                                "app": "SuperIDM",
+                                "version": env!("CARGO_PKG_VERSION"),
+                                "authenticated": is_authenticated
+                            })
+                        } else {
+                            dispatch_method(method, &params, manager).await
+                        };
 
                         let response = serde_json::json!({
                             "jsonrpc": "2.0",
@@ -357,11 +377,18 @@ async fn handle_http_request(
     expected_token: &str,
     peer: std::net::SocketAddr,
 ) -> String {
-    let lines: Vec<&str> = raw.lines().collect();
+    // Split headers vs body FIRST so header extraction never scans the body and
+    // JSON bodies containing `\r\n\r\n` are never truncated.
+    let (header_block, body) = raw
+        .split_once("\r\n\r\n")
+        .or_else(|| raw.split_once("\n\n"))
+        .unwrap_or((raw, ""));
+    let lines: Vec<&str> = header_block.lines().collect();
     let first_line = lines.first().copied().unwrap_or("");
     let parts: Vec<&str> = first_line.split_whitespace().collect();
     let method = parts.first().copied().unwrap_or("GET");
-    let path = parts.get(1).copied().unwrap_or("/");
+    let raw_path = parts.get(1).copied().unwrap_or("/");
+    let path = raw_path.split('?').next().unwrap_or("/");
 
     // Extract Origin header
     let origin = lines.iter()
@@ -461,8 +488,8 @@ async fn handle_http_request(
         .unwrap_or("");
 
     let mut provided_token = "";
-    if auth_header.starts_with("Bearer ") {
-        provided_token = auth_header.trim_start_matches("Bearer ").trim();
+    if auth_header.len() >= 7 && auth_header[..7].eq_ignore_ascii_case("bearer ") {
+        provided_token = auth_header[7..].trim();
     }
 
     if provided_token.is_empty() {
@@ -474,9 +501,6 @@ async fn handle_http_request(
             provided_token = custom;
         }
     }
-
-    // Extract body
-    let body = raw.split("\r\n\r\n").nth(1).unwrap_or("");
 
     // If token wasn't in headers, check body JSON
     let body_json: Option<serde_json::Value> = serde_json::from_str(body).ok();
@@ -519,6 +543,55 @@ async fn handle_http_request(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{}\r\nCache-Control: no-store\r\nContent-Length: {}\r\n\r\n{}",
             cors_header, b.len(), b
         );
+    }
+
+    // POST /api/rules — Allow authenticated browser extension popup to sync rule edits back to Desktop
+    if method == "POST" && path == "/api/rules" {
+        if let Some(params) = body_json {
+            let exts = params
+                .get("file_extensions")
+                .or_else(|| params.get("fileExtensions"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string());
+            let excl = params
+                .get("excluded_domains")
+                .or_else(|| params.get("excludedDomains"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_string());
+            let incoming_ts = params
+                .get("updated_at")
+                .or_else(|| params.get("updatedAt"))
+                .and_then(|v| v.as_i64())
+                .filter(|v| *v > 0)
+                .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+            let mut mgr = manager.write();
+            if incoming_ts >= mgr.browser_rules_updated_at {
+                if let Some(e) = exts {
+                    mgr.browser_file_extensions = e;
+                }
+                if let Some(x) = excl {
+                    mgr.browser_excluded_domains = x;
+                }
+                mgr.browser_rules_updated_at = incoming_ts;
+            }
+            let b = serde_json::json!({
+                "status": "ok",
+                "file_extensions": mgr.browser_file_extensions,
+                "excluded_domains": mgr.browser_excluded_domains,
+                "updated_at": mgr.browser_rules_updated_at,
+            })
+            .to_string();
+            return format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{}\r\nCache-Control: no-store\r\nContent-Length: {}\r\n\r\n{}",
+                cors_header, b.len(), b
+            );
+        } else {
+            let b = r#"{"error":"Invalid JSON payload"}"#;
+            return format!(
+                "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n{}\r\nContent-Length: {}\r\n\r\n{}",
+                cors_header, b.len(), b
+            );
+        }
     }
 
     // POST /api/download
@@ -590,11 +663,10 @@ async fn dispatch_method(
                     }
                 }
             }
-            if !crate::engine::extractor::MediaExtractor::is_platform_url(url) {
-                if let Some(cookies) = params.get("cookies").and_then(|v| v.as_str()) {
-                    if !cookies.is_empty() && !cookies.contains('\r') && !cookies.contains('\n') {
-                        merged_headers.entry("Cookie".to_string()).or_insert_with(|| cookies.to_string());
-                    }
+            if let Some(cookies) = params.get("cookies").and_then(|v| v.as_str()) {
+                let has_cookie = merged_headers.keys().any(|k| k.eq_ignore_ascii_case("cookie"));
+                if !has_cookie && !cookies.is_empty() && !cookies.contains('\r') && !cookies.contains('\n') {
+                    merged_headers.insert("Cookie".to_string(), cookies.to_string());
                 }
             }
 
@@ -730,5 +802,20 @@ mod tests {
         assert_eq!(json["file_extensions"], "ZIP MP4 ISO");
         assert_eq!(json["excluded_domains"], "example.com internal.local");
         assert_eq!(json["updated_at"], 1_777_777_777_000_i64);
+
+        // Query string on /api/ping?t=123 works & POST /api/rules updates manager state
+        let ping_qs = "GET /api/ping?t=123 HTTP/1.1\r\nHost: 127.0.0.1:6801\r\n\r\n";
+        let ping_resp = handle_http_request(ping_qs, &mgr, secret, dummy_peer()).await;
+        assert!(ping_resp.starts_with("HTTP/1.1 200 OK"), "Expected 200 on /api/ping?t=123, got: {}", ping_resp);
+
+        let post_body = r#"{"file_extensions":"MKV ZIP","excluded_domains":"bank.com","updated_at":1888888888000}"#;
+        let post_req = format!(
+            "POST /api/rules HTTP/1.1\r\nHost: 127.0.0.1:6801\r\nX-SuperIDM-Token: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            secret, post_body.len(), post_body
+        );
+        let post_resp = handle_http_request(&post_req, &mgr, secret, dummy_peer()).await;
+        assert!(post_resp.starts_with("HTTP/1.1 200 OK"), "Expected 200 on POST /api/rules, got: {}", post_resp);
+        assert_eq!(mgr.read().browser_file_extensions, "MKV ZIP");
+        assert_eq!(mgr.read().browser_excluded_domains, "bank.com");
     }
 }

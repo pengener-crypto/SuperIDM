@@ -215,16 +215,6 @@ pub struct MediaExtractionInfo {
     pub is_stream: bool,
 }
 
-/// A media segment in an HLS (.m3u8) or DASH (.mpd) playlist.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StreamSegment {
-    pub index: usize,
-    pub url: String,
-    pub duration_secs: f64,
-    pub byte_range: Option<(u64, u64)>,
-    pub completed: bool,
-}
-
 /// An entry in a media playlist (e.g., YouTube playlist, album, course).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlaylistItem {

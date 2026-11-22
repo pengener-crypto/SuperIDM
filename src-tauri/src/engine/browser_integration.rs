@@ -61,46 +61,62 @@ pub fn extract_and_sync_extension(rpc_token: &str) -> Result<PathBuf, String> {
     Ok(ext_dir)
 }
 
-/// Register Windows Registry Keys for Chromium External Extensions.
+/// Register Windows Registry External Extension keys using official Store IDs + update_url
+/// (Chromium on Windows ignores unpacked `path` keys and non-32-char extension IDs).
 pub fn register_browser_registry(browser: &str) -> Result<String, String> {
-    let ext_dir = get_embedded_extension_dir();
-    let ext_path_str = ext_dir.to_string_lossy().to_string();
+    let b = browser.to_lowercase();
+    if b == "firefox" || b == "mozilla firefox" {
+        return Ok("Firefox uses official AMO Add-ons Store installation".to_string());
+    }
 
-    // Constant extension ID or external registry key
-    let reg_keys = match browser.to_lowercase().as_str() {
-        "chrome" | "google chrome" => vec![
-            r"HKCU\Software\Google\Chrome\Extensions\superidm_download_accelerator",
-        ],
-        "edge" | "microsoft edge" => vec![
-            r"HKCU\Software\Microsoft\Edge\Extensions\superidm_download_accelerator",
-        ],
-        "brave" => vec![
-            r"HKCU\Software\BraveSoftware\Brave-Browser\Extensions\superidm_download_accelerator",
-        ],
-        "opera" => vec![
-            r"HKCU\Software\Opera Software\Extensions\superidm_download_accelerator",
-        ],
-        "vivaldi" => vec![
-            r"HKCU\Software\Vivaldi\Extensions\superidm_download_accelerator",
-        ],
+    const CHROME_EXT_ID: &str = "hacedobdgfgjhfoldlhiaddmlndkofdo";
+    const CHROME_UPDATE_URL: &str = "https://clients2.google.com/service/update2/crx";
+    const EDGE_EXT_ID: &str = "kajmocggiabnnpepieigndpjefjbnjem";
+    const EDGE_UPDATE_URL: &str = "https://edge.microsoft.com/extensionwebstorebase/v1/crx";
+
+    let entries: Vec<(String, &str)> = match b.as_str() {
+        "chrome" | "google chrome" => vec![(
+            format!(r"HKCU\Software\Google\Chrome\Extensions\{}", CHROME_EXT_ID),
+            CHROME_UPDATE_URL,
+        )],
+        "edge" | "microsoft edge" => vec![(
+            format!(r"HKCU\Software\Microsoft\Edge\Extensions\{}", EDGE_EXT_ID),
+            EDGE_UPDATE_URL,
+        )],
+        "brave" => vec![(
+            format!(r"HKCU\Software\BraveSoftware\Brave-Browser\Extensions\{}", CHROME_EXT_ID),
+            CHROME_UPDATE_URL,
+        )],
+        "opera" => vec![(
+            format!(r"HKCU\Software\Opera Software\Extensions\{}", CHROME_EXT_ID),
+            CHROME_UPDATE_URL,
+        )],
+        "vivaldi" => vec![(
+            format!(r"HKCU\Software\Vivaldi\Extensions\{}", CHROME_EXT_ID),
+            CHROME_UPDATE_URL,
+        )],
         _ => vec![
-            r"HKCU\Software\Google\Chrome\Extensions\superidm_download_accelerator",
-            r"HKCU\Software\Microsoft\Edge\Extensions\superidm_download_accelerator",
-            r"HKCU\Software\BraveSoftware\Brave-Browser\Extensions\superidm_download_accelerator",
-            r"HKCU\Software\Opera Software\Extensions\superidm_download_accelerator",
-            r"HKCU\Software\Vivaldi\Extensions\superidm_download_accelerator",
+            (format!(r"HKCU\Software\Google\Chrome\Extensions\{}", CHROME_EXT_ID), CHROME_UPDATE_URL),
+            (format!(r"HKCU\Software\Microsoft\Edge\Extensions\{}", EDGE_EXT_ID), EDGE_UPDATE_URL),
+            (format!(r"HKCU\Software\BraveSoftware\Brave-Browser\Extensions\{}", CHROME_EXT_ID), CHROME_UPDATE_URL),
+            (format!(r"HKCU\Software\Opera Software\Extensions\{}", CHROME_EXT_ID), CHROME_UPDATE_URL),
+            (format!(r"HKCU\Software\Vivaldi\Extensions\{}", CHROME_EXT_ID), CHROME_UPDATE_URL),
         ],
     };
 
-    for key in reg_keys {
-        // reg add <key> /v path /t REG_SZ /d "<path>" /f
-        let _ = Command::new("reg")
-            .args(&["add", key, "/v", "path", "/t", "REG_SZ", "/d", &ext_path_str, "/f"])
-            .output();
-
-        let _ = Command::new("reg")
-            .args(&["add", key, "/v", "version", "/t", "REG_SZ", "/d", "1.0.0", "/f"])
-            .output();
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        for (key, update_url) in &entries {
+            let _ = Command::new("reg")
+                .args(["add", key, "/v", "update_url", "/t", "REG_SZ", "/d", update_url, "/f"])
+                .creation_flags(0x08000000)
+                .output();
+            let _ = Command::new("reg")
+                .args(["add", key, "/v", "version", "/t", "REG_SZ", "/d", env!("CARGO_PKG_VERSION"), "/f"])
+                .creation_flags(0x08000000)
+                .output();
+        }
     }
 
     Ok(format!("Extension registered for {}", browser))
@@ -111,13 +127,9 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
     let edge_store_url = "https://microsoftedge.microsoft.com/addons/detail/superidm-%E2%80%94-download-accel/kajmocggiabnnpepieigndpjefjbnjem";
     let chrome_store_url = "https://chromewebstore.google.com/detail/superidm-%E2%80%94-download-accel/hacedobdgfgjhfoldlhiaddmlndkofdo?authuser=0&hl=en";
     let firefox_store_url = "https://addons.mozilla.org/en-US/firefox/addon/superidm-download-accelerator/";
-    let _is_store = browser.eq_ignore_ascii_case("edge_store")
-        || browser.eq_ignore_ascii_case("chrome_store")
-        || browser.eq_ignore_ascii_case("firefox_store")
-        || browser.eq_ignore_ascii_case("store");
-    let _is_edge = matches!(browser.to_lowercase().as_str(), "edge" | "microsoft edge" | "edge_store" | "edge_dev");
-    
-    let target_url = match browser.to_lowercase().as_str() {
+
+    let b = browser.to_lowercase();
+    let target_url = match b.as_str() {
         "edge_store" => edge_store_url,
         "chrome_store" => chrome_store_url,
         "firefox_store" | "firefox" | "mozilla firefox" => firefox_store_url,
@@ -133,7 +145,7 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        let browser_candidates: Vec<PathBuf> = match browser.to_lowercase().as_str() {
+        let browser_candidates: Vec<PathBuf> = match b.as_str() {
             "edge" | "microsoft edge" | "edge_store" | "edge_dev" => vec![
                 PathBuf::from(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
                 PathBuf::from(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
@@ -143,13 +155,18 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
                 PathBuf::from(r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe"),
                 dirs::data_local_dir().map(|p| p.join(r"Mozilla Firefox\firefox.exe")).unwrap_or_default(),
             ],
-            "brave" => vec![
+            "brave" | "brave_dev" => vec![
                 PathBuf::from(r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"),
+                PathBuf::from(r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe"),
                 dirs::data_local_dir().map(|p| p.join(r"BraveSoftware\Brave-Browser\Application\brave.exe")).unwrap_or_default(),
             ],
-            "opera" => vec![
+            "opera" | "opera_dev" => vec![
                 dirs::data_local_dir().map(|p| p.join(r"Programs\Opera\launcher.exe")).unwrap_or_default(),
                 PathBuf::from(r"C:\Program Files\Opera\launcher.exe"),
+            ],
+            "vivaldi" | "vivaldi_dev" => vec![
+                dirs::data_local_dir().map(|p| p.join(r"Vivaldi\Application\vivaldi.exe")).unwrap_or_default(),
+                PathBuf::from(r"C:\Program Files\Vivaldi\Application\vivaldi.exe"),
             ],
             _ => vec![
                 PathBuf::from(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
@@ -158,7 +175,6 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
             ],
         };
 
-        // Determine extension directory to pass --load-extension for non-store browsers
         let ext_dir = get_embedded_extension_dir();
         let load_ext_arg = format!("--load-extension={}", ext_dir.to_string_lossy());
 
@@ -171,7 +187,7 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
                 if is_http_target {
                     cmd.arg(target_url);
                 } else {
-                    cmd.args(&[&load_ext_arg, target_url]);
+                    cmd.args([&load_ext_arg, target_url]);
                 }
                 if cmd.spawn().is_ok() {
                     launched = true;
@@ -180,22 +196,21 @@ pub fn launch_browser_extension_page(browser: &str) -> Result<(), String> {
             }
         }
 
-        // If not found by candidate paths, launch via cmd start with browser command name
+        // Safe fallback: explorer.exe delegates to ShellExecute without cmd.exe `&` parsing or console flash
         if !launched {
             if is_http_target {
-                let _ = Command::new("cmd")
-                    .args(&["/c", "start", "", target_url])
-                    .spawn();
+                let _ = Command::new("explorer.exe").arg(target_url).spawn();
             } else {
-                let browser_name = match browser.to_lowercase().as_str() {
-                    "edge" | "microsoft edge" => "msedge",
-                    "brave" => "brave",
-                    "opera" => "opera",
-                    _ => "chrome",
+                let browser_exe = match b.as_str() {
+                    "edge" | "microsoft edge" | "edge_dev" => "msedge.exe",
+                    "brave" | "brave_dev" => "brave.exe",
+                    "opera" | "opera_dev" => "opera.exe",
+                    "vivaldi" | "vivaldi_dev" => "vivaldi.exe",
+                    _ => "chrome.exe",
                 };
-                let _ = Command::new("cmd")
-                    .args(&["/c", "start", "", browser_name, &load_ext_arg, target_url])
-                    .spawn();
+                if Command::new(browser_exe).args([&load_ext_arg, target_url]).spawn().is_err() {
+                    let _ = Command::new("explorer.exe").arg(ext_dir).spawn();
+                }
             }
         }
     }

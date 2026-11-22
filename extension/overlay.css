@@ -8,7 +8,7 @@
   top: 14px !important;
   right: 14px !important;
   z-index: 2147483647 !important;
-  display: inline-flex !important;
+  display: inline-flex;
   align-items: center !important;
   justify-content: center !important;
   gap: 7px !important;
@@ -21,19 +21,20 @@
   background: #090e17 !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
-  border: 1.5px solid #00f5ff !important;
   border-radius: 20px !important;
   cursor: pointer !important;
   pointer-events: auto !important;
-  box-shadow: 
-    0 0 8px rgba(0, 245, 255, 0.4),
-    0 4px 14px rgba(0, 0, 0, 0.6) !important;
   transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
   user-select: none !important;
   line-height: 1 !important;
   opacity: 0.28 !important;
   border: 1px solid rgba(0, 245, 255, 0.4) !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+}
+
+.superidm-video-badge.superidm-hidden {
+  display: none !important;
+  pointer-events: none !important;
 }
 
 .superidm-video-badge:hover,

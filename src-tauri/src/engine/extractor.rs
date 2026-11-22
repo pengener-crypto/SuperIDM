@@ -937,7 +937,31 @@ impl MediaExtractor {
             ".torrent",
             ".bin", ".dat", ".cab",
         ];
-        direct_exts.iter().any(|ext| path.ends_with(ext) || path.contains(ext))
+        direct_exts.iter().any(|ext| path.ends_with(ext))
+    }
+
+    /// Return `true` ONLY when `format_id` explicitly requests an audio-only download
+    /// (e.g. `"bestaudio"`, `"mp3"`, `"audio"`, `"140"`, `"251"`).
+    /// Compound video+audio selectors such as `"bestvideo+bestaudio/best"` or
+    /// `"bestvideo[height<=1080]+bestaudio/best"` MUST return `false`.
+    pub fn is_audio_only_format(format_id: Option<&str>) -> bool {
+        let fid = match format_id {
+            Some(s) if !s.trim().is_empty() => s.trim().to_ascii_lowercase(),
+            _ => return false,
+        };
+        if fid.contains("video") || fid.contains('+') {
+            return false;
+        }
+        fid == "audio"
+            || fid == "mp3"
+            || fid == "m4a"
+            || fid == "opus"
+            || fid == "140"
+            || fid == "251"
+            || fid == "250"
+            || fid == "249"
+            || fid.starts_with("bestaudio")
+            || fid.contains("audio")
     }
 
     /// Download video/audio via the extraction engine with real-time progress callbacks.
@@ -945,30 +969,67 @@ impl MediaExtractor {
     /// If the first attempt fails (most often because YouTube changed something and the local
     /// yt-dlp is outdated), the extractor core is updated automatically and the download is
     /// retried once — the user no longer has to find and press "Update engine" manually.
+    #[allow(clippy::too_many_arguments)]
     pub async fn download_media_stream(
         client: &Client,
         url: &str,
         dest_dir: &std::path::Path,
+        custom_filename: Option<&str>,
         format_id: Option<&str>,
         extra_headers: &[(String, String)],
         rate_limit_bps: u64,
         max_retries: usize,
-        progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>, // (progress 0..1, speed bps, downloaded bytes, total bytes, eta_secs, is_completed, final_filename)
+        num_connections: usize,
+        progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>,
         cancel_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<std::path::PathBuf, String> {
+        // Resolve Shabakaty Cinemana page URLs to their direct video stream URL first
+        let mut effective_url = Self::clean_target_url(url);
+        let mut effective_filename = custom_filename.map(|s| s.to_string());
+        if effective_url.contains("cinemana.shabakaty.com") {
+            if let Ok(info) = Self::extract_cinemana_info(client, &effective_url).await {
+                if let Some(stream_u) = info
+                    .formats
+                    .iter()
+                    .find_map(|f| f.url.clone().filter(|u| u.starts_with("http://") || u.starts_with("https://")))
+                {
+                    effective_url = stream_u;
+                    if effective_filename.is_none() && !info.title.is_empty() {
+                        effective_filename = Some(info.title);
+                    }
+                }
+            }
+        }
+
         // YouTube needs a JavaScript runtime for its stream-URL challenges. Bootstrap Deno once if neither Deno nor Node is present.
-        if Self::is_youtube_url(url) && Self::js_runtime_arg().is_none() {
+        if Self::is_youtube_url(&effective_url) && Self::js_runtime_arg().is_none() {
             if let Err(e) = Self::ensure_deno_binary(client).await {
                 record_engine_log(format!("[bootstrap] JS runtime unavailable: {}", e));
             }
         }
+        if *cancel_rx.borrow() {
+            return Err("Download cancelled".into());
+        }
 
-        let first = Self::run_ytdlp_download(client, url, dest_dir, format_id, extra_headers, rate_limit_bps, max_retries, progress_tx.clone(), cancel_rx.clone()).await;
+        let first = Self::run_ytdlp_download(
+            client,
+            &effective_url,
+            dest_dir,
+            effective_filename.as_deref(),
+            format_id,
+            extra_headers,
+            rate_limit_bps,
+            max_retries,
+            num_connections,
+            progress_tx.clone(),
+            cancel_rx.clone(),
+        )
+        .await;
         let first_err = match first {
             Ok(p) => return Ok(p),
             Err(e) => e,
         };
-        if *cancel_rx.borrow() || first_err.contains("cancelled") {
+        if *cancel_rx.borrow() || first_err.contains("cancelled") || first_err.contains("Not enough disk space") {
             return Err(first_err);
         }
 
@@ -980,16 +1041,40 @@ impl MediaExtractor {
                 return Err(first_err);
             }
         }
-        Self::run_ytdlp_download(client, url, dest_dir, format_id, extra_headers, rate_limit_bps, max_retries, progress_tx, cancel_rx)
-            .await
-            .map_err(|e| if e == first_err { e } else { format!("{} (after engine update; first attempt: {})", e, first_err) })
+        if *cancel_rx.borrow() {
+            return Err("Download cancelled".into());
+        }
+        Self::run_ytdlp_download(
+            client,
+            &effective_url,
+            dest_dir,
+            effective_filename.as_deref(),
+            format_id,
+            extra_headers,
+            rate_limit_bps,
+            max_retries,
+            num_connections,
+            progress_tx,
+            cancel_rx,
+        )
+        .await
+        .map_err(|e| if e == first_err { e } else { format!("{} (after engine update; first attempt: {})", e, first_err) })
     }
 
     /// Build yt-dlp transfer tuning args (`--concurrent-fragments`, `--retries`, `--fragment-retries`,
     /// and `--limit-rate` when a global bandwidth cap is configured).
+    #[cfg(test)]
     pub fn ytdlp_transfer_args(rate_limit_bps: u64, max_retries: usize) -> Vec<String> {
+        Self::ytdlp_transfer_args_with_conns(rate_limit_bps, max_retries, 8)
+    }
+
+    pub fn ytdlp_transfer_args_with_conns(rate_limit_bps: u64, max_retries: usize, num_connections: usize) -> Vec<String> {
         let retries = max_retries.min(20).to_string();
-        let frags = if rate_limit_bps > 0 { "2" } else { "8" };
+        let frags = if rate_limit_bps > 0 {
+            num_connections.clamp(1, 2)
+        } else {
+            num_connections.clamp(1, 16)
+        };
         let mut args = vec![
             "--concurrent-fragments".to_string(),
             frags.to_string(),
@@ -1007,10 +1092,8 @@ impl MediaExtractor {
         args
     }
 
-    /// Headers the browser extension captured (Referer / Origin / Cookie) that yt-dlp needs to
-    /// fetch a sniffed stream. Page URLs of known platforms (YouTube, ...) are left alone so
-    /// their own extractors keep working exactly as before; Cookie is only forwarded for direct
-    /// media URLs (.m3u8 / .mpd / .mp4 ...), where it is the only way to reach protected CDNs.
+    /// Headers captured from the browser extension or user's Advanced panel (`Referer`, `Origin`,
+    /// `Cookie`, `Authorization`, `User-Agent`) forwarded safely to `yt-dlp`.
     pub fn ytdlp_header_pairs(url: &str, headers: &[(String, String)]) -> Vec<(String, String)> {
         if headers.is_empty() || Self::is_youtube_url(url) {
             return Vec::new();
@@ -1028,8 +1111,8 @@ impl MediaExtractor {
             }
             let lname = name.to_ascii_lowercase();
             let allowed = match lname.as_str() {
-                "referer" | "origin" => true,
-                "cookie" => is_direct_media,
+                "referer" | "origin" | "authorization" | "user-agent" => true,
+                "cookie" => is_direct_media || !Self::is_youtube_url(url),
                 _ => false,
             };
             if allowed && !out.iter().any(|(ek, _)| ek.eq_ignore_ascii_case(name)) {
@@ -1057,23 +1140,30 @@ impl MediaExtractor {
         let _ = child.wait().await;
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn run_ytdlp_download(
         client: &Client,
         url: &str,
         dest_dir: &std::path::Path,
+        custom_filename: Option<&str>,
         format_id: Option<&str>,
         extra_headers: &[(String, String)],
         rate_limit_bps: u64,
         max_retries: usize,
+        num_connections: usize,
         progress_tx: tokio::sync::mpsc::Sender<(f64, f64, u64, u64, f64, bool, Option<String>)>,
         mut cancel_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<std::path::PathBuf, String> {
         use tokio::io::AsyncBufReadExt;
+        let started_at = std::time::SystemTime::now();
 
         let bin = match Self::ensure_ytdlp_binary(client).await {
             Ok(b) => b,
             Err(e) => Self::find_ytdlp_binary().ok_or_else(|| format!("Media extractor core not available: {}", e))?,
         };
+        if *cancel_rx.borrow() {
+            return Err("Download cancelled".into());
+        }
 
         // YouTube (and most platforms) serve video and audio as SEPARATE streams for anything
         // above 360p, so FFmpeg is required for virtually every download. Always bootstrap it
@@ -1092,18 +1182,16 @@ impl MediaExtractor {
                 }
             }
         }
+        if *cancel_rx.borrow() {
+            return Err("Download cancelled".into());
+        }
 
         // Without FFmpeg we must NEVER request a `video+audio` combination, otherwise yt-dlp
         // leaves two unmerged part files. Only pick formats that already contain both tracks.
         const SINGLE_STREAM_ONLY: &str =
             "best[ext=mp4][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best";
 
-        let is_audio_only_req = format_id
-            .map(|fid| {
-                let fl = fid.to_lowercase();
-                fl.contains("audio") || fl == "mp3"
-            })
-            .unwrap_or(false);
+        let is_audio_only_req = Self::is_audio_only_format(format_id);
 
         let format_arg_str = match format_id {
             Some(fid) if !fid.is_empty() && fid != "best" && fid != "auto" => {
@@ -1130,7 +1218,39 @@ impl MediaExtractor {
                 }
             }
         };
-        let output_template = dest_dir.join("%(title)s.%(ext)s").to_string_lossy().to_string();
+
+        // Respect explicit user/extension filename when descriptive; otherwise use %(title)s.%(ext)s
+        let custom_stem = custom_filename.and_then(|raw| {
+            let cleaned = crate::engine::downloader::clean_filename(raw.trim());
+            let low = cleaned.to_ascii_lowercase();
+            let is_placeholder = cleaned.is_empty()
+                || low == "video_stream.mp4"
+                || low == "video.mp4"
+                || low == "download"
+                || low == "download.dat"
+                || low == "instagram.mp4"
+                || low == "youtube.mp4"
+                || low == "facebook.mp4"
+                || low == "tiktok.mp4"
+                || low == "watch"
+                || low.starts_with("download_");
+            if is_placeholder {
+                return None;
+            }
+            let stem = std::path::Path::new(&cleaned)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(&cleaned)
+                .trim()
+                .replace('%', "_");
+            if stem.is_empty() { None } else { Some(stem) }
+        });
+
+        let output_template = if let Some(ref stem) = custom_stem {
+            dest_dir.join(format!("{}.%(ext)s", stem)).to_string_lossy().to_string()
+        } else {
+            dest_dir.join("%(title)s.%(ext)s").to_string_lossy().to_string()
+        };
 
         let clean_url = Self::clean_target_url(url);
 
@@ -1147,7 +1267,7 @@ impl MediaExtractor {
             .arg("before_dl:SUPERIDM_SIZES:%(requested_formats.0.filesize,requested_formats.0.filesize_approx,filesize,filesize_approx)s:%(requested_formats.1.filesize,requested_formats.1.filesize_approx)s")
             .arg("--continue");
 
-        for arg in Self::ytdlp_transfer_args(rate_limit_bps, max_retries) {
+        for arg in Self::ytdlp_transfer_args_with_conns(rate_limit_bps, max_retries, num_connections) {
             cmd.arg(arg);
         }
 
@@ -1259,6 +1379,21 @@ impl MediaExtractor {
                 }
                 total_bytes = video_bytes + audio_bytes;
                 if total_bytes > 0 {
+                    // Pre-flight disk space check (require file size + 10 MB safety buffer)
+                    if let Ok(available) = crate::engine::storage::get_available_disk_space(dest_dir) {
+                        let safety_margin = 10 * 1024 * 1024;
+                        if available < total_bytes.saturating_add(safety_margin) {
+                            let req_mb = total_bytes / (1024 * 1024);
+                            let avail_mb = available / (1024 * 1024);
+                            Self::kill_process_tree(&mut child).await;
+                            return Err(format!(
+                                "Not enough disk space: {} MB required, but only {} MB available in {}",
+                                req_mb,
+                                avail_mb,
+                                dest_dir.display()
+                            ));
+                        }
+                    }
                     let _ = progress_tx.send((0.0, 0.0, 0, total_bytes, 0.0, false, None)).await;
                 }
                 continue;
@@ -1464,14 +1599,35 @@ impl MediaExtractor {
             return Err("Download cancelled".into());
         }
         if status.success() {
-            // Auto-recovery: If split .f*.mp4 and .f*.m4a files exist, merge them directly with FFmpeg
-            if let Some(merged_file) = Self::auto_merge_unmerged_parts(client, dest_dir).await {
-                final_path = Some(merged_file);
+            // Derive this task's expected base stem so auto_merge NEVER hijacks a concurrent task's files
+            let task_stem: Option<String> = final_path
+                .as_ref()
+                .and_then(|fp| fp.file_name().and_then(|n| n.to_str()))
+                .map(|fname| {
+                    if let Some(idx) = fname.rfind(".f") {
+                        fname[..idx].to_string()
+                    } else {
+                        std::path::Path::new(fname)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or(fname)
+                            .to_string()
+                    }
+                })
+                .or(custom_stem);
+
+            // Auto-recovery: ONLY merge split `.f*` parts belonging to THIS task
+            if let Some(ref stem) = task_stem {
+                if let Some(merged_file) = Self::auto_merge_unmerged_parts(client, dest_dir, Some(stem.as_str())).await {
+                    final_path = Some(merged_file);
+                }
             }
 
             let final_pb = match final_path {
                 Some(fp) if fp.exists() => fp,
-                _ => Self::find_newest_media_file(dest_dir).await.unwrap_or_else(|| dest_dir.to_path_buf()),
+                _ => Self::find_newest_media_file_since(dest_dir, Some(started_at))
+                    .await
+                    .unwrap_or_else(|| dest_dir.to_path_buf()),
             };
             let disk_bytes = if let Ok(meta) = tokio::fs::metadata(&final_pb).await {
                 meta.len()
@@ -1505,8 +1661,11 @@ impl MediaExtractor {
         }
     }
 
-    /// Find the newest media file downloaded in the destination directory
-    pub async fn find_newest_media_file(dest_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    /// Find the newest media file downloaded in the destination directory (optionally modified at/after `since`).
+    pub async fn find_newest_media_file_since(
+        dest_dir: &std::path::Path,
+        since: Option<std::time::SystemTime>,
+    ) -> Option<std::path::PathBuf> {
         let mut newest: Option<(std::path::PathBuf, std::time::SystemTime)> = None;
         if let Ok(mut entries) = tokio::fs::read_dir(dest_dir).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
@@ -1516,6 +1675,15 @@ impl MediaExtractor {
                     if ext_low == "mp4" || ext_low == "mkv" || ext_low == "webm" || ext_low == "mp3" || ext_low == "m4a" {
                         if let Ok(meta) = entry.metadata().await {
                             if let Ok(modified) = meta.modified() {
+                                if let Some(cutoff) = since {
+                                    // Allow 2s filesystem clock skew
+                                    let adjusted = cutoff
+                                        .checked_sub(std::time::Duration::from_secs(2))
+                                        .unwrap_or(cutoff);
+                                    if modified < adjusted {
+                                        continue;
+                                    }
+                                }
                                 if newest.as_ref().map(|(_, t)| modified > *t).unwrap_or(true) {
                                     newest = Some((path, modified));
                                 }
@@ -1528,8 +1696,14 @@ impl MediaExtractor {
         newest.map(|(p, _)| p)
     }
 
-    /// Automatically find matching video and audio part files in dest_dir and merge them with FFmpeg.
-    pub async fn auto_merge_unmerged_parts(client: &Client, dest_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    /// Automatically find matching video and audio `.fNNN` part files in `dest_dir` and merge with FFmpeg.
+    /// When `expected_stem` is `Some(s)`, only parts matching that exact stem are considered (preventing
+    /// concurrent tasks from hijacking each other's in-progress streams).
+    pub async fn auto_merge_unmerged_parts(
+        client: &Client,
+        dest_dir: &std::path::Path,
+        expected_stem: Option<&str>,
+    ) -> Option<std::path::PathBuf> {
         let mut video_parts = Vec::new();
         let mut audio_parts = Vec::new();
 
@@ -1537,20 +1711,40 @@ impl MediaExtractor {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    // Only genuine yt-dlp format parts: "<title>.f<digits>.<ext>"
-                    let is_part = |exts: &[&str]| -> bool {
-                        let lower = name.to_lowercase();
-                        exts.iter().any(|ext| {
-                            lower.strip_suffix(&format!(".{}", ext))
-                                .and_then(|stem| stem.rfind(".f").map(|i| &stem[i + 2..]))
-                                .map(|digits| !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit() || c == '-'))
-                                .unwrap_or(false)
-                        })
+                    let lower = name.to_lowercase();
+                    let extract_part_info = |exts: &[&str]| -> Option<(String, String)> {
+                        for ext in exts {
+                            if let Some(stem_with_fmt) = lower.strip_suffix(&format!(".{}", ext)) {
+                                if let Some(i) = stem_with_fmt.rfind(".f") {
+                                    let digits = &stem_with_fmt[i + 2..];
+                                    if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit() || c == '-') {
+                                        let orig_base = &name[..i];
+                                        return Some((orig_base.to_string(), digits.to_string()));
+                                    }
+                                }
+                            }
+                        }
+                        None
                     };
-                    if is_part(&["mp4"]) {
-                        video_parts.push(path);
-                    } else if is_part(&["m4a", "webm", "opus"]) {
-                        audio_parts.push(path);
+
+                    if let Some((base, _fmt)) = extract_part_info(&["mp4", "mkv"]) {
+                        if expected_stem.map(|s| s == base).unwrap_or(true) {
+                            video_parts.push((base, path));
+                        }
+                    } else if let Some((base, _fmt)) = extract_part_info(&["m4a", "opus", "aac"]) {
+                        if expected_stem.map(|s| s == base).unwrap_or(true) {
+                            audio_parts.push((base, path));
+                        }
+                    } else if let Some((base, fmt)) = extract_part_info(&["webm"]) {
+                        if expected_stem.map(|s| s == base).unwrap_or(true) {
+                            // YouTube audio-only WebM formats are 249, 250, 251; VP9/AV1 video WebM formats are 242-399+
+                            let is_webm_audio = matches!(fmt.as_str(), "249" | "250" | "251" | "171" | "172");
+                            if is_webm_audio {
+                                audio_parts.push((base, path));
+                            } else {
+                                video_parts.push((base, path));
+                            }
+                        }
                     }
                 }
             }
@@ -1566,20 +1760,8 @@ impl MediaExtractor {
             None => Self::ensure_ffmpeg_binary(client).await.ok()?,
         };
 
-        for vpath in &video_parts {
-            let vname = match vpath.file_name().and_then(|n| n.to_str()) {
-                Some(n) => n,
-                None => continue,
-            };
-            let base_name = match vname.rfind(".f") {
-                Some(idx) => &vname[..idx],
-                None => continue,
-            };
-            let audio_prefix = format!("{}.f", base_name);
-
-            if let Some(apath) = audio_parts.iter().find(|ap| {
-                ap.file_name().and_then(|n| n.to_str()).map(|an| an.starts_with(&audio_prefix)).unwrap_or(false)
-            }) {
+        for (base_name, vpath) in &video_parts {
+            if let Some((_, apath)) = audio_parts.iter().find(|(ab, _)| ab == base_name) {
                 let final_merged = dest_dir.join(format!("{}.mp4", base_name));
                 let mut cmd = tokio::process::Command::new(&ffmpeg_bin);
                 cmd.arg("-y")
@@ -1680,8 +1862,12 @@ impl MediaExtractor {
             let _ = Self::ensure_deno_binary(client).await;
         }
 
-        // 3. Try yt-dlp if available (supports 1000+ complex platforms including YouTube, TikTok, Vimeo)
-        match Self::extract_with_ytdlp(clean_url) {
+        // 3. Try yt-dlp on a blocking worker thread so Tokio async workers are never starved
+        let clean_owned = clean_url.to_string();
+        let ytdlp_res = tokio::task::spawn_blocking(move || Self::extract_with_ytdlp(&clean_owned))
+            .await
+            .map_err(|e| format!("Extractor worker failed: {}", e))?;
+        match ytdlp_res {
             Ok(info) => return Ok(info),
             Err(e) => {
                 // If it's a known video platform, return the actual extraction error — don't fall back to HTML sniffer
@@ -1691,7 +1877,7 @@ impl MediaExtractor {
             }
         }
 
-        // 3. Native HTML & Media Sniffer Fallback
+        // 4. Native HTML & Media Sniffer Fallback
         Self::extract_with_native_sniffer(client, clean_url).await
     }
 
@@ -1705,28 +1891,35 @@ impl MediaExtractor {
             let _ = Self::ensure_deno_binary(client).await;
         }
         let bin = Self::find_ytdlp_binary().ok_or_else(|| "yt-dlp binary not found on system".to_string())?;
+        let is_yt = Self::is_youtube_url(clean_url);
+        let rt_arg = Self::js_runtime_arg();
+        let clean_owned = clean_url_str.clone();
 
-        let mut cmd = Command::new(bin);
-        cmd.arg("-J")
-            .arg("--flat-playlist")
-            .arg("--no-warnings");
-        if !Self::is_youtube_url(clean_url) {
-            cmd.arg("--user-agent").arg(DEFAULT_USER_AGENT);
-        }
-        if let Some(rt) = Self::js_runtime_arg() {
-            cmd.arg("--js-runtimes").arg(rt);
-        }
-        cmd.arg(&clean_url);
+        let output = tokio::task::spawn_blocking(move || {
+            let mut cmd = Command::new(bin);
+            cmd.arg("-J")
+                .arg("--flat-playlist")
+                .arg("--no-warnings")
+                .arg("--socket-timeout")
+                .arg("20");
+            if !is_yt {
+                cmd.arg("--user-agent").arg(DEFAULT_USER_AGENT);
+            }
+            if let Some(rt) = rt_arg {
+                cmd.arg("--js-runtimes").arg(rt);
+            }
+            cmd.arg(&clean_owned);
 
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        }
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
 
-        let output = cmd
-            .output()
-            .map_err(|e| format!("Failed to launch yt-dlp: {}", e))?;
+            cmd.output().map_err(|e| format!("Failed to launch yt-dlp: {}", e))
+        })
+        .await
+        .map_err(|e| format!("Playlist worker failed: {}", e))??;
 
         if !output.status.success() {
             let err_msg = String::from_utf8_lossy(&output.stderr);
@@ -2219,11 +2412,21 @@ impl MediaExtractor {
         })
     }
 
+    /// Find the largest valid UTF-8 character boundary `<= idx` (prevents panic on Arabic/emoji/BOM HTML).
+    fn floor_char_boundary(s: &str, idx: usize) -> usize {
+        let mut i = idx.min(s.len());
+        while i > 0 && !s.is_char_boundary(i) {
+            i -= 1;
+        }
+        i
+    }
+
     fn find_player_iframe(html: &str, base_url: &str) -> Option<String> {
         let mut search_from = 0;
         while let Some(pos) = html[search_from..].find("<iframe") {
             let abs_pos = search_from + pos;
-            let window = &html[abs_pos..abs_pos.min(html.len()) + 500.min(html.len() - abs_pos)];
+            let end_idx = Self::floor_char_boundary(html, abs_pos.saturating_add(500));
+            let window = &html[abs_pos..end_idx];
             if let Some(src_pos) = window.find("src=") {
                 let quote = window[src_pos + 4..].chars().next()?;
                 if quote == '"' || quote == '\'' {
@@ -2269,7 +2472,8 @@ impl MediaExtractor {
         let pattern_alt = format!("property='{}'", property);
 
         let pos = html.find(&pattern).or_else(|| html.find(&pattern_alt))?;
-        let window = &html[pos..pos.min(html.len()) + 400.min(html.len() - pos)];
+        let end_idx = Self::floor_char_boundary(html, pos.saturating_add(400));
+        let window = &html[pos..end_idx];
 
         if let Some(content_pos) = window.find("content=\"") {
             let start = content_pos + 9;
@@ -2292,18 +2496,24 @@ impl MediaExtractor {
         while let Some(pos) = html[search_from..].find(extension) {
             let abs_pos = search_from + pos;
             let start_slice = &html[..abs_pos];
-            let start = start_slice.rfind('"').or_else(|| start_slice.rfind('\'')).unwrap_or(0) + 1;
+            let start = start_slice
+                .rfind('"')
+                .or_else(|| start_slice.rfind('\''))
+                .map(|i| i + 1)
+                .unwrap_or(0);
             let end = abs_pos + extension.len();
 
-            let matched = &html[start..end];
-            if matched.starts_with("http://") || matched.starts_with("https://") {
-                return Some(matched.to_string());
-            } else if matched.starts_with("//") {
-                return Some(format!("https:{}", matched));
-            } else if matched.starts_with('/') {
-                if let Ok(base) = reqwest::Url::parse(base_url) {
-                    if let Some(host) = base.host_str() {
-                        return Some(format!("{}://{}{}", base.scheme(), host, matched));
+            if start <= end && html.is_char_boundary(start) && html.is_char_boundary(end) {
+                let matched = &html[start..end];
+                if matched.starts_with("http://") || matched.starts_with("https://") {
+                    return Some(matched.to_string());
+                } else if matched.starts_with("//") {
+                    return Some(format!("https:{}", matched));
+                } else if matched.starts_with('/') {
+                    if let Ok(base) = reqwest::Url::parse(base_url) {
+                        if let Some(host) = base.host_str() {
+                            return Some(format!("{}://{}{}", base.scheme(), host, matched));
+                        }
                     }
                 }
             }
@@ -2344,13 +2554,57 @@ mod tests {
         assert_eq!(direct.len(), 2);
         assert!(direct.iter().any(|(k, _)| k == "Referer"));
         assert!(direct.iter().any(|(k, _)| k == "Cookie"));
-        // Platform page URL: Cookie is NOT forwarded, Referer is
+        // Non-YouTube page URL: Referer + Cookie both forwarded so login-walled streams work,
+        // unknown headers and CR/LF-injected values still dropped
         let page = MediaExtractor::ytdlp_header_pairs("https://example.com/watch/1", &hdrs);
-        assert_eq!(page.len(), 1);
-        assert_eq!(page[0].0, "Referer");
+        assert_eq!(page.len(), 2);
+        assert!(page.iter().any(|(k, _)| k == "Referer"));
+        assert!(page.iter().any(|(k, _)| k == "Cookie"));
         // YouTube is never touched
         assert!(MediaExtractor::ytdlp_header_pairs("https://www.youtube.com/watch?v=ew0RSjgDgH8", &hdrs).is_empty());
         assert!(MediaExtractor::ytdlp_header_pairs("https://cdn.example/a.mp4", &[]).is_empty());
+    }
+
+    #[test]
+    fn test_is_audio_only_format_compound_vs_audio() {
+        assert!(!MediaExtractor::is_audio_only_format(None));
+        assert!(!MediaExtractor::is_audio_only_format(Some("best")));
+        assert!(!MediaExtractor::is_audio_only_format(Some("bestvideo+bestaudio/best")));
+        assert!(!MediaExtractor::is_audio_only_format(Some("bestvideo[height<=1080]+bestaudio/best")));
+        assert!(!MediaExtractor::is_audio_only_format(Some("bestvideo[height<=2160]+bestaudio/best")));
+        assert!(!MediaExtractor::is_audio_only_format(Some("137+140")));
+        assert!(MediaExtractor::is_audio_only_format(Some("bestaudio/best")));
+        assert!(MediaExtractor::is_audio_only_format(Some("bestaudio[ext=m4a]/bestaudio")));
+        assert!(MediaExtractor::is_audio_only_format(Some("mp3")));
+        assert!(MediaExtractor::is_audio_only_format(Some("140")));
+        assert!(MediaExtractor::is_audio_only_format(Some("251")));
+    }
+
+    #[test]
+    fn test_utf8_arabic_html_sniffer_does_not_panic() {
+        let arabic_pad = "مرحبا بالعالم — فيديو رائع ".repeat(40);
+        let html = format!(
+            "\u{FEFF}<html><head><meta property=\"og:title\" content=\"فيلم تجريبي\"/>{}</head><body><iframe src=\"https://cdn.example/embed/1\">{}</iframe><script>var u=\"https://cdn.example/live.m3u8\";</script></body></html>",
+            arabic_pad, arabic_pad
+        );
+        assert_eq!(
+            MediaExtractor::extract_meta_property(&html, "og:title").as_deref(),
+            Some("فيلم تجريبي")
+        );
+        assert_eq!(
+            MediaExtractor::find_player_iframe(&html, "https://example.com").as_deref(),
+            Some("https://cdn.example/embed/1")
+        );
+        assert_eq!(
+            MediaExtractor::find_stream_url_in_html(&html, ".m3u8", "https://example.com").as_deref(),
+            Some("https://cdn.example/live.m3u8")
+        );
+    }
+
+    #[test]
+    fn test_is_likely_direct_file_does_not_match_mid_title() {
+        assert!(MediaExtractor::is_likely_direct_file("https://cdn.example/setup.exe?v=1"));
+        assert!(!MediaExtractor::is_likely_direct_file("Analyzing virus.exe.mp4"));
     }
 
     #[test]

@@ -417,6 +417,11 @@ input:checked + .toggle-slider:before {
   animation: superidm-popIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@keyframes superidm-popIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ───── Hotkeys Box ───── */
 .hotkey-box {
   display: flex;

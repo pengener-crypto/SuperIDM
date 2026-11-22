@@ -104,8 +104,45 @@ impl DownloadManager {
     }
 }
 
-/// Probe a URL before starting download to discover file metadata.
+/// Build a SessionConfig with inferred headers + user/extension custom headers.
+fn build_session_headers(url: &str, custom_headers: Option<&[(String, String)]>) -> reqwest::header::HeaderMap {
+    let mut session = SessionConfig::new()
+        .with_user_agent(DEFAULT_USER_AGENT)
+        .with_inferred_headers(url);
+
+    if let Some(headers) = custom_headers {
+        for (key, value) in headers {
+            if key.eq_ignore_ascii_case("cookie") {
+                session.parse_cookie_header(value);
+            } else if key.eq_ignore_ascii_case("user-agent") {
+                session = session.with_user_agent(value.as_str());
+            } else if key.eq_ignore_ascii_case("referer") {
+                session.referer = Some(value.clone());
+            } else if key.eq_ignore_ascii_case("origin") {
+                session.origin = Some(value.clone());
+            } else if key.eq_ignore_ascii_case("authorization") {
+                session.authorization = Some(value.clone());
+            } else {
+                session.custom_headers.push((key.clone(), value.clone()));
+            }
+        }
+    }
+
+    session.build_headers()
+}
+
+/// Probe a URL before starting download to discover file metadata (convenience wrapper for tests).
+#[cfg(test)]
 pub async fn probe_url(client: &Client, raw_url: &str) -> Result<ProbeResult, String> {
+    probe_url_with_headers(client, raw_url, None).await
+}
+
+/// Probe a URL with optional custom headers (Authorization, Cookie, Referer, User-Agent, etc.).
+pub async fn probe_url_with_headers(
+    client: &Client,
+    raw_url: &str,
+    custom_headers: Option<&[(String, String)]>,
+) -> Result<ProbeResult, String> {
     let trimmed = raw_url.trim();
     let lower = trimmed.to_ascii_lowercase();
     if lower.starts_with("ftp://") || lower.starts_with("ftps://") {
@@ -124,15 +161,17 @@ pub async fn probe_url(client: &Client, raw_url: &str) -> Result<ProbeResult, St
     let mut suggested_filename = None;
     let mut content_type = None;
 
-    // Try HEAD first with timeout
+    let base_headers = build_session_headers(&url, custom_headers);
+
+    // Try HEAD first with timeout (only parse headers on 2xx success — NEVER parse 405 error body length!)
     let head_fut = client
         .head(&url)
-        .header("User-Agent", DEFAULT_USER_AGENT)
+        .headers(base_headers.clone())
         .send();
 
     if let Ok(Ok(resp)) = tokio::time::timeout(Duration::from_secs(12), head_fut).await {
         let final_url = resp.url().to_string();
-        if resp.status().is_success() || resp.status().as_u16() == 405 {
+        if resp.status().is_success() {
             let headers = resp.headers();
             content_length = headers
                 .get("content-length")
@@ -170,11 +209,11 @@ pub async fn probe_url(client: &Client, raw_url: &str) -> Result<ProbeResult, St
         }
     }
 
-    // If HEAD didn't give Content-Length, try a Range GET probe for bytes 0-0
+    // If HEAD didn't give Content-Length (or returned 405 Method Not Allowed), try Range GET bytes=0-0
     if content_length == 0 {
         let get_fut = client
             .get(&url)
-            .header("User-Agent", DEFAULT_USER_AGENT)
+            .headers(base_headers)
             .header("Range", "bytes=0-0")
             .send();
 
@@ -198,13 +237,24 @@ pub async fn probe_url(client: &Client, raw_url: &str) -> Result<ProbeResult, St
                     .unwrap_or(0);
             }
 
-            if suggested_filename.is_none() {
-                suggested_filename = headers
-                    .get("content-disposition")
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(|v| extract_filename_from_disposition(v))
-                    .or_else(|| extract_filename_from_url(&final_url))
-                    .or_else(|| extract_filename_from_url(&url));
+            if range_resp.status().is_success() || range_resp.status().as_u16() == 206 {
+                if etag.is_none() {
+                    etag = headers.get("etag").and_then(|v| v.to_str().ok()).map(|v| v.to_string());
+                }
+                if last_modified.is_none() {
+                    last_modified = headers.get("last-modified").and_then(|v| v.to_str().ok()).map(|v| v.to_string());
+                }
+                if content_type.is_none() {
+                    content_type = headers.get("content-type").and_then(|v| v.to_str().ok()).map(|v| v.to_string());
+                }
+                if suggested_filename.is_none() {
+                    suggested_filename = headers
+                        .get("content-disposition")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|v| extract_filename_from_disposition(v))
+                        .or_else(|| extract_filename_from_url(&final_url))
+                        .or_else(|| extract_filename_from_url(&url));
+                }
             }
         }
     }
@@ -269,7 +319,7 @@ pub async fn download_chunk_with_retry(
     file_path: PathBuf,
     throttler: BandwidthThrottler,
     event_tx: mpsc::Sender<WorkerEvent>,
-    cancel_rx: watch::Receiver<bool>,
+    mut cancel_rx: watch::Receiver<bool>,
     custom_headers: Option<Vec<(String, String)>>,
     chunk_limits: Option<ChunkLimitMap>,
     max_retries: usize,
@@ -313,7 +363,7 @@ pub async fn download_chunk_with_retry(
             &file_path,
             &throttler,
             &event_tx,
-            &cancel_rx,
+            &mut cancel_rx,
             &custom_headers,
             &chunk_limit,
         )
@@ -392,7 +442,14 @@ pub async fn download_chunk_with_retry(
             reported_err
         );
 
-        tokio::time::sleep(delay).await;
+        tokio::select! {
+            _ = tokio::time::sleep(delay) => {}
+            _ = cancel_rx.changed() => {
+                if *cancel_rx.borrow() {
+                    return;
+                }
+            }
+        }
     }
 }
 
@@ -430,34 +487,11 @@ async fn download_chunk_stream(
     file_path: &Path,
     throttler: &BandwidthThrottler,
     event_tx: &mpsc::Sender<WorkerEvent>,
-    cancel_rx: &watch::Receiver<bool>,
+    cancel_rx: &mut watch::Receiver<bool>,
     custom_headers: &Option<Vec<(String, String)>>,
     chunk_limit: &Arc<AtomicU64>,
 ) -> Result<StreamOutcome, ChunkStreamError> {
-    let mut session = SessionConfig::new()
-        .with_user_agent(DEFAULT_USER_AGENT)
-        .with_inferred_headers(url);
-
-    // Apply custom headers (Authorization, Cookie, Referer, Origin, User-Agent, etc.)
-    if let Some(headers) = custom_headers {
-        for (key, value) in headers {
-            if key.eq_ignore_ascii_case("cookie") {
-                session.parse_cookie_header(value);
-            } else if key.eq_ignore_ascii_case("user-agent") {
-                session = session.with_user_agent(value.as_str());
-            } else if key.eq_ignore_ascii_case("referer") {
-                session.referer = Some(value.clone());
-            } else if key.eq_ignore_ascii_case("origin") {
-                session.origin = Some(value.clone());
-            } else if key.eq_ignore_ascii_case("authorization") {
-                session.authorization = Some(value.clone());
-            } else {
-                session.custom_headers.push((key.clone(), value.clone()));
-            }
-        }
-    }
-
-    let mut req = client.get(url).headers(session.build_headers());
+    let mut req = client.get(url).headers(build_session_headers(url, custom_headers.as_deref()));
 
     if end_byte > start_byte {
         let range_header = format!("bytes={}-{}", start_byte, end_byte);
@@ -467,10 +501,15 @@ async fn download_chunk_stream(
         req = req.header("Range", range_header);
     }
 
-    let resp = req
-        .send()
-        .await
-        .map_err(|e| format!("Connection failed for chunk {}: {}", chunk_index, e))?;
+    let resp = tokio::select! {
+        res = req.send() => res.map_err(|e| format!("Connection failed for chunk {}: {}", chunk_index, e))?,
+        _ = cancel_rx.changed() => {
+            if *cancel_rx.borrow() {
+                return Ok(StreamOutcome { next_offset: start_byte, full_body_eof: false });
+            }
+            return Err(format!("Cancelled chunk {}", chunk_index).into());
+        }
+    };
 
     let status = resp.status();
     if status.as_u16() != 206 && status.as_u16() != 200 {
@@ -525,7 +564,7 @@ async fn download_chunk_stream(
     let mut pending_bytes_reported: u64 = 0;
     let mut last_report_time = std::time::Instant::now();
 
-    while let Some(result) = stream.next().await {
+    loop {
         if *cancel_rx.borrow() {
             if !write_buf.is_empty() {
                 storage::write_at_offset(&mut file, buf_start_offset, &write_buf).await?;
@@ -544,14 +583,59 @@ async fn download_chunk_stream(
             return Ok(StreamOutcome { next_offset: offset, full_body_eof: false }); // Paused
         }
 
+        let next_item = tokio::select! {
+            item = stream.next() => item,
+            _ = cancel_rx.changed() => {
+                if *cancel_rx.borrow() {
+                    if !write_buf.is_empty() {
+                        storage::write_at_offset(&mut file, buf_start_offset, &write_buf).await?;
+                        write_buf.clear();
+                    }
+                    if pending_bytes_reported > 0 {
+                        let _ = event_tx
+                            .send(WorkerEvent::Progress {
+                                chunk_index,
+                                bytes_written: pending_bytes_reported,
+                                new_offset: offset,
+                            })
+                            .await;
+                    }
+                    let _ = file.flush().await;
+                    return Ok(StreamOutcome { next_offset: offset, full_body_eof: false });
+                }
+                continue;
+            }
+        };
+
+        let result = match next_item {
+            Some(r) => r,
+            None => break,
+        };
+
         let bytes = result.map_err(|e| {
             format!("Stream error on chunk {} at offset {}: {}", chunk_index, offset, e)
         })?;
 
         let len = bytes.len() as u64;
 
-        // Apply bandwidth throttling
-        throttler.acquire(bytes.len()).await;
+        // Apply cancellable bandwidth throttling
+        if !throttler.acquire_cancellable(bytes.len(), cancel_rx).await {
+            if !write_buf.is_empty() {
+                storage::write_at_offset(&mut file, buf_start_offset, &write_buf).await?;
+                write_buf.clear();
+            }
+            if pending_bytes_reported > 0 {
+                let _ = event_tx
+                    .send(WorkerEvent::Progress {
+                        chunk_index,
+                        bytes_written: pending_bytes_reported,
+                        new_offset: offset,
+                    })
+                    .await;
+            }
+            let _ = file.flush().await;
+            return Ok(StreamOutcome { next_offset: offset, full_body_eof: false });
+        }
 
         write_buf.extend_from_slice(&bytes);
         offset += len;

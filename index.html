@@ -73,6 +73,10 @@ input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;
 .pri-btn.sel{background:#00f5ff;color:#003739}
 .pri-btn:not(.sel):hover{background:#282a2e}
 .log-e{font-family:'JetBrains Mono';font-size:12px;padding:3px 0;border-bottom:1px solid #1a1c20}
+.log-e.info{color:#cbd5e1}
+.log-e.success{color:#34d399}
+.log-e.warn{color:#fbbf24}
+.log-e.error{color:#f87171}
 @keyframes clipPromptSlideIn{from{transform:translate(-50%,120%);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 #clipPrompt{animation:clipPromptSlideIn .4s cubic-bezier(.16,1,.3,1) forwards;max-width:calc(100vw - 32px)!important}
 
@@ -85,16 +89,37 @@ html:not(.dark) header { background: rgba(255, 255, 255, 0.95) !important; borde
 html:not(.dark) .text-primary { color: #0284c7 !important; }
 html:not(.dark) #pgTitle { color: #0f172a !important; font-weight: 700 !important; }
 html:not(.dark) .text-primary-container { color: #0369a1 !important; }
+html:not(.dark) .bg-primary { background-color: #0284c7 !important; }
+html:not(.dark) .bg-primary\/10 { background-color: rgba(2, 132, 199, 0.08) !important; }
+html:not(.dark) .bg-primary\/15 { background-color: rgba(2, 132, 199, 0.12) !important; }
+html:not(.dark) .bg-primary\/20 { background-color: rgba(2, 132, 199, 0.15) !important; }
+html:not(.dark) .bg-primary\/60 { background-color: rgba(2, 132, 199, 0.6) !important; }
+html:not(.dark) .bg-primary\/70 { background-color: rgba(2, 132, 199, 0.72) !important; }
+html:not(.dark) .border-primary\/20 { border-color: rgba(2, 132, 199, 0.22) !important; }
+html:not(.dark) .border-primary\/30 { border-color: rgba(2, 132, 199, 0.35) !important; }
 html:not(.dark) .bg-primary-container { background-color: #0284c7 !important; color: #ffffff !important; }
 html:not(.dark) .bg-primary-container:hover { background-color: #0369a1 !important; }
+html:not(.dark) .bg-primary-container\/10 { background-color: rgba(2, 132, 199, 0.09) !important; }
+html:not(.dark) .bg-primary-container\/20 { background-color: rgba(2, 132, 199, 0.14) !important; }
 html:not(.dark) .text-on-primary-container { color: #ffffff !important; }
 
-/* Surface containers (Cards, Boxes, Panels) */
-html:not(.dark) .bg-surface-container-lowest { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
+/* Surface containers (Cards, Boxes, Panels, Opacity variants & Hovers) */
+html:not(.dark) .bg-surface-container-lowest,
+html:not(.dark) .bg-surface-container-lowest\/80,
+html:not(.dark) .bg-surface-container-lowest\/90 { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
 html:not(.dark) .bg-surface-container-low { background-color: #ffffff !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important; }
-html:not(.dark) .bg-surface-container { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
-html:not(.dark) .bg-surface-container-high { background-color: #f8fafc !important; border-color: #cbd5e1 !important; }
-html:not(.dark) .bg-surface-container-highest { background-color: #f1f5f9 !important; border-color: #cbd5e1 !important; }
+html:not(.dark) .bg-surface-container,
+html:not(.dark) .bg-surface-container\/50,
+html:not(.dark) .bg-surface-container\/90 { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
+html:not(.dark) .bg-surface-container-high,
+html:not(.dark) .bg-surface-container-high\/40,
+html:not(.dark) .bg-surface-container-high\/60 { background-color: #f8fafc !important; border-color: #cbd5e1 !important; }
+html:not(.dark) .bg-surface-container-highest,
+html:not(.dark) .bg-surface-container-highest\/60 { background-color: #f1f5f9 !important; border-color: #cbd5e1 !important; }
+html:not(.dark) .hover\:bg-surface-container:hover { background-color: #f1f5f9 !important; }
+html:not(.dark) .hover\:bg-surface-container-high:hover { background-color: #e2e8f0 !important; }
+html:not(.dark) .hover\:bg-surface-container-highest:hover { background-color: #e2e8f0 !important; }
+html:not(.dark) .hover\:text-on-surface:hover { color: #0f172a !important; }
 
 /* Typography & Contrast */
 html:not(.dark) .text-on-surface { color: #0f172a !important; font-weight: 600 !important; }
@@ -102,11 +127,16 @@ html:not(.dark) .text-on-surface-variant { color: #334155 !important; font-weigh
 html:not(.dark) .text-on-surface-variant\/50 { color: #64748b !important; }
 html:not(.dark) .text-on-surface-variant\/60 { color: #475569 !important; }
 html:not(.dark) .text-on-surface-variant\/70 { color: #475569 !important; }
+html:not(.dark) .text-cyan-400 { color: #0284c7 !important; }
+html:not(.dark) .text-red-400 { color: #dc2626 !important; }
 
 /* Borders & Outlines */
 html:not(.dark) .border-outline-variant,
+html:not(.dark) .border-outline-variant\/40,
 html:not(.dark) .border-outline-variant\/50,
-html:not(.dark) .border-outline-variant\/60 { border-color: #e2e8f0 !important; }
+html:not(.dark) .border-outline-variant\/60,
+html:not(.dark) .border-outline-variant\/70,
+html:not(.dark) .border-outline-variant\/80 { border-color: #e2e8f0 !important; }
 
 /* Sidebar Navigation */
 html:not(.dark) .slink { color: #475569 !important; font-weight: 500 !important; }
@@ -129,14 +159,29 @@ html:not(.dark) .dl-row { background-color: #ffffff !important; border: 1px soli
 html:not(.dark) .dl-row:hover { border-color: #38bdf8 !important; background-color: #f8fafc !important; }
 html:not(.dark) .det-panel { background: #f8fafc !important; border-top: 1px solid #e2e8f0 !important; color: #334155 !important; }
 
-/* Progress Segments in Light Mode */
+/* Progress Segments & Bandwidth Bars in Light Mode */
 html:not(.dark) .seg-bar { background: #e2e8f0 !important; border-radius: 2px !important; }
 html:not(.dark) .seg.done { background: #0284c7 !important; }
 html:not(.dark) .seg.act { background: #38bdf8 !important; }
 html:not(.dark) .seg.empty { background: #e2e8f0 !important; }
+html:not(.dark) .bw-bar { background: rgba(2, 132, 199, 0.32) !important; }
+html:not(.dark) .bw-bar.pk { background: #0284c7 !important; }
+html:not(.dark) #idmModalProgressBar.from-primary { background: linear-gradient(90deg, #0284c7, #38bdf8) !important; }
+
+/* Toggles, Priority Buttons & Sliders in Light Mode */
+html:not(.dark) .tgl-sl { background: #cbd5e1 !important; }
+html:not(.dark) .tgl-sl:before { background: #ffffff !important; box-shadow: 0 1px 2px rgba(0,0,0,0.18); }
+html:not(.dark) input:checked + .tgl-sl { background: #0284c7 !important; }
+html:not(.dark) input:checked + .tgl-sl:before { background: #ffffff !important; }
+html:not(.dark) .pri-btn { color: #475569 !important; }
+html:not(.dark) .pri-btn:not(.sel):hover { background: #e2e8f0 !important; color: #0f172a !important; }
+html:not(.dark) .pri-btn.sel { background: #0284c7 !important; color: #ffffff !important; }
+html:not(.dark) input[type="range"] { background: #cbd5e1 !important; }
+html:not(.dark) input[type="range"]::-webkit-slider-thumb { background: #0284c7 !important; }
 
 /* Status Badges with Crisp Contrast */
 html:not(.dark) .bg-emerald-500\/15,
+html:not(.dark) .bg-emerald-500\/20,
 html:not(.dark) .border-emerald-500\/30 {
   background-color: #dcfce7 !important;
   color: #15803d !important;
@@ -162,8 +207,18 @@ html:not(.dark) .border-amber-500\/30 {
 }
 html:not(.dark) .text-amber-400 { color: #b45309 !important; font-weight: 700 !important; }
 
-/* Search & Inputs */
-html:not(.dark) input, html:not(.dark) select, html:not(.dark) textarea {
+html:not(.dark) .bg-red-500\/15,
+html:not(.dark) .border-red-500\/30 {
+  background-color: #fee2e2 !important;
+  color: #b91c1c !important;
+  border-color: #fca5a5 !important;
+  font-weight: 700 !important;
+}
+
+/* Search & Text Inputs (never override range/checkbox/radio backgrounds) */
+html:not(.dark) input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) select,
+html:not(.dark) textarea {
   color: #0f172a !important;
   background-color: #ffffff !important;
   border-color: #cbd5e1 !important;
@@ -263,14 +318,14 @@ html[dir="rtl"] #toastBox {
 }
 /* Keep technical paths, code, URLs, and numeric sliders LTR for natural reading */
 html[dir="rtl"] #urlInp,
+html[dir="rtl"] #refModalNewInp,
 html[dir="rtl"] #defSavePath,
 html[dir="rtl"] #modalPath,
 html[dir="rtl"] #extPathDisplay,
 html[dir="rtl"] #extractorCoreLoc,
 html[dir="rtl"] .seg-bar,
 html[dir="rtl"] input[type="range"],
-html[dir="rtl"] code,
-html[dir="rtl"] .font-mono {
+html[dir="rtl"] code {
   direction: ltr !important;
   text-align: left !important;
 }
@@ -320,10 +375,10 @@ html[dir="rtl"] .flex.items-baseline {
   <nav class="flex-1 py-4 px-3">
     <p id="txtDownloadsHdr" class="text-[11px] text-on-surface-variant uppercase tracking-wider px-3 mb-2" style="font-family:'JetBrains Mono'">Downloads</p>
     <ul class="space-y-0.5">
-      <li><a class="slink active" id="nav-downloading" data-act="nav" data-view="downloading"><span class="material-symbols-outlined text-[20px]">downloading</span><span id="txtNavDl" class="text-[14px]" style="font-family:Inter">Downloading</span><span id="bdg-dl" class="ml-auto bg-primary-container text-on-primary-container text-[11px] px-2 py-0.5 rounded-full" style="font-family:'JetBrains Mono'">0</span></a></li>
-      <li><a class="slink" id="nav-all" data-act="nav" data-view="all"><span class="material-symbols-outlined text-[20px]">list</span><span id="txtNavAll" class="text-[14px]" style="font-family:Inter">All Downloads</span><span id="bdg-all" class="ml-auto text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"></span></a></li>
-      <li><a class="slink" id="nav-completed" data-act="nav" data-view="completed"><span class="material-symbols-outlined text-[20px]">check_circle</span><span id="txtNavComp" class="text-[14px]" style="font-family:Inter">Completed</span><span id="bdg-comp" class="ml-auto text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"></span></a></li>
-      <li><a class="slink" id="nav-queued" data-act="nav" data-view="queued"><span class="material-symbols-outlined text-[20px]">schedule</span><span id="txtNavQ" class="text-[14px]" style="font-family:Inter">Queued</span><span id="bdg-q" class="ml-auto text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"></span></a></li>
+      <li><a class="slink active" id="nav-downloading" data-act="nav" data-view="downloading"><span class="material-symbols-outlined text-[20px]">downloading</span><span id="txtNavDl" class="text-[14px]" style="font-family:Inter">Downloading</span><span id="bdg-dl" class="ms-auto bg-primary-container text-on-primary-container text-[11px] px-2 py-0.5 rounded-full" style="font-family:'JetBrains Mono'">0</span></a></li>
+      <li><a class="slink" id="nav-all" data-act="nav" data-view="all"><span class="material-symbols-outlined text-[20px]">list</span><span id="txtNavAll" class="text-[14px]" style="font-family:Inter">All Downloads</span><span id="bdg-all" class="ms-auto text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"></span></a></li>
+      <li><a class="slink" id="nav-completed" data-act="nav" data-view="completed"><span class="material-symbols-outlined text-[20px]">check_circle</span><span id="txtNavComp" class="text-[14px]" style="font-family:Inter">Completed</span><span id="bdg-comp" class="ms-auto text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"></span></a></li>
+      <li><a class="slink" id="nav-queued" data-act="nav" data-view="queued"><span class="material-symbols-outlined text-[20px]">schedule</span><span id="txtNavQ" class="text-[14px]" style="font-family:Inter">Queued</span><span id="bdg-q" class="ms-auto text-[11px] text-on-surface-variant" style="font-family:'JetBrains Mono'"></span></a></li>
     </ul>
     <p id="txtCategoriesHdr" class="text-[11px] text-on-surface-variant uppercase tracking-wider px-3 mb-2 mt-5" style="font-family:'JetBrains Mono'">Categories</p>
     <ul class="space-y-0.5">
@@ -413,7 +468,7 @@ html[dir="rtl"] .flex.items-baseline {
       <button onclick="pauseAll()" data-act="pause-all" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high active:scale-95 transition-all" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">pause</span><span id="btnPauseAllTxt">Pause All</span></button>
       <button onclick="resumeAll()" data-act="resume-all" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high active:scale-95 transition-all" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">play_arrow</span><span id="btnResumeAllTxt">Resume All</span></button>
       <button onclick="clearDone()" data-act="clear-done" class="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container-high active:scale-95 transition-all" style="font-family:Inter"><span class="material-symbols-outlined text-[16px]">delete_sweep</span><span id="btnClearDoneTxt">Clear Done</span></button>
-      <div class="ml-auto flex items-center gap-2">
+      <div class="ms-auto flex items-center gap-2">
         <span class="text-[12px] text-on-surface-variant" style="font-family:'JetBrains Mono'" id="lblSort">Sort:</span>
         <select id="sortSel" class="bg-surface-container-high border border-outline-variant text-on-surface-variant text-[12px] rounded px-2 py-1 outline-none" onchange="renderDLs()" style="font-family:'JetBrains Mono'">
           <option value="date" id="optSortDate">Date Added</option>
@@ -429,7 +484,7 @@ html[dir="rtl"] .flex.items-baseline {
       <div class="flex-1 min-w-0" id="thFileName">File Name &amp; Progress</div>
       <div class="w-28 text-right flex-shrink-0" id="thSpeed">Speed</div>
       <div class="w-24 text-right flex-shrink-0" id="thEta">ETA</div>
-      <div class="w-36 text-center flex-shrink-0" id="thActions">Actions</div>
+      <div class="w-40 text-center flex-shrink-0" id="thActions">Actions</div>
     </div>
     <!-- List -->
     <div id="dlList" class="flex flex-col gap-2"></div>
@@ -478,12 +533,12 @@ html[dir="rtl"] .flex.items-baseline {
       <div class="grid grid-cols-2 gap-6">
         <div>
           <label id="bwLblMaxDn" class="text-[12px] text-on-surface-variant block mb-2" style="font-family:Inter">Max Download Speed (0 = unlimited)</label>
-          <input type="range" id="throttleDn" min="0" max="100" value="0" class="w-full" oninput="applyThrottle()"/>
+          <input type="range" id="throttleDn" min="0" max="100" value="0" class="w-full" oninput="previewThrottleLabel(this.value)" onchange="applyThrottle()"/>
           <div class="text-[12px] text-primary-container mt-1 font-mono" id="throttleDnVal">Unlimited</div>
         </div>
         <div>
           <label id="bwLblMaxConn" class="text-[12px] text-on-surface-variant block mb-2" style="font-family:Inter">Max connections per download</label>
-          <input type="range" id="maxConnBw" min="1" max="32" value="16" class="w-full" oninput="setConnectionsPerDl(this.value)"/>
+          <input type="range" id="maxConnBw" min="1" max="32" value="16" class="w-full" oninput="document.getElementById('maxConnBwVal').textContent=this.value" onchange="setConnectionsPerDl(this.value)"/>
           <div class="text-[12px] text-primary-container mt-1 font-mono" id="maxConnBwVal">16</div>
         </div>
       </div>
@@ -538,15 +593,15 @@ html[dir="rtl"] .flex.items-baseline {
           </div>
           <div>
             <label id="stLblMaxSim" class="text-[12px] text-on-surface-variant block mb-1.5" style="font-family:Inter">Max simultaneous downloads</label>
-            <div class="flex items-center gap-3"><input type="range" min="1" max="10" value="3" id="maxSimSldr" class="flex-1" oninput="setMaxSimDownloads(this.value)"/><span class="text-[13px] text-primary-container" id="maxSimV" style="font-family:'JetBrains Mono'">3</span></div>
+            <div class="flex items-center gap-3"><input type="range" min="1" max="10" value="3" id="maxSimSldr" class="flex-1" oninput="document.getElementById('maxSimV').textContent=this.value" onchange="setMaxSimDownloads(this.value)"/><span class="text-[13px] text-primary-container" id="maxSimV" style="font-family:'JetBrains Mono'">3</span></div>
           </div>
           <div>
             <label id="stLblConnPerDl" class="text-[12px] text-on-surface-variant block mb-1.5" style="font-family:Inter">Connections per download</label>
-            <div class="flex items-center gap-3"><input type="range" min="1" max="32" value="16" id="maxConnSet" class="flex-1" oninput="setConnectionsPerDl(this.value)"/><span class="text-[13px] text-primary-container" id="maxConnSetV" style="font-family:'JetBrains Mono'">16</span></div>
+            <div class="flex items-center gap-3"><input type="range" min="1" max="32" value="16" id="maxConnSet" class="flex-1" oninput="document.getElementById('maxConnSetV').textContent=this.value" onchange="setConnectionsPerDl(this.value)"/><span class="text-[13px] text-primary-container" id="maxConnSetV" style="font-family:'JetBrains Mono'">16</span></div>
           </div>
           <div>
             <label id="stLblAutoRetry" class="text-[12px] text-on-surface-variant block mb-1.5" style="font-family:Inter">Auto-retry on failure</label>
-            <div class="flex items-center gap-3"><input type="range" min="0" max="10" value="3" id="retrySldr" class="flex-1" oninput="setAutoRetry(this.value)"/><span class="text-[13px] text-primary-container" id="retryV" style="font-family:'JetBrains Mono'">3</span></div>
+            <div class="flex items-center gap-3"><input type="range" min="0" max="10" value="3" id="retrySldr" class="flex-1" oninput="document.getElementById('retryV').textContent=this.value" onchange="setAutoRetry(this.value)"/><span class="text-[13px] text-primary-container" id="retryV" style="font-family:'JetBrains Mono'">3</span></div>
           </div>
         </div>
       </div>
@@ -558,6 +613,7 @@ html[dir="rtl"] .flex.items-baseline {
           <div class="flex items-center justify-between"><span id="stLblMinTray" class="text-[13px] text-on-surface" style="font-family:Inter">Minimize to system tray</span><label class="tgl-sw"><input type="checkbox" id="minTrayOpt" checked onchange="toggleMinTray()"/><span class="tgl-sl"></span></label></div>
           <div class="flex items-center justify-between"><span id="stLblSoundAlert" class="text-[13px] text-on-surface" style="font-family:Inter">Sound alert on completion</span><label class="tgl-sw"><input type="checkbox" id="soundAlertOpt" onchange="toggleSoundAlert()"/><span class="tgl-sl"></span></label></div>
           <div class="flex items-center justify-between"><span id="stLblForceHttps" class="text-[13px] text-on-surface" style="font-family:Inter">Force HTTPS only</span><label class="tgl-sw"><input type="checkbox" id="forceHttpsOpt" checked onchange="toggleForceHttps()"/><span class="tgl-sl"></span></label></div>
+          <div class="flex items-center justify-between"><span id="stLblSkipPrompt" class="text-[13px] text-on-surface" style="font-family:Inter">Auto-start browser downloads (skip dialog)</span><label class="tgl-sw"><input type="checkbox" id="skipPromptSetOpt" onchange="setSkipDownloadPrompt(this.checked)"/><span class="tgl-sl"></span></label></div>
         </div>
       </div>
       <!-- Browser Integration Card -->
@@ -690,7 +746,7 @@ html[dir="rtl"] .flex.items-baseline {
               <span class="font-bold text-on-surface" id="stHotkeysTitle">مفاتيح التحكم والاختصارات السريعة:</span>
               <div class="text-on-surface-variant flex flex-wrap gap-x-4 gap-y-1">
                 <span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-highest border border-outline-variant font-mono text-[10px] text-primary">Alt + Click</kbd> <span id="stHotkeyAltDesc">تجاوز SuperIDM والتحميل عبر المتصفح العادي</span></span>
-                <span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-highest border border-outline-variant font-mono text-[10px] text-primary">Ctrl + Click</kbd> <span id="stHotkeyCtrlDesc">إجبار التحميل عبر SuperIDM لأي رابط</span></span>
+                <span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-highest border border-outline-variant font-mono text-[10px] text-primary">Ctrl + Shift + Click</kbd> <span id="stHotkeyCtrlDesc">إجبار التحميل عبر SuperIDM لأي رابط</span></span>
               </div>
             </div>
           </div>
@@ -815,8 +871,8 @@ html[dir="rtl"] .flex.items-baseline {
       <!-- URL -->
       <div class="space-y-2">
         <label id="modalLblSrcUrl" class="text-[11px] text-on-surface-variant uppercase tracking-wider" style="font-family:'JetBrains Mono'">Source URL</label>
-        <div class="relative flex items-center bg-surface-container-lowest rounded border border-outline-variant input-glow transition-colors">
-          <span class="material-symbols-outlined text-on-surface-variant ml-3 absolute text-[20px]">link</span>
+        <div dir="ltr" class="relative flex items-center bg-surface-container-lowest rounded border border-outline-variant input-glow transition-colors">
+          <span class="material-symbols-outlined text-on-surface-variant left-3 absolute text-[20px]">link</span>
           <input id="urlInp" type="text" class="w-full bg-transparent border-none text-on-surface py-3 pl-10 pr-28 focus:ring-0 outline-none text-[13px]" placeholder="Paste link here..." style="font-family:'JetBrains Mono'" oninput="detectFT()" onkeydown="if(event.key==='Enter')startDL()"/>
           <div id="ftBadge" class="absolute right-2 flex items-center bg-surface-container px-2 py-1 rounded hidden">
             <span class="w-1.5 h-1.5 rounded-full bg-primary-container mr-1.5 animate-pulse"></span>
@@ -871,7 +927,7 @@ html[dir="rtl"] .flex.items-baseline {
           <button id="modalPresetMus" type="button" onclick="fillSample('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3')" data-act="preset" data-url="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" class="text-[11px] bg-primary-container/20 hover:bg-primary-container/30 text-primary-container border border-primary-container/40 px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">🎵 Sample Music (.mp3)</button>
           <button id="modalPreset10M" type="button" onclick="fillSample('https://proof.ovh.net/files/10Mb.dat')" data-act="preset" data-url="https://proof.ovh.net/files/10Mb.dat" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">10MB Benchmark</button>
           <button id="modalPresetPaste" type="button" onclick="pasteClipToInp()" data-act="paste-clip" class="text-[11px] bg-surface-container-highest hover:bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant px-2 py-0.5 rounded transition-all active:scale-95" style="font-family:'JetBrains Mono'">📋 Paste</button>
-          <button id="batchTogBtn" onclick="togBatch()" class="text-[11px] text-primary hover:text-primary-container ml-auto" style="font-family:'JetBrains Mono'" data-act="tog-batch">+ Batch mode</button>
+          <button id="batchTogBtn" onclick="togBatch()" class="text-[11px] text-primary hover:text-primary-container ms-auto" style="font-family:'JetBrains Mono'" data-act="tog-batch">+ Batch mode</button>
         </div>
         <div id="batchArea" class="hidden space-y-2 mt-2">
           <textarea id="batchInp" class="w-full bg-surface-container-lowest border border-outline-variant text-on-surface text-[12px] rounded p-3 outline-none focus:border-primary-container min-h-[90px] resize-y" placeholder="One URL per line for batch download..." style="font-family:'JetBrains Mono'"></textarea>
@@ -957,13 +1013,13 @@ html[dir="rtl"] .flex.items-baseline {
       <div class="flex items-center gap-3">
         <button id="modalBtnQueue" type="button" onclick="queueDL()" class="px-4 py-2 text-[13px] text-on-surface-variant border border-outline-variant rounded hover:bg-surface-container transition-colors active:scale-95 flex items-center gap-1.5" style="font-family:Inter"><span class="material-symbols-outlined text-[16px] align-middle">schedule</span><span id="modalBtnQueueTxt">Queue for Later</span></button>
         <label class="flex items-center gap-1.5 text-[11px] text-on-surface-variant cursor-pointer select-none">
-          <input type="checkbox" id="chkSkipPromptNext" onchange="localStorage.setItem('superidm_skip_download_prompt', this.checked ? 'true' : 'false')" class="rounded border-outline-variant text-primary focus:ring-0">
+          <input type="checkbox" id="chkSkipPromptNext" onchange="setSkipDownloadPrompt(this.checked)" class="rounded border-outline-variant text-primary focus:ring-0">
           <span id="lblSkipPromptNext">بدء التحميل تلقائياً دون إظهار هذه النافذة مستقبلاً</span>
         </label>
       </div>
       <div class="flex gap-2">
         <button id="modalBtnCancel" type="button" onclick="closeAddModal()" class="px-5 py-2 text-[13px] text-on-surface border border-outline-variant rounded hover:bg-surface-container transition-colors active:scale-95" style="font-family:Inter">Cancel</button>
-        <button id="btnStartDL" type="button" onclick="startDL()" class="px-5 py-2 text-[13px] text-background bg-primary-container hover:bg-primary-fixed rounded flex items-center gap-2 transition-all active:scale-95 font-semibold" style="font-family:Inter;box-shadow:0 0 18px rgba(0,245,255,.25)">
+        <button id="btnStartDL" type="button" onclick="startDL()" class="px-5 py-2 text-[13px] text-on-primary-container bg-primary-container hover:bg-primary-fixed rounded flex items-center gap-2 transition-all active:scale-95 font-semibold" style="font-family:Inter;box-shadow:0 0 18px rgba(0,245,255,.25)">
           <span class="material-symbols-outlined text-[16px]" style="font-variation-settings:'FILL' 1">rocket_launch</span><span id="btnStartDLTxt">Start Download</span>
         </button>
       </div>
@@ -1132,15 +1188,15 @@ html[dir="rtl"] .flex.items-baseline {
                 اختر متصفحك لفتح صفحة الإضافات بنقرة واحدة مباشرة:
               </p>
               <div class="flex items-center gap-2 flex-wrap">
-                <button type="button" onclick="openBrowserExtensionsPage('edge')" class="px-2.5 py-1 bg-surface-container-highest hover:bg-surface-container-high border border-outline-variant text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95">
+                <button type="button" onclick="openBrowserExtensionsPage('edge_dev')" class="px-2.5 py-1 bg-surface-container-highest hover:bg-surface-container-high border border-outline-variant text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95">
                   <span class="w-3.5 h-3.5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[9px]">E</span>
                   <span id="manBtnExtEdge">صفحة إضافات Edge</span>
                 </button>
-                <button type="button" onclick="openBrowserExtensionsPage('chrome')" class="px-2.5 py-1 bg-surface-container-highest hover:bg-surface-container-high border border-outline-variant text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95">
+                <button type="button" onclick="openBrowserExtensionsPage('chrome_dev')" class="px-2.5 py-1 bg-surface-container-highest hover:bg-surface-container-high border border-outline-variant text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95">
                   <span class="w-3.5 h-3.5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[9px]">G</span>
                   <span id="manBtnExtChrome">صفحة إضافات Chrome</span>
                 </button>
-                <button type="button" onclick="openBrowserExtensionsPage('brave')" class="px-2.5 py-1 bg-surface-container-highest hover:bg-surface-container-high border border-outline-variant text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95">
+                <button type="button" onclick="openBrowserExtensionsPage('brave_dev')" class="px-2.5 py-1 bg-surface-container-highest hover:bg-surface-container-high border border-outline-variant text-on-surface rounded text-[11px] flex items-center gap-1 transition-all active:scale-95">
                   <span class="w-3.5 h-3.5 rounded bg-primary/20 text-primary flex items-center justify-center font-bold text-[9px]">B</span>
                   <span id="manBtnExtBrave">صفحة إضافات Brave</span>
                 </button>
@@ -1153,9 +1209,9 @@ html[dir="rtl"] .flex.items-baseline {
             <div class="w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-[12px] flex-shrink-0 mt-0.5">3</div>
             <div class="flex-1 min-w-0">
               <p class="font-semibold text-on-surface text-[12px]" id="manStep3Hdr">تفعيل خيار "وضع المطور" (Developer mode)</p>
-              <p class="text-[11px] text-on-surface-variant leading-relaxed" id="manStep3Desc">
-                • في <b>Edge</b>: ستجد في القائمة الجانبية اليسرى أو أعلى الصفحة خيار "وضع المطور"، اضغط عليه لتفعيله (المفتاح الأزرق).<br/>
-                • في <b>Chrome / Brave</b>: ستجد في الزاوية العلوية اليمنى مفتاح "Developer mode"، قم بتشغيله.
+              <p class="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-line" id="manStep3Desc">
+                • في Edge: ستجد في القائمة الجانبية اليسرى أو أعلى الصفحة خيار "وضع المطور"، اضغط عليه لتفعيله (المفتاح الأزرق).
+• في Chrome / Brave: ستجد في الزاوية العلوية اليمنى مفتاح "Developer mode"، قم بتشغيله.
               </p>
             </div>
           </div>
@@ -1165,9 +1221,9 @@ html[dir="rtl"] .flex.items-baseline {
             <div class="w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-[12px] flex-shrink-0 mt-0.5">4</div>
             <div class="flex-1 min-w-0">
               <p class="font-semibold text-on-surface text-[12px]" id="manStep4Hdr">تحميل وتثبيت الإضافة</p>
-              <p class="text-[11px] text-on-surface-variant leading-relaxed" id="manStep4Desc">
-                • <b>الأسهل:</b> اسحب مجلد <code class="text-primary font-mono font-bold">extension</code> الذي فُتح لك وأفلته بالماوس داخل صفحة المتصفح.<br/>
-                • <b>أو:</b> اضغط زر <b>"تحميل حزمة مفكوكة" (Load unpacked)</b> في أعلى صفحة المتصفح واختر مجلد extension الذي فُتح لك.
+              <p class="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-line" id="manStep4Desc">
+                • الأسهل: اسحب مجلد extension الذي فُتح لك وأفلته بالماوس داخل صفحة المتصفح.
+• أو: اضغط زر "تحميل حزمة مفكوكة" (Load unpacked) في أعلى صفحة المتصفح واختر مجلد extension الذي فُتح لك.
               </p>
             </div>
           </div>
@@ -1232,8 +1288,8 @@ html[dir="rtl"] .flex.items-baseline {
           <label class="text-[11px] text-on-surface-variant uppercase tracking-wider font-mono" id="refModalLblNewUrl">الرابط المباشر الجديد</label>
           <span class="text-[10px] text-primary" id="refModalLblTip">(أو اتركه فارغاً لإعادة التوليد التلقائي)</span>
         </div>
-        <div class="relative flex items-center bg-surface-container-lowest rounded border border-outline-variant input-glow transition-colors">
-          <span class="material-symbols-outlined text-on-surface-variant ml-3 absolute text-[18px]">add_link</span>
+        <div dir="ltr" class="relative flex items-center bg-surface-container-lowest rounded border border-outline-variant input-glow transition-colors">
+          <span class="material-symbols-outlined text-on-surface-variant left-3 absolute text-[18px]">add_link</span>
           <input id="refModalNewInp" type="text" class="w-full bg-transparent border-none text-on-surface py-2.5 pl-9 pr-24 focus:ring-0 outline-none text-[12px] font-mono" placeholder="https://..." onkeydown="if(event.key==='Enter')submitRefreshLink()"/>
           <button type="button" onclick="pasteClipToRefresh()" class="absolute right-1.5 px-2.5 py-1 text-[11px] bg-surface-container-high hover:bg-surface-container-highest text-primary font-medium rounded flex items-center gap-1 transition-all">
             <span class="material-symbols-outlined text-[14px]">content_paste</span>
@@ -1303,7 +1359,7 @@ html[dir="rtl"] .flex.items-baseline {
       </div>
       <div class="flex items-center gap-2.5">
         <button onclick="closePlaylistModal()" class="px-4 py-2 text-[12px] text-on-surface border border-outline-variant rounded hover:bg-surface-container transition-all active:scale-95" id="btnCancelPlaylist">Cancel</button>
-        <button onclick="startPlaylistBatchDownload()" id="btnStartPlaylistDL" class="px-5 py-2 text-[12px] text-background bg-primary-container hover:bg-primary-fixed rounded flex items-center gap-1.5 font-semibold transition-all active:scale-95 shadow-md">
+        <button onclick="startPlaylistBatchDownload()" id="btnStartPlaylistDL" class="px-5 py-2 text-[12px] text-on-primary-container bg-primary-container hover:bg-primary-fixed rounded flex items-center gap-1.5 font-semibold transition-all active:scale-95 shadow-md">
           <span class="material-symbols-outlined text-[16px]">rocket_launch</span>
           <span id="btnStartPlaylistDLTxt">Download Selected</span>
         </button>
@@ -1544,27 +1600,31 @@ function bindTauriEvents() {
       listenFn('download_progress', (event) => {
         const p = event.payload || event;
         if (!p || !p.id) return;
-        let dl = dls.find(d => String(d.id) === String(p.id));
-        if (!dl) {
-          dl = dls.find(d => d.status === 'downloading' && (String(d.id).startsWith('task-') || d.downloaded_bytes === 0));
-          if (dl) dl.id = String(p.id);
-        }
+        const dl = dls.find(d => String(d.id) === String(p.id));
         if (dl) {
           const st = mapStatus(p.status);
           if (dl._userPausedAt && (Date.now() - dl._userPausedAt) < 1500 && st === 'downloading') {
             return;
           }
           const isComp = st === 'complete';
+          const restartedFromZero = st === 'downloading' && dl.status !== 'downloading' && (p.downloaded_bytes === 0);
           if (p.destination) dl.destination = p.destination;
           if (p.filename) {
             dl.filename = p.filename;
             dl.name = p.filename;
+            const fiNew = getFI(p.filename);
+            if (fiNew && fiNew.i !== 'download') {
+              dl.icon = fiNew.i;
+              dl.label = fiNew.l;
+            }
           }
           if (p.total_bytes !== undefined && p.total_bytes > 0) {
             dl.total_bytes = p.total_bytes;
           }
           if (p.downloaded_bytes !== undefined) {
-            dl.downloaded_bytes = Math.max(dl.downloaded_bytes || 0, p.downloaded_bytes);
+            dl.downloaded_bytes = restartedFromZero
+              ? p.downloaded_bytes
+              : Math.max(dl.downloaded_bytes || 0, p.downloaded_bytes);
           }
           dl.speed = p.speed !== undefined ? p.speed : (dl.speed || 0);
           dl.eta_secs = p.eta_secs !== undefined ? p.eta_secs : 0;
@@ -1578,6 +1638,7 @@ function bindTauriEvents() {
             const alreadyComplete = dl.status === 'complete';
             dl.status = 'complete';
             dl.progress = 1.0;
+            delete dl._localQueued;
             if (dl.total_bytes > 0) dl.downloaded_bytes = dl.total_bytes;
             else if (dl.downloaded_bytes > 0) dl.total_bytes = dl.downloaded_bytes;
             dl.speed = 0;
@@ -1591,10 +1652,13 @@ function bindTauriEvents() {
             }
             renderDLs();
           } else {
-            // Strictly monotonic: progress never retreats
-            dl.progress = Math.min(0.99, Math.max(dl.progress || 0, rawProg));
+            // Strictly monotonic within an active transfer, but allow reset on fresh restart
+            dl.progress = restartedFromZero
+              ? Math.min(0.99, Math.max(0, rawProg))
+              : Math.min(0.99, Math.max(dl.progress || 0, rawProg));
             const stChanged = dl.status !== st;
             dl.status = st;
+            if (st === 'downloading') delete dl._localQueued;
             if (stChanged) {
               renderDLs();
             } else {
@@ -1693,7 +1757,7 @@ let curPri = 'High';
 let batchMode = false;
 let logs = [];
 let peakDn = 0;
-let bwH = { dn: Array(30).fill(0), up: Array(30).fill(0.1) };
+let bwH = { dn: Array(30).fill(0) };
 let schedTimer = null;
 let clipInt = null;
 let lastClip = '';
@@ -1774,23 +1838,42 @@ function mapStatus(s) {
 }
 
 // ════════ BACKEND TASK SYNC ════════
+let hasCompletedInitialSync = false;
+
 async function syncFromBackend() {
   if (!hasTauriIPC()) return;
   try {
     const tasks = await tauriCall('get_all_tasks');
     if (!tasks || !Array.isArray(tasks)) return;
 
-    // Purge any orphaned local placeholders
-    if (tasks.length > 0) {
-      dls = dls.filter(d => !String(d.id).startsWith('task-') || tasks.some(t => String(t.id) === String(d.id)));
-    }
-
     const prevLen = dls.length;
     let hasNewTasks = false;
 
+    // On first startup sync, demote any stale localStorage 'downloading' task that isn't active in Rust
+    if (!hasCompletedInitialSync) {
+      hasCompletedInitialSync = true;
+      const backendIds = new Set(tasks.map(t => String(t.id)));
+      dls.forEach(d => {
+        if (d.status === 'downloading' && !backendIds.has(String(d.id))) {
+          d.status = 'paused';
+          d.speed = 0;
+          hasNewTasks = true;
+        }
+      });
+    }
+
+    // Never purge locally queued tasks (`d.status === 'queued'`); only purge dead non-queued local placeholders
+    if (tasks.length > 0) {
+      dls = dls.filter(d =>
+        !String(d.id).startsWith('task-') ||
+        d.status === 'queued' ||
+        tasks.some(t => String(t.id) === String(d.id))
+      );
+    }
+
     tasks.forEach(t => {
       let dl = dls.find(d => String(d.id) === String(t.id));
-      const fi = getFI(t.url);
+      const fi = getFI(t.filename || t.url);
       const fname = t.filename || fi.n;
 
       if (!dl) {
@@ -1813,7 +1896,7 @@ async function syncFromBackend() {
           addedAt: t.created_at || Date.now(),
           destination: t.destination || savePth,
           server: t.url && t.url.includes('://') ? t.url.split('/')[2] : 'server',
-          protocol: t.url && t.url.startsWith('https') ? 'HTTPS' : 'HTTP',
+          protocol: t.url && /^https:/i.test(t.url) ? 'HTTPS' : 'HTTP',
           expanded: false,
           bwH: Array(10).fill(0),
           eta_secs: t.eta_secs || 0,
@@ -1822,11 +1905,23 @@ async function syncFromBackend() {
         dls.push(dl);
       } else {
         const newStatus = mapStatus(t.status);
-        if (dl.status !== newStatus) {
+        // Honor user pause grace window and local overflow queue marker
+        if (dl._userPausedAt && (Date.now() - dl._userPausedAt) < 1500 && newStatus === 'downloading') {
+          return;
+        }
+        const effectiveStatus = (dl._localQueued && (newStatus === 'paused' || newStatus === 'error'))
+          ? 'queued'
+          : newStatus;
+        if (effectiveStatus === 'downloading' || effectiveStatus === 'complete') {
+          delete dl._localQueued;
+        }
+
+        const restartedFromZero = effectiveStatus === 'downloading' && dl.status !== 'downloading' && (t.downloaded_bytes === 0);
+        if (dl.status !== effectiveStatus) {
           const wasDownloading = dl.status === 'downloading';
-          dl.status = newStatus;
+          dl.status = effectiveStatus;
           hasNewTasks = true;
-          if (wasDownloading && newStatus === 'complete') {
+          if (wasDownloading && effectiveStatus === 'complete') {
             addLog('success', `[COMPLETED] ${dl.filename || dl.name} — ${fmtSz(dl.total_bytes)}`);
             playCompletionChime();
             if (document.getElementById('showToastOpt')?.checked) showCompT(dl);
@@ -1836,7 +1931,7 @@ async function syncFromBackend() {
             if (autoShow) {
               showIdmModal(String(t.id));
             }
-          } else if (wasDownloading && (newStatus === 'paused' || newStatus === 'error')) {
+          } else if (wasDownloading && (effectiveStatus === 'paused' || effectiveStatus === 'error')) {
             processQueue();
           }
         }
@@ -1844,6 +1939,10 @@ async function syncFromBackend() {
         const prevDest = dl.destination;
         dl.filename = fname;
         dl.name = fname;
+        if (fi.i !== 'download') {
+          dl.icon = fi.i;
+          dl.label = fi.l;
+        }
         if (t.destination) dl.destination = t.destination;
         if (t.url) dl.url = t.url;
         if (t.num_connections) dl.connections = t.num_connections;
@@ -1852,18 +1951,22 @@ async function syncFromBackend() {
           dl.total_bytes = t.total_bytes;
         }
         if (t.downloaded_bytes !== undefined) {
-          dl.downloaded_bytes = Math.max(dl.downloaded_bytes || 0, t.downloaded_bytes);
+          dl.downloaded_bytes = restartedFromZero
+            ? t.downloaded_bytes
+            : Math.max(dl.downloaded_bytes || 0, t.downloaded_bytes);
         }
         if (dl.filename !== prevFname || dl.destination !== prevDest) {
           persistLocalDls();
         }
-        dl.speed = t.speed !== undefined ? t.speed : dl.speed;
-        dl.eta_secs = t.eta_secs || 0;
+        dl.speed = effectiveStatus === 'downloading' ? (t.speed !== undefined ? t.speed : dl.speed) : 0;
+        dl.eta_secs = effectiveStatus === 'downloading' ? (t.eta_secs || 0) : 0;
         const rawProg = t.progress !== undefined && t.progress > 0 ? t.progress : (dl.total_bytes > 0 ? dl.downloaded_bytes / dl.total_bytes : 0);
         if (dl.status === 'complete') {
           dl.progress = 1.0;
         } else {
-          dl.progress = Math.min(0.99, Math.max(dl.progress || 0, rawProg));
+          dl.progress = restartedFromZero
+            ? Math.min(0.99, Math.max(0, rawProg))
+            : Math.min(0.99, Math.max(dl.progress || 0, rawProg));
         }
         if (dl.status === 'downloading') {
           dl.bwH = [...dl.bwH.slice(1), (dl.speed || 0) / 1048576];
@@ -1903,10 +2006,14 @@ function persistLocalDls() {
       status: d.status,
       speed: d.speed,
       connections: d.connections,
+      supports_range: d.supports_range,
       priority: d.priority,
       addedAt: d.addedAt,
       destination: d.destination,
-      progress: d.progress
+      progress: d.progress,
+      format: d.format,
+      headers: d.headers,
+      _localQueued: d._localQueued || undefined
     }));
     localStorage.setItem('superidm_dls', JSON.stringify(toSave));
   } catch (e) {}
@@ -1918,11 +2025,18 @@ function loadLocalDls() {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        let maxLocalNum = 0;
         dls = parsed.map(t => {
-          const fi = getFI(t.url || '');
+          const idStr = String(t.id);
+          const m = idStr.match(/^task-(\d+)$/);
+          if (m) {
+            const num = parseInt(m[1], 10);
+            if (num > maxLocalNum) maxLocalNum = num;
+          }
+          const fi = getFI(t.filename || t.name || t.url || '');
           const fname = t.filename || t.name || fi.n;
           return {
-            id: String(t.id),
+            id: idStr,
             url: t.url,
             name: fname,
             filename: fname,
@@ -1934,20 +2048,41 @@ function loadLocalDls() {
             status: t.status || 'complete',
             speed: 0,
             connections: t.connections || gMaxConn,
+            supports_range: t.supports_range !== false,
             priority: t.priority || 'Normal',
             addedAt: t.addedAt || Date.now(),
             destination: t.destination || savePth,
             server: t.url && t.url.includes('://') ? t.url.split('/')[2] : 'server',
-            protocol: t.url && t.url.startsWith('https') ? 'HTTPS' : 'HTTP',
+            protocol: t.url && /^https:/i.test(t.url) ? 'HTTPS' : 'HTTP',
             expanded: false,
             bwH: Array(10).fill(0),
             eta_secs: 0,
-            progress: t.progress !== undefined ? t.progress : (t.total_bytes > 0 ? t.downloaded_bytes / t.total_bytes : 0)
+            progress: t.progress !== undefined ? t.progress : (t.total_bytes > 0 ? t.downloaded_bytes / t.total_bytes : 0),
+            format: t.format || undefined,
+            headers: t.headers || undefined,
+            _localQueued: Boolean(t._localQueued)
           };
         });
+        nid = Math.max(nid, maxLocalNum + 1);
       }
     }
   } catch (e) {}
+}
+
+function toBase64Utf8(str) {
+  const bytes = new TextEncoder().encode(String(str));
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) {
+    bin += String.fromCharCode(bytes[i]);
+  }
+  return btoa(bin);
+}
+
+function isAudioOnlyFormat(fmt) {
+  if (!fmt) return false;
+  const f = String(fmt).toLowerCase().trim();
+  if (f.includes('+') || f.includes('video') || f === 'best') return false;
+  return f.includes('audio') || f === 'mp3' || f === 'm4a' || f === 'opus' || f === 'flac' || f === 'wav' || f === '140' || f === '251';
 }
 
 // ════════ DOWNLOAD ACTIONS ════════
@@ -1960,30 +2095,32 @@ async function addDL(rawUrl, opts = {}) {
     return;
   }
   const forceHttps = document.getElementById('forceHttpsOpt')?.checked ?? true;
-  if (forceHttps && url.startsWith('http://')) {
+  if (forceHttps && /^http:\/\//i.test(url)) {
     url = 'https://' + url.substring(7);
   }
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+  if (!/^https?:\/\//i.test(url)) {
     url = 'https://' + url;
   }
 
-  const { i, l, c, n } = getFI(url);
+  const { i, l, c, n } = getFI(opts.filename || opts.name || url);
   const finalName = opts.filename || opts.name || (n && n !== 'download' && n.includes('.') && !/^[a-f0-9]{24,64}$/i.test(n) ? n : undefined);
+  const displayName = finalName || n || url;
   const conn = opts.conn || gMaxConn;
   const cat = (opts.cat && opts.cat !== 'Auto' && opts.cat !== 'Auto-detect') ? opts.cat : c;
   const pri = opts.pri === 'High' ? 1 : 0;
   const simTot = opts.tot || 0;
+  const destDir = opts.destination || savePth;
 
   const activeCount = dls.filter(d => d.status === 'downloading').length;
   const shouldQueue = opts.status === 'queued' || (activeCount >= gMaxActive);
 
   if (hasTauriIPC() && !shouldQueue) {
-    addLog('info', `[STARTING] ${finalName || n} — requesting engine...`);
+    addLog('info', `[STARTING] ${displayName} — requesting engine...`);
     try {
       const taskId = await tauriCall('start_download', {
         request: {
           url: url,
-          destination: savePth,
+          destination: destDir,
           filename: finalName,
           format: opts.format || undefined,
           numConnections: conn,
@@ -1993,7 +2130,7 @@ async function addDL(rawUrl, opts = {}) {
           headers: opts.headers || undefined
         },
         url: url,
-        destination: savePth,
+        destination: destDir,
         filename: finalName,
         format: opts.format || undefined,
         numConnections: conn,
@@ -2004,10 +2141,12 @@ async function addDL(rawUrl, opts = {}) {
       });
 
       if (taskId) {
-        addLog('success', `[ENGINE START] Backend Task: ${String(taskId).substring(0, 8)} — ${finalName}`);
-        showT('success', curLang === 'ar' ? 'بدء التحميل' : 'Download Started', curLang === 'ar' ? `${finalName} (${conn} خط اتصال)` : `${finalName} (${conn} connections)`);
+        addLog('success', `[ENGINE START] Backend Task: ${String(taskId).substring(0, 8)} — ${displayName}`);
+        if (!opts.silentToast) {
+          showT('success', curLang === 'ar' ? 'بدء التحميل' : 'Download Started', curLang === 'ar' ? `${displayName} (${conn} خط اتصال)` : `${displayName} (${conn} connections)`);
+        }
         await syncFromBackend();
-        const autoShow = localStorage.getItem('superidm_auto_show_progress') !== 'false';
+        const autoShow = !opts.skipAutoShow && localStorage.getItem('superidm_auto_show_progress') !== 'false';
         if (autoShow) {
           showIdmModal(String(taskId));
         }
@@ -2015,9 +2154,9 @@ async function addDL(rawUrl, opts = {}) {
     } catch (err) {
       addLog('error', `[ENGINE ERROR] ${err}`);
       const errStr = String(err);
-      const isDiskErr = errStr.includes('Insufficient disk space');
-      const errTitle = isDiskErr 
-        ? (curLang === 'ar' ? 'مساحة القرص غير كافية' : 'Insufficient Disk Space') 
+      const isDiskErr = /insufficient disk space|not enough disk space/i.test(errStr);
+      const errTitle = isDiskErr
+        ? (curLang === 'ar' ? 'مساحة القرص غير كافية' : 'Insufficient Disk Space')
         : (curLang === 'ar' ? 'خطأ في التنزيل' : 'Download Error');
       showT('error', errTitle, errStr);
     }
@@ -2028,8 +2167,8 @@ async function addDL(rawUrl, opts = {}) {
     const dl = {
       id: localId,
       url: url,
-      name: finalName || n,
-      filename: finalName || n,
+      name: displayName,
+      filename: displayName,
       icon: i,
       label: l,
       category: cat,
@@ -2040,9 +2179,9 @@ async function addDL(rawUrl, opts = {}) {
       connections: conn,
       priority: opts.pri || curPri,
       addedAt: Date.now(),
-      destination: savePth,
+      destination: destDir,
       server: url.includes('://') ? url.split('/')[2] : 'cdn.server.net',
-      protocol: url.startsWith('https') ? 'HTTPS' : 'HTTP',
+      protocol: /^https:/i.test(url) ? 'HTTPS' : 'HTTP',
       expanded: false,
       bwH: Array(10).fill(0),
       eta_secs: 0,
@@ -2051,14 +2190,16 @@ async function addDL(rawUrl, opts = {}) {
       headers: opts.headers || undefined
     };
     dls.unshift(dl);
-    addLog('info', `[${isQ ? 'TASK QUEUED' : 'TASK ADDED'}] ${finalName || n} — ${conn} connections [${opts.pri || curPri}]`);
-    const isAr = curLang === 'ar';
-    showT(isQ ? 'info' : 'success', isQ ? (isAr ? 'تمت الجدولة' : 'Task Queued') : (isAr ? 'تمت الإضافة' : 'Task Added'), isQ ? `${finalName || n} (${isAr ? 'في قائمة الانتظار' : 'Waiting in queue'})` : finalName || n);
+    addLog('info', `[${isQ ? 'TASK QUEUED' : 'TASK ADDED'}] ${displayName} — ${conn} connections [${opts.pri || curPri}]`);
+    if (!opts.silentToast) {
+      const isAr = curLang === 'ar';
+      showT(isQ ? 'info' : 'success', isQ ? (isAr ? 'تمت الجدولة' : 'Task Queued') : (isAr ? 'تمت الإضافة' : 'Task Added'), isQ ? `${displayName} (${isAr ? 'في قائمة الانتظار' : 'Waiting in queue'})` : displayName);
+    }
     renderDLs();
     updBdg();
     updStats();
     persistLocalDls();
-    if (!isQ && localStorage.getItem('superidm_auto_show_progress') !== 'false') {
+    if (!isQ && !opts.skipAutoShow && localStorage.getItem('superidm_auto_show_progress') !== 'false') {
       showIdmModal(localId);
     }
   }
@@ -2078,6 +2219,12 @@ function fillSample(url) {
 }
 
 let currentExtractedInfo = null;
+let _sniffInFlightPromise = null;
+let _sniffInFlightUrl = '';
+let _sniffDebounce = null;
+let _lastDetectedUrl = '';
+let _pendingBrowserMeta = null;
+let _pendingPromptQueue = [];
 
 async function sniffMediaStream() {
   const inp = document.getElementById('urlInp');
@@ -2085,6 +2232,11 @@ async function sniffMediaStream() {
   const url = cleanTargetUrl(raw);
   if (!url) return false;
   if (inp && url !== raw) inp.value = url;
+
+  // Deduplicate concurrent sniffs for the exact same URL
+  if (_sniffInFlightPromise && _sniffInFlightUrl === url) {
+    return _sniffInFlightPromise;
+  }
 
   const isAr = curLang === 'ar';
   const sniffBtn = document.getElementById('sniffBtn');
@@ -2096,67 +2248,93 @@ async function sniffMediaStream() {
   showT('info', isAr ? 'ملتقط الوسائط' : 'Media Sniffer', isAr ? 'جارٍ استخراج صيغ البث المتاحة...' : 'Extracting stream formats...');
   addLog('info', `[EXTRACTOR] Analyzing media: ${url}`);
 
-  if (hasTauriIPC()) {
-    try {
-      const info = await tauriCall('extract_media_info', { url });
-      if (info && info.formats && info.formats.length > 0) {
-        currentExtractedInfo = info;
-        const card = document.getElementById('mediaExtCard');
-        const titleEl = document.getElementById('extMediaTitle');
-        const typeEl = document.getElementById('extStreamType');
-        const sel = document.getElementById('extFormatSel');
+  _sniffInFlightUrl = url;
+  const runSniff = (async () => {
+    if (hasTauriIPC()) {
+      try {
+        const info = await tauriCall('extract_media_info', { url });
+        // Discard stale results if the user changed URL or closed the modal while sniffing
+        const nowUrl = cleanTargetUrl((document.getElementById('urlInp')?.value || '').trim());
+        const modalHidden = document.getElementById('addModal')?.classList.contains('hidden');
+        if (modalHidden || nowUrl !== url) {
+          return false;
+        }
+        if (info && info.formats && info.formats.length > 0) {
+          currentExtractedInfo = Object.assign({}, info, { _sourceUrl: url });
+          const card = document.getElementById('mediaExtCard');
+          const titleEl = document.getElementById('extMediaTitle');
+          const typeEl = document.getElementById('extStreamType');
+          const sel = document.getElementById('extFormatSel');
 
-        if (titleEl) titleEl.textContent = info.title || (isAr ? 'بث وسائط مستخرج' : 'Extracted Media Stream');
-        if (typeEl) typeEl.textContent = info.is_stream ? (isAr ? 'بث متكيف HLS/DASH' : 'HLS/DASH Stream') : (isAr ? 'فيديو مباشر' : 'Direct Video');
+          if (titleEl) titleEl.textContent = info.title || (isAr ? 'بث وسائط مستخرج' : 'Extracted Media Stream');
+          if (typeEl) typeEl.textContent = info.is_stream ? (isAr ? 'بث متكيف HLS/DASH' : 'HLS/DASH Stream') : (isAr ? 'فيديو مباشر' : 'Direct Video');
 
-        if (sel) {
-          sel.innerHTML = '';
-          const autoOpt = document.createElement('option');
-          autoOpt.value = 'best';
-          autoOpt.id = 'extFormatBestOpt';
-          autoOpt.textContent = isAr ? 'تلقائي (أفضل جودة - 1080p/4K مع الصوت)' : 'Auto (Best Quality - 1080p/4K with Sound)';
-          sel.appendChild(autoOpt);
+          if (sel) {
+            sel.innerHTML = '';
+            const autoOpt = document.createElement('option');
+            autoOpt.value = 'best';
+            autoOpt.id = 'extFormatBestOpt';
+            autoOpt.textContent = isAr ? 'تلقائي (أفضل جودة - 1080p/4K مع الصوت)' : 'Auto (Best Quality - 1080p/4K with Sound)';
+            sel.appendChild(autoOpt);
 
-          info.formats.forEach((fmt, idx) => {
-            if (fmt.resolution && fmt.resolution !== 'audio only') {
-              const opt = document.createElement('option');
-              opt.value = fmt.format_id || fmt.url;
-              opt.textContent = isAr
-                ? `${fmt.resolution} (${fmt.ext.toUpperCase()}) + صوت • ${fmt.note || 'HD'} ${fmt.filesize ? '• ' + fmtSz(fmt.filesize) : ''}`
-                : `${fmt.resolution} (${fmt.ext.toUpperCase()}) + Audio • ${fmt.note || 'HD'} ${fmt.filesize ? '• ' + fmtSz(fmt.filesize) : ''}`;
-              sel.appendChild(opt);
+            info.formats.forEach((fmt) => {
+              if (fmt.resolution && fmt.resolution !== 'audio only') {
+                const opt = document.createElement('option');
+                opt.value = fmt.format_id || fmt.url;
+                opt.textContent = isAr
+                  ? `${fmt.resolution} (${fmt.ext.toUpperCase()}) + صوت • ${fmt.note || 'HD'} ${fmt.filesize ? '• ' + fmtSz(fmt.filesize) : ''}`
+                  : `${fmt.resolution} (${fmt.ext.toUpperCase()}) + Audio • ${fmt.note || 'HD'} ${fmt.filesize ? '• ' + fmtSz(fmt.filesize) : ''}`;
+                sel.appendChild(opt);
+              }
+            });
+
+            // Add audio only option
+            const audioOpt = document.createElement('option');
+            audioOpt.value = 'bestaudio[ext=m4a]/bestaudio';
+            audioOpt.textContent = isAr ? 'صوت فقط (MP3 / جودة صوت عالية)' : 'Audio Only (MP3 / High Quality Audio)';
+            sel.appendChild(audioOpt);
+
+            // Pre-select format if browser extension requested a specific format (e.g. MP3)
+            if (_pendingBrowserMeta && _pendingBrowserMeta.url === url && _pendingBrowserMeta.format) {
+              if (isAudioOnlyFormat(_pendingBrowserMeta.format)) {
+                sel.value = audioOpt.value;
+              }
             }
-          });
+          }
 
-          // Add audio only option
-          const audioOpt = document.createElement('option');
-          audioOpt.value = 'bestaudio[ext=m4a]/bestaudio';
-          audioOpt.textContent = isAr ? 'صوت فقط (MP3 / جودة صوت عالية)' : 'Audio Only (MP3 / High Quality Audio)';
-          sel.appendChild(audioOpt);
+          if (card) card.classList.remove('hidden');
+          showT('success', isAr ? 'تم استخراج البث' : 'Media Stream Sniffed', isAr ? `تم تجهيز ${info.formats.length} جودة متاحة!` : `${info.formats.length} format(s) ready!`);
+          addLog('success', `[EXTRACTOR] Found ${info.formats.length} stream format(s) for: ${info.title}`);
+          if (sniffBtn) {
+            sniffBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">check</span> <span id="sniffBtnTxt">${isAr ? 'تم الاستخراج' : 'Extracted'}</span>`;
+            sniffBtn.disabled = false;
+          }
+          return true;
+        } else {
+          showT('warn', isAr ? 'ملتقط الوسائط' : 'Media Sniffer', isAr ? 'لم يتم العثور على بث منفصل. سيتم التحميل عبر المحرك المباشر.' : 'No direct streams found. Will download using direct HTTP engine.');
         }
-
-        if (card) card.classList.remove('hidden');
-        showT('success', isAr ? 'تم استخراج البث' : 'Media Stream Sniffed', isAr ? `تم تجهيز ${info.formats.length} جودة متاحة!` : `${info.formats.length} format(s) ready!`);
-        addLog('success', `[EXTRACTOR] Found ${info.formats.length} stream format(s) for: ${info.title}`);
-        if (sniffBtn) {
-          sniffBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">check</span> <span id="sniffBtnTxt">${isAr ? 'تم الاستخراج' : 'Extracted'}</span>`;
-          sniffBtn.disabled = false;
-        }
-        return true;
-      } else {
-        showT('warn', isAr ? 'ملتقط الوسائط' : 'Media Sniffer', isAr ? 'لم يتم العثور على بث منفصل. سيتم التحميل عبر المحرك المباشر.' : 'No direct streams found. Will download using direct HTTP engine.');
+      } catch (e) {
+        showT('error', isAr ? 'مستخرج الوسائط' : 'Media Extractor', String(e));
+        addLog('error', `[EXTRACTOR ERROR] ${e}`);
       }
-    } catch (e) {
-      showT('error', isAr ? 'مستخرج الوسائط' : 'Media Extractor', String(e));
-      addLog('error', `[EXTRACTOR ERROR] ${e}`);
+    }
+
+    if (sniffBtn) {
+      sniffBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">search</span><span id="sniffBtnTxt">${isAr ? 'التقاط واستخراج' : 'Sniff & Extract'}</span>`;
+      sniffBtn.disabled = false;
+    }
+    return false;
+  })();
+
+  _sniffInFlightPromise = runSniff;
+  try {
+    return await runSniff;
+  } finally {
+    if (_sniffInFlightPromise === runSniff) {
+      _sniffInFlightPromise = null;
+      _sniffInFlightUrl = '';
     }
   }
-
-  if (sniffBtn) {
-    sniffBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">search</span><span id="sniffBtnTxt">${isAr ? 'التقاط واستخراج' : 'Sniff & Extract'}</span>`;
-    sniffBtn.disabled = false;
-  }
-  return false;
 }
 window.sniffMediaStream = sniffMediaStream;
 
@@ -2183,7 +2361,8 @@ function expandUrlPattern(inputPattern) {
     const step = Math.max(1, isNaN(stepVal) ? 1 : stepVal);
 
     const isNumeric = /^[0-9]+$/.test(startStr) && /^[0-9]+$/.test(endStr);
-    const isAlpha = /^[a-zA-Z]$/.test(startStr) && /^[a-zA-Z]$/.test(endStr);
+    const isAlpha = (/^[a-z]$/.test(startStr) && /^[a-z]$/.test(endStr)) ||
+                    (/^[A-Z]$/.test(startStr) && /^[A-Z]$/.test(endStr));
 
     let tokens = [];
 
@@ -2253,8 +2432,8 @@ function generateFromPattern() {
   }
 
   const generated = expandUrlPattern(val);
-  if (!generated.length || (generated.length === 1 && generated[0] === val && !val.includes('['))) {
-    showT('warn', isAr ? 'صيغة غير صالحة' : 'Invalid Pattern', isAr ? 'تأكد من استخدام أقواس التسلسل مثل [01-20] أو [a-z]' : 'Make sure to include range brackets like [01-20] or [a-z]');
+  if (!generated.length || (generated.length === 1 && generated[0] === val)) {
+    showT('warn', isAr ? 'صيغة غير صالحة' : 'Invalid Pattern', isAr ? 'تأكد من استخدام أقواس تسلسل صحيحة مثل [01-20] أو [a-z] أو [A-Z]' : 'Make sure to include valid range brackets like [01-20], [a-z], or [A-Z]');
     return;
   }
 
@@ -2425,7 +2604,7 @@ function renderPlaylistItems(entries) {
 
     const durBadge = document.createElement('span');
     durBadge.className = 'text-[11px] font-mono text-on-surface-variant bg-surface-container-highest px-2 py-0.5 rounded flex-shrink-0';
-    durBadge.textContent = item.duration_string || (item.duration_secs ? `${Math.floor(item.duration_secs/60)}:${item.duration_secs%60}` : '--:--');
+    durBadge.textContent = item.duration_string || (item.duration_secs ? `${Math.floor(item.duration_secs / 60)}:${String(Math.floor(item.duration_secs % 60)).padStart(2, '0')}` : '--:--');
 
     row.appendChild(chk);
     row.appendChild(indexSpan);
@@ -2497,7 +2676,9 @@ async function startPlaylistBatchDownload() {
       filename: cleanTitle + (isAudio ? '.mp3' : '.mp4'),
       format: isAudio ? 'bestaudio' : 'best',
       cat: isAudio ? 'Music' : 'Videos',
-      pri: 'High'
+      pri: 'High',
+      silentToast: true,
+      skipAutoShow: true
     });
   }
 
@@ -2528,56 +2709,18 @@ async function startDL() {
   isStartingDL = true;
 
   try {
-    const conn = parseInt(document.getElementById('connSldr')?.value || '16');
-    const cat = document.getElementById('catSel')?.value || 'Auto-detect';
+    if (_sniffDebounce) {
+      clearTimeout(_sniffDebounce);
+      _sniffDebounce = null;
+    }
+    const isAr = curLang === 'ar';
+    const conn = parseInt(document.getElementById('connSldr')?.value || String(gMaxConn));
+    const cat = document.getElementById('catSel')?.value || 'Auto';
 
     const inp = document.getElementById('urlInp');
     let raw = (inp?.value || '').trim();
     let url = cleanTargetUrl(raw);
     if (inp && url !== raw) inp.value = url;
-
-    // If it's a direct downloadable file (.zip, .exe, etc.), skip media extraction
-    const isDirect = typeof isLikelyDirectFile === 'function' ? isLikelyDirectFile(url) : false;
-    const isVideoSite = !isDirect && isVideoPlatformUrl(url);
-    if (isVideoSite && !currentExtractedInfo && !batchMode) {
-      await sniffMediaStream();
-    }
-
-    // Determine download URL and custom filename
-    let downloadUrl = url;
-    let customFilename = undefined;
-    let selectedFormat = undefined;
-
-    if (isVideoSite) {
-      downloadUrl = url; // CRITICAL: Always keep platform URL so yt-dlp + FFmpeg downloads full stream and muxes audio
-      if (currentExtractedInfo) {
-        const cleanTitle = (currentExtractedInfo.title || 'Video').replace(/[/\\?%*:|"<>]/g, '_').trim();
-        const sel = document.getElementById('extFormatSel');
-        selectedFormat = sel?.value || 'best';
-        const isAudioOnly = selectedFormat && (selectedFormat.includes('audio') || selectedFormat === 'bestaudio');
-        customFilename = cleanTitle + (isAudioOnly ? '.mp3' : '.mp4');
-      }
-    } else if (currentExtractedInfo) {
-      const cleanTitle = (currentExtractedInfo.title || 'Media').replace(/[/\\?%*:|"<>]/g, '_').trim();
-      const sel = document.getElementById('extFormatSel');
-      selectedFormat = sel?.value || 'best';
-      const isAudioOnly = selectedFormat && (selectedFormat.includes('audio') || selectedFormat === 'bestaudio');
-      customFilename = cleanTitle + (isAudioOnly ? '.mp3' : '.mp4');
-
-      if (selectedFormat === 'best' || !selectedFormat) {
-        const firstDirect = currentExtractedInfo.formats?.find(f => f.url && (f.url.startsWith('http://') || f.url.startsWith('https://')));
-        if (firstDirect) {
-          downloadUrl = firstDirect.url;
-        }
-      } else {
-        const chosenFmt = currentExtractedInfo.formats?.find(f => (f.format_id === selectedFormat || f.url === selectedFormat));
-        if (chosenFmt && chosenFmt.url && (chosenFmt.url.startsWith('http://') || chosenFmt.url.startsWith('https://'))) {
-          downloadUrl = chosenFmt.url;
-        }
-      }
-    } else {
-      currentExtractedInfo = null;
-    }
 
     // Parse custom headers and basic authentication from Advanced options
     let customHeaders = {};
@@ -2588,17 +2731,18 @@ async function startDL() {
     const userVal = document.getElementById('inpUser')?.value?.trim();
     const passVal = document.getElementById('inpPass')?.value || '';
     if (userVal) {
-      customHeaders['Authorization'] = 'Basic ' + btoa(userVal + ':' + passVal);
+      customHeaders['Authorization'] = 'Basic ' + toBase64Utf8(userVal + ':' + passVal);
     }
     const finalHeaders = Object.keys(customHeaders).length > 0 ? customHeaders : undefined;
 
-    const isAr = curLang === 'ar';
+    const patternRe = /\[[a-zA-Z0-9]+\s*-\s*[a-zA-Z0-9]+(?::[0-9]+)?\]/;
+
     if (batchMode) {
-      const raw = document.getElementById('batchInp')?.value || '';
-      const lines = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+      const batchRaw = document.getElementById('batchInp')?.value || '';
+      const lines = batchRaw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
       let urls = [];
       for (const line of lines) {
-        if (/\[[a-zA-Z0-9]+-[a-zA-Z0-9]+(?::[0-9]+)?\]/.test(line)) {
+        if (patternRe.test(line)) {
           urls.push(...expandUrlPattern(line));
         } else {
           urls.push(line);
@@ -2610,46 +2754,120 @@ async function startDL() {
         return;
       }
       for (const u of urls) {
-        await addDL(u, { conn, pri: curPri, cat, headers: finalHeaders });
+        await addDL(u, { conn, pri: curPri, cat, headers: finalHeaders, silentToast: true, skipAutoShow: true });
       }
       showT('success', isAr ? 'تمت جدولة الدفعة' : 'Batch Queued', isAr ? `تم بدء ${urls.length} مهمة تنزيل` : `${urls.length} download task(s) started`);
-    } else {
-      if (!downloadUrl) {
-        downloadUrl = 'https://proof.ovh.net/files/10Mb.dat';
-        if (inp) inp.value = downloadUrl;
-      }
+      closeAddModal();
+      setView('downloading');
+      return;
+    }
 
-      // Check if single URL input contains a wildcard pattern e.g. [01-20] or [a-z]
-      if (/\[[a-zA-Z0-9]+-[a-zA-Z0-9]+(?::[0-9]+)?\]/.test(downloadUrl)) {
-        const generated = expandUrlPattern(downloadUrl);
-        if (generated.length > 1) {
-          showT('info', isAr ? 'اكتشاف تسلسل روابط' : 'Pattern Detected', isAr ? `جارٍ بدء تحميل دفعة من ${generated.length} رابط...` : `Starting batch download of ${generated.length} items...`);
-          for (const u of generated) {
-            await addDL(u, { conn, pri: curPri, cat, headers: finalHeaders });
-          }
-          showT('success', isAr ? 'تمت جدولة الدفعة' : 'Batch Queued', isAr ? `تم بدء ${generated.length} مهمة تنزيل` : `${generated.length} download task(s) started`);
-          closeAddModal();
-          setView('downloading');
-          return;
+    if (!url) {
+      showT('error', isAr ? 'الرابط مطلوب' : 'URL Required', isAr ? 'يرجى إدخال رابط التنزيل أولاً' : 'Please enter a download URL first');
+      inp?.focus();
+      return;
+    }
+
+    // Check if single URL input contains a wildcard pattern e.g. [01-20] or [a-z]
+    if (patternRe.test(url)) {
+      const generated = expandUrlPattern(url);
+      if (generated.length > 1) {
+        showT('info', isAr ? 'اكتشاف تسلسل روابط' : 'Pattern Detected', isAr ? `جارٍ بدء تحميل دفعة من ${generated.length} رابط...` : `Starting batch download of ${generated.length} items...`);
+        for (const u of generated) {
+          await addDL(u, { conn, pri: curPri, cat, headers: finalHeaders, silentToast: true, skipAutoShow: true });
+        }
+        showT('success', isAr ? 'تمت جدولة الدفعة' : 'Batch Queued', isAr ? `تم بدء ${generated.length} مهمة تنزيل` : `${generated.length} download task(s) started`);
+        closeAddModal();
+        setView('downloading');
+        return;
+      }
+    }
+
+    // Check browser-captured filename & format metadata (if URL still matches)
+    const pendingMeta = (_pendingBrowserMeta && _pendingBrowserMeta.url === url)
+      ? _pendingBrowserMeta
+      : null;
+
+    // Discard extracted info if it belongs to a different URL
+    if (currentExtractedInfo && currentExtractedInfo._sourceUrl && currentExtractedInfo._sourceUrl !== url) {
+      currentExtractedInfo = null;
+    }
+
+    // If it's a direct downloadable file (.zip, .exe, etc.), skip media extraction
+    const isDirect = isLikelyDirectFile(url) || (pendingMeta && isLikelyDirectFile(pendingMeta.filename));
+    const isVideoSite = !isDirect && isVideoPlatformUrl(url);
+    if (isVideoSite && !currentExtractedInfo && !pendingMeta?.format) {
+      if (_sniffInFlightPromise && _sniffInFlightUrl === url) {
+        await _sniffInFlightPromise;
+      } else {
+        await sniffMediaStream();
+      }
+    }
+
+    // Determine download URL, custom filename, and selected format
+    let downloadUrl = url;
+    let customFilename = pendingMeta?.filename || undefined;
+    let selectedFormat = pendingMeta?.format || undefined;
+
+    if (isVideoSite) {
+      downloadUrl = url; // Keep platform URL so yt-dlp + FFmpeg downloads full stream and muxes audio
+      if (currentExtractedInfo) {
+        const cleanTitle = (currentExtractedInfo.title || 'Video').replace(/[/\\?%*:|"<>]/g, '_').trim();
+        const sel = document.getElementById('extFormatSel');
+        const selVal = sel?.value;
+        if (selVal && selVal !== 'best') {
+          selectedFormat = selVal;
+        } else if (!selectedFormat) {
+          selectedFormat = 'best';
+        }
+        const isAudio = isAudioOnlyFormat(selectedFormat);
+        if (!customFilename) {
+          customFilename = cleanTitle + (isAudio ? '.mp3' : '.mp4');
         }
       }
+    } else if (currentExtractedInfo) {
+      const cleanTitle = (currentExtractedInfo.title || 'Media').replace(/[/\\?%*:|"<>]/g, '_').trim();
+      const sel = document.getElementById('extFormatSel');
+      selectedFormat = sel?.value || selectedFormat || 'best';
+      const isAudio = isAudioOnlyFormat(selectedFormat);
+      if (!customFilename) {
+        customFilename = cleanTitle + (isAudio ? '.mp3' : '.mp4');
+      }
 
-      await addDL(downloadUrl, {
-        conn,
-        pri: curPri,
-        cat: isVideoSite ? 'Videos' : cat,
-        filename: customFilename,
-        format: selectedFormat,
-        headers: finalHeaders
-      });
+      if (selectedFormat === 'best' || !selectedFormat) {
+        const firstDirect = currentExtractedInfo.formats?.find(f => f.url && /^https?:\/\//i.test(f.url));
+        if (firstDirect) {
+          downloadUrl = firstDirect.url;
+        }
+      } else {
+        const chosenFmt = currentExtractedInfo.formats?.find(f => (f.format_id === selectedFormat || f.url === selectedFormat));
+        if (chosenFmt && chosenFmt.url && /^https?:\/\//i.test(chosenFmt.url)) {
+          downloadUrl = chosenFmt.url;
+        }
+      }
+    } else {
+      currentExtractedInfo = null;
     }
+
+    const isAudio = isAudioOnlyFormat(selectedFormat);
+    const hasExplicitCat = cat && cat !== 'Auto' && cat !== 'Auto-detect';
+    const resolvedCat = hasExplicitCat ? cat : (isAudio ? 'Music' : (isVideoSite ? 'Videos' : cat));
+
+    await addDL(downloadUrl, {
+      conn,
+      pri: curPri,
+      cat: resolvedCat,
+      filename: customFilename,
+      format: selectedFormat,
+      headers: finalHeaders
+    });
 
     closeAddModal();
     setView('downloading');
   } finally {
     setTimeout(() => {
       isStartingDL = false;
-    }, 500);
+    }, 300);
   }
 }
 
@@ -2657,6 +2875,7 @@ async function queueDL() {
   const isAr = curLang === 'ar';
   const conn = parseInt(document.getElementById('connSldr')?.value || String(gMaxConn));
   const cat = document.getElementById('catSel')?.value || 'Auto';
+  const patternRe = /\[[a-zA-Z0-9]+\s*-\s*[a-zA-Z0-9]+(?::[0-9]+)?\]/;
 
   let customHeaders = {};
   const hdrText = document.getElementById('inpHeaders')?.value?.trim();
@@ -2666,7 +2885,7 @@ async function queueDL() {
   const userVal = document.getElementById('inpUser')?.value?.trim();
   const passVal = document.getElementById('inpPass')?.value || '';
   if (userVal) {
-    customHeaders['Authorization'] = 'Basic ' + btoa(userVal + ':' + passVal);
+    customHeaders['Authorization'] = 'Basic ' + toBase64Utf8(userVal + ':' + passVal);
   }
   const finalHeaders = Object.keys(customHeaders).length > 0 ? customHeaders : undefined;
 
@@ -2675,7 +2894,7 @@ async function queueDL() {
     const lines = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
     let urls = [];
     for (const line of lines) {
-      if (/\[[a-zA-Z0-9]+-[a-zA-Z0-9]+(?::[0-9]+)?\]/.test(line)) {
+      if (patternRe.test(line)) {
         urls.push(...expandUrlPattern(line));
       } else {
         urls.push(line);
@@ -2687,7 +2906,7 @@ async function queueDL() {
       return;
     }
     for (const u of urls) {
-      await addDL(u, { conn, pri: curPri, cat, status: 'queued', headers: finalHeaders });
+      await addDL(u, { conn, pri: curPri, cat, status: 'queued', headers: finalHeaders, silentToast: true, skipAutoShow: true });
     }
     showT('info', isAr ? 'تمت جدولة الدفعة' : 'Batch Queued', isAr ? `تمت إضافة ${urls.length} مهمة إلى قائمة الانتظار` : `Queued ${urls.length} task(s) for later`);
     closeAddModal();
@@ -2704,11 +2923,11 @@ async function queueDL() {
     return;
   }
 
-  if (/\[[a-zA-Z0-9]+-[a-zA-Z0-9]+(?::[0-9]+)?\]/.test(url)) {
+  if (patternRe.test(url)) {
     const generated = expandUrlPattern(url);
     if (generated.length > 1) {
       for (const u of generated) {
-        await addDL(u, { conn, pri: curPri, cat, status: 'queued', headers: finalHeaders });
+        await addDL(u, { conn, pri: curPri, cat, status: 'queued', headers: finalHeaders, silentToast: true, skipAutoShow: true });
       }
       showT('info', isAr ? 'تمت جدولة الدفعة' : 'Batch Queued', isAr ? `تمت إضافة ${generated.length} مهمة إلى قائمة الانتظار` : `Queued ${generated.length} task(s) for later`);
       closeAddModal();
@@ -2717,26 +2936,36 @@ async function queueDL() {
     }
   }
 
-  const isDirect = typeof isLikelyDirectFile === 'function' ? isLikelyDirectFile(url) : false;
+  const pendingMeta = (_pendingBrowserMeta && _pendingBrowserMeta.url === url)
+    ? _pendingBrowserMeta
+    : null;
+  const isDirect = isLikelyDirectFile(url) || (pendingMeta && isLikelyDirectFile(pendingMeta.filename));
   const isVideoSite = !isDirect && isVideoPlatformUrl(url);
-  let customFilename = undefined;
-  let selectedFormat = undefined;
-  if (currentExtractedInfo) {
+  let customFilename = pendingMeta?.filename || undefined;
+  let selectedFormat = pendingMeta?.format || undefined;
+  if (currentExtractedInfo && (!currentExtractedInfo._sourceUrl || currentExtractedInfo._sourceUrl === url)) {
     const cleanTitle = (currentExtractedInfo.title || 'Video').replace(/[/\\?%*:|"<>]/g, '_').trim();
     const sel = document.getElementById('extFormatSel');
-    selectedFormat = sel?.value || 'best';
-    const isAudioOnly = selectedFormat && (selectedFormat.includes('audio') || selectedFormat === 'bestaudio');
-    customFilename = cleanTitle + (isAudioOnly ? '.mp3' : '.mp4');
+    const selVal = sel?.value;
+    if (selVal && selVal !== 'best') selectedFormat = selVal;
+    else if (!selectedFormat) selectedFormat = 'best';
+    const isAudio = isAudioOnlyFormat(selectedFormat);
+    if (!customFilename) customFilename = cleanTitle + (isAudio ? '.mp3' : '.mp4');
   }
+
+  const isAudio = isAudioOnlyFormat(selectedFormat);
+  const hasExplicitCat = cat && cat !== 'Auto' && cat !== 'Auto-detect';
+  const resolvedCat = hasExplicitCat ? cat : (isAudio ? 'Music' : (isVideoSite ? 'Videos' : cat));
 
   await addDL(url, {
     conn,
     pri: curPri,
-    cat: isVideoSite ? 'Videos' : cat,
+    cat: resolvedCat,
     filename: customFilename,
     format: selectedFormat,
     status: 'queued',
-    headers: finalHeaders
+    headers: finalHeaders,
+    silentToast: true
   });
   showT('info', isAr ? 'تمت الجدولة' : 'Task Queued', isAr ? 'تمت إضافة التنزيل إلى قائمة الانتظار' : 'Download scheduled in queue');
   closeAddModal();
@@ -2930,6 +3159,7 @@ async function resumeDL(id, opts) {
   const isAr = (curLang === 'ar');
   const prevStatus = dl.status;
   delete dl._userPausedAt;
+  delete dl._localQueued;
   addLog('info', `[RESUME] ${dl.filename || dl.name}`);
   dl.status = 'downloading';
   renderDLs();
@@ -2942,8 +3172,12 @@ async function resumeDL(id, opts) {
       throw new Error(isAr ? 'رابط التنزيل غير متوفر للاستئناف' : 'Source URL unavailable for resume');
     }
     let destFolder = savePth || '';
-    if (dl.destination && dl.filename && dl.destination.endsWith(dl.filename)) {
-      destFolder = dl.destination.slice(0, dl.destination.length - dl.filename.length).replace(/[\\/]+$/, '') || savePth || '';
+    if (dl.destination) {
+      if (dl.filename && dl.destination.endsWith(dl.filename)) {
+        destFolder = dl.destination.slice(0, dl.destination.length - dl.filename.length).replace(/[\\/]+$/, '') || savePth || '';
+      } else {
+        destFolder = dl.destination;
+      }
     }
     const newId = await tauriCall('start_download', {
       request: {
@@ -3242,9 +3476,10 @@ function showIdmModal(id) {
     autoChk.checked = localStorage.getItem('superidm_auto_show_progress') !== 'false';
   }
 
-  updateIdmModal(dl);
+  // Reveal modal BEFORE updating so updateIdmModal()'s hidden-guard passes on initial open
   m.classList.remove('hidden');
   m.classList.add('flex');
+  updateIdmModal(dl);
 }
 
 function hideIdmModal() {
@@ -3292,8 +3527,8 @@ function updateIdmModal(dl) {
   const connCount = dl.connections || dl.conn || 1;
   const isStreamTask = connCount === 1 && (dl.category === 'Videos' || dl.category === 'Music');
 
-  if (szEl) szEl.textContent = total > 0 ? fmtBytes(total) : (dl.status === 'downloading' ? (isAr ? 'جارٍ التحضير...' : 'Preparing...') : '--');
-  if (dldEl) dldEl.textContent = fmtBytes(downloaded);
+  if (szEl) szEl.textContent = total > 0 ? fmtSz(total) : (dl.status === 'downloading' ? (isAr ? 'جارٍ التحضير...' : 'Preparing...') : '--');
+  if (dldEl) dldEl.textContent = fmtSz(downloaded);
   if (pctEl) pctEl.textContent = `${pct}%`;
   if (barEl) barEl.style.width = `${pct}%`;
   if (connEl) {
@@ -3317,7 +3552,7 @@ function updateIdmModal(dl) {
   if (dl.status === 'complete' || dl.status === 'completed') {
     if (dotEl) dotEl.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
     if (stTxtEl) stTxtEl.textContent = isAr ? 'اكتمل التنزيل بنجاح!' : 'Download Completed Successfully!';
-    if (spdEl) spdEl.textContent = fmtBytes(downloaded);
+    if (spdEl) spdEl.textContent = fmtSz(downloaded);
     if (etaEl) etaEl.textContent = isAr ? 'مكتمل' : 'Completed';
     if (barEl) barEl.className = 'h-full bg-emerald-400 rounded-full transition-all duration-300';
     
@@ -3330,6 +3565,25 @@ function updateIdmModal(dl) {
         <button type="button" onclick="openIdmFile()" class="px-5 py-1.5 text-[12px] font-bold bg-primary-container hover:bg-primary-fixed text-on-primary-container rounded flex items-center gap-1.5 transition-all active:scale-95 shadow-lg glow-btn">
           <span class="material-symbols-outlined text-[16px]" style="font-variation-settings:'FILL' 1">launch</span>
           <span>${isAr ? 'فتح الملف الآن' : 'Open File Now'}</span>
+        </button>
+      `;
+    }
+  } else if (dl.status === 'queued') {
+    if (dotEl) dotEl.className = 'w-2.5 h-2.5 rounded-full bg-on-surface-variant';
+    if (stTxtEl) stTxtEl.textContent = isAr ? 'في قائمة الانتظار (مجدول)' : 'Queued for Download';
+    if (spdEl) spdEl.textContent = '0 B/s';
+    if (etaEl) etaEl.textContent = isAr ? 'بالانتظار' : 'Queued';
+    if (barEl) barEl.className = 'h-full bg-primary/50 rounded-full transition-all duration-300';
+
+    if (actEl) {
+      actEl.innerHTML = `
+        <button type="button" onclick="resumeIdmDL()" class="px-4 py-1.5 text-[12px] font-bold bg-primary-container text-on-primary-container rounded flex items-center gap-1.5 transition-all active:scale-95 shadow">
+          <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+          <span>${isAr ? 'بدء الآن' : 'Start Now'}</span>
+        </button>
+        <button type="button" onclick="cancelIdmDL()" class="px-3.5 py-1.5 text-[12px] font-semibold bg-surface-container-highest hover:bg-red-500/20 text-red-400 rounded border border-outline-variant flex items-center gap-1.5 transition-all active:scale-95">
+          <span class="material-symbols-outlined text-[16px]">close</span>
+          <span>${isAr ? 'إلغاء' : 'Cancel'}</span>
         </button>
       `;
     }
@@ -3358,7 +3612,7 @@ function updateIdmModal(dl) {
       const errDetail = dl.lastError ? ` — ${dl.lastError}` : '';
       stTxtEl.textContent = isAr ? `فشل التنزيل${errDetail}` : `Download Failed${errDetail}`;
     }
-    if (spdEl) spdEl.textContent = '0.0 B/s';
+    if (spdEl) spdEl.textContent = '0 B/s';
     if (etaEl) etaEl.textContent = isAr ? 'فشل' : 'Failed';
     if (barEl) barEl.className = 'h-full bg-red-500 rounded-full transition-all duration-300';
 
@@ -3387,7 +3641,7 @@ function updateIdmModal(dl) {
       }
     }
     if (spdEl) spdEl.textContent = fmtSpd(dl.speed || 0);
-    if (etaEl) etaEl.textContent = fmtEta(dl.eta_secs);
+    if (etaEl) etaEl.textContent = fmtT(dl.eta_secs);
     if (barEl) barEl.className = 'h-full bg-gradient-to-r from-primary to-primary-container rounded-full transition-all duration-300';
 
     if (actEl) {
@@ -3418,7 +3672,7 @@ function updateIdmModal(dl) {
         const cDone = Boolean(c.completed) || (cTotal > 0 && cDownloaded >= cTotal);
         const cPct = cDone ? 100 : (cTotal > 0 ? Math.min(99, Math.round((cDownloaded / cTotal) * 100)) : 0);
         const fillCls = cDone ? 'bg-primary' : (cPct > 0 ? 'bg-primary/70 animate-pulse' : '');
-        const label = `Chunk #${(c.index ?? idx) + 1}: ${cPct}%`;
+        const label = isAr ? `الجزء #${(c.index ?? idx) + 1}: ${cPct}%` : `Chunk #${(c.index ?? idx) + 1}: ${cPct}%`;
         return `<div class="flex-1 bg-surface-container-highest h-full rounded-sm overflow-hidden" title="${label}"><div class="h-full ${fillCls} transition-all duration-200" style="width:${cPct}%"></div></div>`;
       }).join('');
     } else {
@@ -3511,7 +3765,33 @@ async function openFile(destination, filename) {
   }
 }
 
-function handleRowDblClick(id) {
+let _rowClickTimer = null;
+function handleRowClick(ev, id) {
+  if (ev && ev.target && ev.target.closest('button')) return;
+  const dl = dls.find(d => String(d.id) === String(id));
+  if (!dl) return;
+  if (_rowClickTimer) {
+    clearTimeout(_rowClickTimer);
+    _rowClickTimer = null;
+  }
+  if (dl.status === 'complete' || dl.status === 'completed') {
+    // Brief delay on completed rows so double-click opens the file directly without flashing the modal
+    _rowClickTimer = setTimeout(() => {
+      _rowClickTimer = null;
+      showIdmModal(id);
+    }, 220);
+  } else {
+    showIdmModal(id);
+  }
+}
+window.handleRowClick = handleRowClick;
+
+function handleRowDblClick(ev, id) {
+  if (ev && ev.target && ev.target.closest('button')) return;
+  if (_rowClickTimer) {
+    clearTimeout(_rowClickTimer);
+    _rowClickTimer = null;
+  }
   const dl = dls.find(d => String(d.id) === String(id));
   if (!dl) return;
   if (dl.status === 'complete' || dl.status === 'completed') {
@@ -3562,6 +3842,7 @@ async function resumeAll() {
   for (const d of overflow) {
     if (d.status !== 'queued') {
       d.status = 'queued';
+      d._localQueued = true;
     }
   }
   if (overflow.length > 0) {
@@ -3583,9 +3864,14 @@ async function resumeAll() {
 function clearDone() {
   const isAr = curLang === 'ar';
   const prevLen = dls.length;
-  const toRemove = dls.filter(d => d.status === 'complete' || d.status === 'cancelled' || d.status === 'error' || d.status === 'failed');
-  dls = dls.filter(d => d.status !== 'complete' && d.status !== 'cancelled' && d.status !== 'error' && d.status !== 'failed');
+  // Clear only completed & cancelled tasks — preserve failed/error tasks so users can inspect or retry them
+  const toRemove = dls.filter(d => d.status === 'complete' || d.status === 'cancelled');
+  dls = dls.filter(d => d.status !== 'complete' && d.status !== 'cancelled');
   const removed = prevLen - dls.length;
+
+  if (typeof currentIdmTaskId !== 'undefined' && currentIdmTaskId && toRemove.some(d => String(d.id) === String(currentIdmTaskId))) {
+    hideIdmModal();
+  }
 
   if (hasTauriIPC() && toRemove.length > 0) {
     toRemove.forEach(d => {
@@ -3598,8 +3884,8 @@ function clearDone() {
     });
   }
 
-  showT('info', isAr ? 'مسح المكتملة' : 'Cleared Completed', isAr ? `تمت إزالة ${removed} مهمة من القائمة (مع بقاء الملفات بالقرص)` : `Removed ${removed} task(s) from list (files kept on disk)`);
-  addLog('info', `[CLEAR] Cleared ${removed} finished tasks (files preserved)`);
+  showT('info', isAr ? 'مسح المكتملة' : 'Cleared Completed', isAr ? `تمت إزالة ${removed} مهمة مكتملة من القائمة (مع بقاء الملفات بالقرص)` : `Removed ${removed} completed task(s) from list (files kept on disk)`);
+  addLog('info', `[CLEAR] Cleared ${removed} completed tasks (files preserved)`);
   renderDLs();
   updBdg();
   updStats();
@@ -3640,7 +3926,6 @@ function localTick() {
   const mb = totSpd / 1048576;
   if (mb > peakDn) peakDn = mb;
   bwH.dn = [...bwH.dn.slice(1), mb];
-  bwH.up = [...bwH.up.slice(1), activeCount > 0 ? 0.2 : 0.05];
 
   // Update window title for taskbar speed display
   updateWindowTitle(activeCount, totSpd, avgProg);
@@ -3656,7 +3941,7 @@ function localTick() {
 function updateDLRowDOM(d) {
   const row = document.getElementById(`dlrow-${d.id}`);
   if (!row) {
-    renderDLs();
+    // Task is filtered out of the currently visible view/category/search — do NOT rebuild DOM
     return;
   }
   const pct = Math.min(100, Math.max(0, Math.round((d.progress || (d.total_bytes > 0 ? d.downloaded_bytes / d.total_bytes : 0)) * 100)));
@@ -3682,7 +3967,7 @@ function updateDLRowDOM(d) {
   const stEl = document.getElementById(`dlst-${d.id}`);
   if (stEl) {
     stEl.textContent = stLbl;
-    stEl.className = `text-[10px] px-1.5 py-0.2 rounded border ${stBg}`;
+    stEl.className = `text-[10px] px-1.5 py-0.5 rounded border ${stBg}`;
   }
 
   const szEl = document.getElementById(`dlsz-${d.id}`);
@@ -3832,15 +4117,15 @@ function renderDLs() {
       : `${d.connections || 16} ${isAr ? 'اتصال' : 'conns'}`;
 
     return `
-    <div id="dlrow-${safeId}" data-status="${d.status}" class="dl-row bg-surface-container border border-outline-variant/60 rounded overflow-hidden" ondblclick="handleRowDblClick('${safeId}')" oncontextmenu="showRowCtxMenu(event, '${safeId}')">
-      <div class="flex items-center gap-4 px-4 py-3 cursor-pointer select-none" onclick="showIdmModal('${safeId}')" title="${isAr ? 'انقر لعرض نافذة التقدم المباشرة (مثل IDM)' : 'Click to view IDM progress dialog'}">
+    <div id="dlrow-${safeId}" data-status="${d.status}" class="dl-row bg-surface-container border border-outline-variant/60 rounded overflow-hidden" oncontextmenu="showRowCtxMenu(event, '${safeId}')">
+      <div class="flex items-center gap-4 px-4 py-3 cursor-pointer select-none" onclick="handleRowClick(event, '${safeId}')" ondblclick="handleRowDblClick(event, '${safeId}')" title="${isComp ? (isAr ? 'انقر مرتين لفتح الملف، أو انقر مرة لعرض التفاصيل' : 'Double-click to open file, click for details') : (isAr ? 'انقر لعرض نافذة التقدم المباشرة (مثل IDM)' : 'Click to view IDM progress dialog')}">
         <div class="w-9 h-9 rounded bg-surface-container-highest flex items-center justify-center flex-shrink-0 border border-outline-variant">
           <span class="material-symbols-outlined text-primary-container text-[20px]">${safeIcon}</span>
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
             <span id="dlfn-${safeId}" class="text-[13px] font-medium text-on-surface truncate" style="font-family:Inter">${safeName}</span>
-            <span id="dlst-${safeId}" class="text-[10px] px-1.5 py-0.2 rounded border ${stBg}" style="font-family:'JetBrains Mono'">${stLbl}</span>
+            <span id="dlst-${safeId}" class="text-[10px] px-1.5 py-0.5 rounded border ${stBg}" style="font-family:'JetBrains Mono'">${stLbl}</span>
           </div>
           <div class="flex items-center gap-2 mt-1">
             <div id="dlseg-${safeId}" class="seg-bar">${segsHtml}</div>
@@ -3926,17 +4211,16 @@ function updStats() {
 }
 
 function updBwBars() {
-  ['bwDnBars', 'bwUpBars'].forEach((id, isUp) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const h = isUp ? bwH.up : bwH.dn;
-    const mx = Math.max(...h, 1);
-    el.innerHTML = h.map(v => {
-      const hp = Math.max(4, Math.round(v / mx * 100));
-      const pk = v === Math.max(...h) && v > 0;
-      return `<div class="bw-bar${pk ? ' pk' : ''}" style="height:${hp}%"></div>`;
-    }).join('');
-  });
+  const el = document.getElementById('bwDnBars');
+  if (!el) return;
+  const h = bwH.dn;
+  const peakVal = Math.max(...h);
+  const mx = Math.max(peakVal, 1);
+  el.innerHTML = h.map(v => {
+    const hp = Math.max(4, Math.round(v / mx * 100));
+    const pk = v === peakVal && v > 0;
+    return `<div class="bw-bar${pk ? ' pk' : ''}" style="height:${hp}%"></div>`;
+  }).join('');
 }
 
 function updBdg() {
@@ -3991,6 +4275,7 @@ function setView(v) {
     const sView = document.getElementById('settingsView');
     if (sView) sView.classList.remove('hidden');
     if (mainTabs) mainTabs.classList.add('hidden');
+    if (typeof syncBrowserRulesFromBackend === 'function') syncBrowserRulesFromBackend();
   } else if (v === 'logs') {
     const lNav = document.getElementById('nav-logs');
     if (lNav) lNav.classList.add('active');
@@ -4001,19 +4286,23 @@ function setView(v) {
   } else {
     const nEl = document.getElementById('nav-' + v);
     if (nEl) nEl.classList.add('active');
-    const netView = document.getElementById('netView');
-    if (netView) netView.classList.remove('hidden');
-    setTab(curTab);
+    // Always return to the main Network/Downloads tab when clicking a download view in the sidebar
+    setTab('network');
     renderDLs();
   }
 }
 
-function filterCat(cat) {
-  catFilter = catFilter === cat ? null : cat;
+function filterCat(cat, keepCurrent = false) {
+  catFilter = keepCurrent ? cat : (catFilter === cat ? null : cat);
   curView = 'all';
   document.querySelectorAll('.slink').forEach(el => el.classList.remove('active'));
-  const nAll = document.getElementById('nav-all');
-  if (nAll) nAll.classList.add('active');
+  if (catFilter) {
+    const catLink = document.querySelector(`.slink[data-cat="${catFilter}"]`);
+    if (catLink) catLink.classList.add('active');
+  } else {
+    const nAll = document.getElementById('nav-all');
+    if (nAll) nAll.classList.add('active');
+  }
   const pgTitle = document.getElementById('pgTitle');
   const t = (typeof I18N !== 'undefined' && I18N[curLang]) ? I18N[curLang] : null;
   const catNames = {
@@ -4025,12 +4314,13 @@ function filterCat(cat) {
   };
   if (pgTitle) pgTitle.textContent = catFilter ? (catNames[catFilter] || catFilter) : (t ? t.titleAll : 'All Downloads');
 
-  ['bwView', 'schedView', 'settingsView', 'logsView'].forEach(id => {
+  const mainTabs = document.getElementById('mainTabs');
+  if (mainTabs) mainTabs.classList.remove('hidden');
+  ['settingsView', 'logsView'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.add('hidden');
   });
-  const netView = document.getElementById('netView');
-  if (netView) netView.classList.remove('hidden');
+  setTab('network');
   renderDLs();
 }
 
@@ -4092,6 +4382,10 @@ function closeAddModal() {
   modal.classList.add('hidden');
   modal.classList.remove('flex');
   modal.style.display = 'none';
+  if (_sniffDebounce) {
+    clearTimeout(_sniffDebounce);
+    _sniffDebounce = null;
+  }
   const uInp = document.getElementById('urlInp');
   if (uInp) uInp.value = '';
   const bInp = document.getElementById('batchInp');
@@ -4112,7 +4406,32 @@ function closeAddModal() {
   if (userInp) userInp.value = '';
   const passInp = document.getElementById('inpPass');
   if (passInp) passInp.value = '';
+  const catSel = document.getElementById('catSel');
+  if (catSel) catSel.value = 'Auto';
+  // Reset batch mode and collapse advanced panel cleanly
+  batchMode = false;
+  const bArea = document.getElementById('batchArea');
+  if (bArea) bArea.classList.add('hidden');
+  const bBtn = document.getElementById('batchTogBtn');
+  if (bBtn) bBtn.textContent = curLang === 'ar' ? '+ تنزيل دفعات' : '+ Batch mode';
+  const advSec = document.getElementById('advSec');
+  if (advSec) advSec.classList.add('hidden');
+  const advChev = document.getElementById('advChev');
+  if (advChev) advChev.style.transform = 'rotate(-90deg)';
+  const sniffBtn = document.getElementById('sniffBtn');
+  if (sniffBtn) {
+    sniffBtn.disabled = false;
+    sniffBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">search</span><span id="sniffBtnTxt">${curLang === 'ar' ? 'التقاط واستخراج' : 'Sniff & Extract'}</span>`;
+  }
   currentExtractedInfo = null;
+  _lastDetectedUrl = '';
+  _pendingBrowserMeta = null;
+
+  // Pop next queued browser download prompt if multiple arrived while modal was open
+  if (Array.isArray(_pendingPromptQueue) && _pendingPromptQueue.length > 0) {
+    const nextReq = _pendingPromptQueue.shift();
+    setTimeout(() => promptDownloadFromBrowser(nextReq), 120);
+  }
 }
 
 function cleanTargetUrl(raw) {
@@ -4213,8 +4532,8 @@ function isVideoPlatformUrl(url) {
 
 function isLikelyDirectFile(nameOrUrl) {
   if (!nameOrUrl) return false;
-  const u = String(nameOrUrl).toLowerCase();
-  const path = u.split('?')[0];
+  const u = String(nameOrUrl).toLowerCase().trim();
+  const path = u.split('#')[0].split('?')[0];
   const directExts = [
     '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz',
     '.exe', '.msi', '.dmg', '.deb', '.rpm', '.appimage',
@@ -4224,7 +4543,7 @@ function isLikelyDirectFile(nameOrUrl) {
     '.torrent',
     '.bin', '.dat', '.cab'
   ];
-  return directExts.some(ext => path.endsWith(ext) || path.includes(ext) || u.endsWith(ext));
+  return directExts.some(ext => path.endsWith(ext));
 }
 
 function detectFT() {
@@ -4232,10 +4551,33 @@ function detectFT() {
   if (!inp) return;
   const raw = (inp.value || '').trim();
   const cleaned = cleanTargetUrl(raw);
-  if (cleaned && cleaned !== raw && cleaned.startsWith('http')) {
+  if (cleaned && cleaned !== raw && /^https?:/i.test(cleaned)) {
     inp.value = cleaned;
   }
   const url = cleaned || raw;
+
+  // Whenever URL changes, discard stale extracted info and cancel pending auto-sniff
+  if (url !== _lastDetectedUrl) {
+    _lastDetectedUrl = url;
+    if (_sniffDebounce) {
+      clearTimeout(_sniffDebounce);
+      _sniffDebounce = null;
+    }
+    if (currentExtractedInfo && currentExtractedInfo._sourceUrl !== url) {
+      currentExtractedInfo = null;
+      const card = document.getElementById('mediaExtCard');
+      if (card) card.classList.add('hidden');
+      const sniffBtn = document.getElementById('sniffBtn');
+      if (sniffBtn) {
+        sniffBtn.disabled = false;
+        sniffBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">search</span><span id="sniffBtnTxt">${curLang === 'ar' ? 'التقاط واستخراج' : 'Sniff & Extract'}</span>`;
+      }
+    }
+    if (_pendingBrowserMeta && _pendingBrowserMeta.url !== url) {
+      _pendingBrowserMeta = null;
+    }
+  }
+
   const b = document.getElementById('ftBadge');
   const yt = document.getElementById('ytNotice');
   const plNotice = document.getElementById('playlistNotice');
@@ -4246,8 +4588,9 @@ function detectFT() {
     if (plNotice) plNotice.classList.add('hidden');
     return;
   }
-  const isVideo = isVideoPlatformUrl(url);
-  const isPlay = isPlaylistUrl(url);
+  const isDirect = isLikelyDirectFile(url);
+  const isVideo = !isDirect && isVideoPlatformUrl(url);
+  const isPlay = !isDirect && isPlaylistUrl(url);
   if (plNotice) plNotice.classList.toggle('hidden', !isPlay);
   if (yt) yt.classList.toggle('hidden', !isVideo || isPlay);
 
@@ -4272,12 +4615,13 @@ function detectFT() {
   if (ftText) ftText.textContent = isVideo ? (isAr ? 'صفحة فيديو' : 'Video Page') : (isAr ? (lblMapAr[l] || l) : l);
   b.classList.remove('hidden');
 
-  // Auto-sniff video pages with debounce
-  if (isVideo && !currentExtractedInfo) {
-    if (window._sniffDebounce) clearTimeout(window._sniffDebounce);
-    window._sniffDebounce = setTimeout(() => {
+  // Auto-sniff single video pages (skip playlists & direct files) with debounce
+  if (isVideo && !isPlay && !currentExtractedInfo) {
+    if (_sniffDebounce) clearTimeout(_sniffDebounce);
+    _sniffDebounce = setTimeout(() => {
+      _sniffDebounce = null;
       sniffMediaStream();
-    }, 400);
+    }, 450);
   }
 }
 
@@ -4347,10 +4691,16 @@ async function chgSavePath() {
 }
 
 // ════════ BANDWIDTH THROTTLE ════════
-async function applyThrottle() {
-  const val = parseInt(document.getElementById('throttleDn')?.value || '0');
+function previewThrottleLabel(rawVal) {
+  const val = parseInt(rawVal || '0');
   const lbl = document.getElementById('throttleDnVal');
   if (lbl) lbl.textContent = val === 0 ? (curLang === 'ar' ? 'بدون حد' : 'Unlimited') : val + ' MB/s';
+}
+window.previewThrottleLabel = previewThrottleLabel;
+
+async function applyThrottle() {
+  const val = parseInt(document.getElementById('throttleDn')?.value || '0');
+  previewThrottleLabel(val);
   try { localStorage.setItem('superidm_throttle_mb', String(val)); } catch (e) {}
   const limitBps = val === 0 ? 0 : val * 1048576;
   if (hasTauriIPC()) {
@@ -4540,6 +4890,16 @@ function toggleSoundAlert() {
   }
 }
 
+function setSkipDownloadPrompt(enabled) {
+  const en = Boolean(enabled);
+  try { localStorage.setItem('superidm_skip_download_prompt', en ? 'true' : 'false'); } catch (e) {}
+  const chkModal = document.getElementById('chkSkipPromptNext');
+  if (chkModal) chkModal.checked = en;
+  const chkSet = document.getElementById('skipPromptSetOpt');
+  if (chkSet) chkSet.checked = en;
+}
+window.setSkipDownloadPrompt = setSkipDownloadPrompt;
+
 function toggleForceHttps() {
   const isAr = curLang === 'ar';
   const el = document.getElementById('forceHttpsOpt');
@@ -4636,6 +4996,12 @@ function loadSettings() {
       if (el) el.checked = savedHttps === 'true';
     }
 
+    const savedSkipPrompt = localStorage.getItem('superidm_skip_download_prompt') === 'true';
+    const skipSetEl = document.getElementById('skipPromptSetOpt');
+    if (skipSetEl) skipSetEl.checked = savedSkipPrompt;
+    const skipModEl = document.getElementById('chkSkipPromptNext');
+    if (skipModEl) skipModEl.checked = savedSkipPrompt;
+
     // Auto-extract archives setting synchronization
     const savedAutoExt = localStorage.getItem('superidm_auto_ext');
     const isAutoExt = savedAutoExt !== null ? savedAutoExt === 'true' : true;
@@ -4717,10 +5083,28 @@ async function processQueue() {
 
       addLog('info', `[QUEUE] Launching: ${task.filename || task.name} [${task.priority || 'Normal'}]`);
       try {
+        // If this queued task already has a Rust UUID (e.g. queued via Resume All overflow), resume it instead of duplicating
+        const isBackendId = task.id && !String(task.id).startsWith('task-');
+        if (isBackendId) {
+          try {
+            await tauriCall('resume_download', { taskId: String(task.id), task_id: String(task.id) });
+            task.status = 'downloading';
+            delete task._localQueued;
+            continue;
+          } catch (resumeErr) {
+            if (!String(resumeErr || '').toLowerCase().includes('not found')) {
+              throw resumeErr;
+            }
+          }
+        }
+        let destFolder = task.destination || savePth;
+        if (destFolder && task.filename && destFolder.endsWith(task.filename)) {
+          destFolder = destFolder.slice(0, destFolder.length - task.filename.length).replace(/[\\/]+$/, '') || savePth;
+        }
         const taskId = await tauriCall('start_download', {
           request: {
             url: task.url,
-            destination: task.destination || savePth,
+            destination: destFolder,
             filename: task.filename,
             format: task.format || undefined,
             numConnections: task.connections || gMaxConn,
@@ -4730,7 +5114,7 @@ async function processQueue() {
             headers: task.headers || undefined
           },
           url: task.url,
-          destination: task.destination || savePth,
+          destination: destFolder,
           filename: task.filename,
           format: task.format || undefined,
           numConnections: task.connections || gMaxConn,
@@ -4743,9 +5127,14 @@ async function processQueue() {
         if (taskId) {
           task.id = String(taskId);
           task.status = 'downloading';
+          delete task._localQueued;
         }
       } catch (err) {
-        addLog('error', `[QUEUE PROMOTION ERROR] ${err}`);
+        task.status = 'error';
+        task.lastError = humanizeDownloadError(err);
+        task.speed = 0;
+        delete task._localQueued;
+        addLog('error', `[QUEUE PROMOTION ERROR] ${task.filename || task.name}: ${err}`);
       }
     }
     renderDLs();
@@ -4871,6 +5260,7 @@ const I18N = {
     stLblMinTray: 'تصغير إلى شريط النظام',
     stLblSoundAlert: 'تنبيه صوتي عند اكتمال التنزيل',
     stLblForceHttps: 'فرض اتصال HTTPS الآمن فقط',
+    stLblSkipPrompt: 'بدء تنزيلات المتصفح تلقائياً (تخطي نافذة التأكيد)',
     stHdrBrowserInt: 'التكامل مع المتصفحات ولاقط الفيديو العائم',
     stDescBrowserInt: 'تكامل فوري بنقرة واحدة لمتصفحات Chrome و Edge و Firefox و Brave و Opera',
     stBadgeActiveReady: 'نشط وجاهز',
@@ -4915,19 +5305,19 @@ const I18N = {
     extPreferManualTxt: 'هل تفضل تثبيت الإضافة يدوياً بالمجلد؟',
     extPreferManualBtn: 'عرض إرشادات التثبيت اليدوي ←',
     manGuideTitle: 'خطوات التثبيت اليدوي المفصلة (لجميع المتصفحات):',
-    manStep1Hdr: '1. فتح واستخراج مجلد الإضافة',
+    manStep1Hdr: 'فتح واستخراج مجلد الإضافة',
     manBtnOpenFolder: 'فتح المجلد الآن',
     manStep1Desc: 'اضغط على الزر أعلاه لفتح مجلد الإضافة تلقائياً.',
-    manStep2Hdr: '2. فتح صفحة إدارة الإضافات في متصفحك',
+    manStep2Hdr: 'فتح صفحة إدارة الإضافات في متصفحك',
     manStep2Desc: 'اختر متصفحك لفتح صفحة الإضافات بنقرة واحدة مباشرة:',
     manBtnExtEdge: 'صفحة إضافات Edge',
     manBtnExtChrome: 'صفحة إضافات Chrome',
     manBtnExtBrave: 'صفحة إضافات Brave',
-    manStep3Hdr: '3. تفعيل خيار "وضع المطور"',
+    manStep3Hdr: 'تفعيل خيار "وضع المطور"',
     manStep3Desc: '• في Edge: ستجد في القائمة الجانبية اليسرى أو أعلى الصفحة خيار "وضع المطور"، اضغط عليه لتفعيله (المفتاح الأزرق).\n• في Chrome / Brave: ستجد في الزاوية العلوية اليمنى مفتاح "وضع المطور"، قم بتشغيله.',
-    manStep4Hdr: '4. تحميل وتثبيت الإضافة',
+    manStep4Hdr: 'تحميل وتثبيت الإضافة',
     manStep4Desc: '• الأسهل: اسحب مجلد الإضافة الذي فُتح لك وأفلته بالماوس داخل صفحة المتصفح.\n• أو: اضغط زر "تحميل إضافة غير محزومة" في أعلى صفحة المتصفح واختر مجلد الإضافة الذي فُتح لك.',
-    manStep5Hdr: '5. تثبيت الأيقونة في شريط المتصفح',
+    manStep5Hdr: 'تثبيت الأيقونة في شريط المتصفح',
     manStep5Desc: 'اضغط على أيقونة الإضافات (رمز قطعة البازل 🧩) في شريط المتصفح بجانب شريط العناوين، ثم اضغط رمز الدبوس 📌 بجانب SuperIDM لتثبيتها دائماً.',
     extModalBtnFolder: 'فتح مجلد الإضافة',
     extModalBtnDone: 'إغلاق / تم التثبيت',
@@ -5148,6 +5538,7 @@ const I18N = {
     stLblMinTray: 'Minimize to system tray',
     stLblSoundAlert: 'Sound alert on completion',
     stLblForceHttps: 'Force HTTPS only',
+    stLblSkipPrompt: 'Auto-start browser downloads (skip dialog)',
     stHdrBrowserInt: 'Browser Integration & Floating Video Grabber',
     stDescBrowserInt: 'Seamless 1-Click integration for Google Chrome, Microsoft Edge, Mozilla Firefox, Brave & Opera',
     stBadgeActiveReady: 'Active & Ready',
@@ -5192,19 +5583,19 @@ const I18N = {
     extPreferManualTxt: 'Prefer installing the extension manually from folder?',
     extPreferManualBtn: 'View Manual Installation Guide →',
     manGuideTitle: 'Detailed Manual Installation Steps (All Browsers):',
-    manStep1Hdr: '1. Open & Extract Extension Folder',
+    manStep1Hdr: 'Open & Extract Extension Folder',
     manBtnOpenFolder: 'Open Folder Now',
     manStep1Desc: 'Click the button above to open the extension folder automatically.',
-    manStep2Hdr: '2. Open Extensions Management Page in Browser',
+    manStep2Hdr: 'Open Extensions Management Page in Browser',
     manStep2Desc: 'Choose your browser to open its extensions page directly with 1-click:',
     manBtnExtEdge: 'Edge Extensions Page',
     manBtnExtChrome: 'Chrome Extensions Page',
     manBtnExtBrave: 'Brave Extensions Page',
-    manStep3Hdr: '3. Enable "Developer mode"',
+    manStep3Hdr: 'Enable "Developer mode"',
     manStep3Desc: '• In Edge: Look in the left sidebar or top for "Developer mode" and switch it on (blue switch).\n• In Chrome / Brave: In the top-right corner, turn on the "Developer mode" switch.',
-    manStep4Hdr: '4. Load & Install the Extension',
+    manStep4Hdr: 'Load & Install the Extension',
     manStep4Desc: '• Easiest: Drag & drop the opened extension folder directly into the browser window.\n• Or: Click "Load unpacked" at the top of the browser page and choose the opened extension folder.',
-    manStep5Hdr: '5. Pin Icon to Browser Toolbar',
+    manStep5Hdr: 'Pin Icon to Browser Toolbar',
     manStep5Desc: 'Click the extensions puzzle icon 🧩 in your browser toolbar next to the address bar, then click the pin 📌 next to SuperIDM to keep it visible.',
     extModalBtnFolder: 'Open Extension Folder',
     extModalBtnDone: 'Close / Installed',
@@ -5408,9 +5799,23 @@ function applyI18n() {
   const chkAppUpd = document.getElementById('checkAppUpdateTxt');
   if (chkAppUpd) chkAppUpd.textContent = isRtl ? 'فحص تحديث البرنامج' : 'Check App Update';
 
-  setView(curView);
+  // Preserve active category filter and tab across language switches
+  const savedCat = catFilter;
+  const savedTab = curTab;
+  if (savedCat) {
+    filterCat(savedCat, true);
+  } else {
+    setView(curView);
+    if (curView !== 'settings' && curView !== 'logs' && savedTab) {
+      setTab(savedTab);
+    }
+  }
   renderDLs();
   updStats();
+  if (typeof currentIdmTaskId !== 'undefined' && currentIdmTaskId) {
+    const activeDl = dls.find(d => String(d.id) === String(currentIdmTaskId));
+    if (activeDl) updateIdmModal(activeDl);
+  }
   refreshEngineStatusUI();
 }
 
@@ -5467,10 +5872,17 @@ async function refreshEngineStatusUI() {
     const info = await tauriCall('get_engine_status');
     if (info) {
       lastEngineStatus = info;
-      const ytVer = info.ytdlp_version ? `yt-dlp ${info.ytdlp_version}` : 'yt-dlp missing';
-      const ff = info.ffmpeg_ok ? 'FFmpeg OK' : 'FFmpeg missing';
+      const isAr = (curLang === 'ar');
+      const ytVer = info.ytdlp_version
+        ? `yt-dlp ${info.ytdlp_version}`
+        : (isAr ? 'yt-dlp غير مثبت' : 'yt-dlp missing');
+      const ff = info.ffmpeg_ok
+        ? (isAr ? 'FFmpeg جاهز' : 'FFmpeg OK')
+        : (isAr ? 'FFmpeg غير مثبت' : 'FFmpeg missing');
       const jsName = info.js_runtime ? info.js_runtime.split(':')[0] : 'JS';
-      const js = info.js_ok ? `${jsName} OK` : 'JS missing';
+      const js = info.js_ok
+        ? (isAr ? `${jsName} جاهز` : `${jsName} OK`)
+        : (isAr ? 'JS غير مثبت' : 'JS missing');
       stat.textContent = `${ytVer} • ${ff} • ${js}`;
     }
   } catch (e) {}
@@ -5693,9 +6105,9 @@ function dismClip() {
 
 function accClip() {
   if (clipPnd) {
-    addDL(clipPnd);
-    showT('success', curLang === 'ar' ? 'بدء التحميل' : 'Download Started', getFI(clipPnd).n);
+    const url = clipPnd;
     dismClip();
+    addDL(url);
     setView('downloading');
   }
 }
@@ -5781,6 +6193,9 @@ document.addEventListener('click', function(e) {
   } else if (act === 'cancel-dl') {
     const id = target.getAttribute('data-id');
     if (id) cancelDL(id);
+  } else if (act === 'open-file') {
+    const id = target.getAttribute('data-id');
+    if (id) openFileById(id);
   } else if (act === 'open-folder') {
     const id = target.getAttribute('data-id');
     const path = target.getAttribute('data-path');
@@ -5836,22 +6251,98 @@ window.accClip = accClip;
 window.toggleClipMon = toggleClipMon;
 window.renderDLs = renderDLs;
 
-// ════════ KEYBOARD SHORTCUTS ════════
+// ════════ KEYBOARD SHORTCUTS (Unified) ════════
+function isAnyModalOpen() {
+  const modalIds = [
+    'shutdownCountdownModal', 'deleteConfirmModal', 'refreshLinkModal',
+    'playlistModal', 'extSetupModal', 'idmDownloadModal', 'addModal'
+  ];
+  return modalIds.some(id => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains('hidden');
+  });
+}
+
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
-    e.preventDefault();
-    openAddModal();
+  const activeEl = document.activeElement;
+  const tag = activeEl ? activeEl.tagName : '';
+  const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || Boolean(activeEl && activeEl.isContentEditable);
+
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+    const k = e.key.toLowerCase();
+    if (k === 'n' && !isTyping) {
+      e.preventDefault();
+      openAddModal();
+      return;
+    }
+    if (k === 'p' && !isTyping && !isAnyModalOpen()) {
+      e.preventDefault();
+      pauseAll();
+      return;
+    }
+    if (k === 'r' && !isTyping && !isAnyModalOpen()) {
+      e.preventDefault();
+      resumeAll();
+      return;
+    }
   }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
-    e.preventDefault();
-    pauseAll();
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
-    e.preventDefault();
-    resumeAll();
-  }
+
   if (e.key === 'Escape') {
-    closeAddModal();
+    const ctx = document.getElementById('rowCtxMenu');
+    if (ctx && !ctx.classList.contains('hidden')) {
+      hideRowCtxMenu();
+      return;
+    }
+    const sdModal = document.getElementById('shutdownCountdownModal');
+    if (sdModal && !sdModal.classList.contains('hidden')) {
+      cancelScheduledShutdown();
+      return;
+    }
+    const delModal = document.getElementById('deleteConfirmModal');
+    if (delModal && !delModal.classList.contains('hidden')) {
+      closeDeleteConfirmModal();
+      return;
+    }
+    const refModal = document.getElementById('refreshLinkModal');
+    if (refModal && !refModal.classList.contains('hidden')) {
+      closeRefreshLinkModal();
+      return;
+    }
+    const plModal = document.getElementById('playlistModal');
+    if (plModal && !plModal.classList.contains('hidden')) {
+      closePlaylistModal();
+      return;
+    }
+    const extModal = document.getElementById('extSetupModal');
+    if (extModal && !extModal.classList.contains('hidden')) {
+      closeExtModal();
+      return;
+    }
+    const idmModal = document.getElementById('idmDownloadModal');
+    if (idmModal && !idmModal.classList.contains('hidden')) {
+      hideIdmModal();
+      return;
+    }
+    const addM = document.getElementById('addModal');
+    if (addM && !addM.classList.contains('hidden')) {
+      closeAddModal();
+      return;
+    }
+    const clipP = document.getElementById('clipPrompt');
+    if (clipP && !clipP.classList.contains('hidden')) {
+      dismClip();
+      return;
+    }
+  } else if (e.key === 'Enter') {
+    const delModal = document.getElementById('deleteConfirmModal');
+    if (delModal && !delModal.classList.contains('hidden')) {
+      // If user focused any non-primary button (Cancel, Keep File, or × close), let that button handle Enter!
+      if (tag === 'BUTTON' && activeEl.id !== 'delConfirmPrimaryBtn') {
+        return;
+      }
+      e.preventDefault();
+      confirmDeleteDL();
+    }
   }
 });
 
@@ -6195,7 +6686,7 @@ async function autoInstallAllBrowsers() {
   if (hasTauriIPC()) {
     try {
       await tauriCall('install_browser_integration', { browser: 'all' });
-      await tauriCall('launch_browser_extensions', { browser: 'edge' });
+      await tauriCall('launch_browser_extensions', { browser: 'edge_dev' });
       await tauriCall('open_extension_folder');
       addLog('success', '[INTEGRATION] Setup triggered for all browsers');
     } catch (e) {
@@ -6224,6 +6715,26 @@ function loadBrowserRules() {
   if (exclEl) exclEl.value = excluded;
 }
 
+async function syncBrowserRulesFromBackend() {
+  if (!hasTauriIPC()) return;
+  try {
+    const res = await tauriCall('get_browser_rules');
+    const remoteTs = Number(res?.updated_at || 0);
+    const localTs = parseInt(localStorage.getItem('superidm_rules_updated_at') || '0', 10);
+    if (remoteTs > localTs) {
+      if (typeof res.file_extensions === 'string' && res.file_extensions.trim()) {
+        localStorage.setItem('superidm_file_extensions', res.file_extensions.trim());
+      }
+      if (typeof res.excluded_domains === 'string') {
+        localStorage.setItem('superidm_excluded_domains', res.excluded_domains.trim());
+      }
+      localStorage.setItem('superidm_rules_updated_at', String(remoteTs));
+      loadBrowserRules();
+    }
+  } catch (e) {}
+}
+
+let _saveRulesTimer = null;
 function saveBrowserRules() {
   const extsEl = document.getElementById('stFileExtsInput');
   const exclEl = document.getElementById('stExcludedDomainsInput');
@@ -6247,12 +6758,17 @@ function saveBrowserRules() {
   }
 
   const btn = document.getElementById('btnSaveBrowserRules');
-  if (btn) {
-    const origHTML = btn.innerHTML;
-    btn.innerHTML = `<span class="material-symbols-outlined text-[14px]">check</span> <span>${curLang === 'ar' ? 'تم الحفظ والمزامنة! ✅' : 'Saved & Synced! ✅'}</span>`;
+  const lbl = document.getElementById('stBtnSaveRules');
+  const ico = btn ? btn.querySelector('.material-symbols-outlined') : null;
+  if (btn && lbl) {
+    if (_saveRulesTimer) clearTimeout(_saveRulesTimer);
+    if (ico) ico.textContent = 'check';
+    lbl.textContent = curLang === 'ar' ? 'تم الحفظ والمزامنة!' : 'Saved & Synced!';
     btn.classList.add('bg-emerald-600');
-    setTimeout(() => {
-      btn.innerHTML = origHTML;
+    _saveRulesTimer = setTimeout(() => {
+      _saveRulesTimer = null;
+      if (ico) ico.textContent = 'save';
+      lbl.textContent = curLang === 'ar' ? 'حفظ إعدادات الالتقاط' : 'Save Capture Rules';
       btn.classList.remove('bg-emerald-600');
     }, 1800);
   }
@@ -6387,10 +6903,15 @@ async function triggerImmediateShutdown() {
     clearInterval(shutdownCountdownTimer);
     shutdownCountdownTimer = null;
   }
+  const secsEl = document.getElementById('shutdownCountdownSecs');
+  const nowBtn = document.getElementById('btnShutdownNow');
+  if (secsEl) secsEl.textContent = '3s';
+  if (nowBtn) nowBtn.disabled = true;
   if (hasTauriIPC()) {
     try {
       await tauriCall('schedule_system_shutdown', { delaySecs: 3, delay_secs: 3 });
     } catch (e) {
+      if (nowBtn) nowBtn.disabled = false;
       showT('error', curLang === 'ar' ? 'خطأ' : 'Error', String(e));
     }
   }
@@ -6482,43 +7003,21 @@ window.clearDone = clearDone;
 
 document.addEventListener('click', () => hideRowCtxMenu());
 window.addEventListener('scroll', () => hideRowCtxMenu(), true);
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    hideRowCtxMenu();
-    const sdModal = document.getElementById('shutdownCountdownModal');
-    if (sdModal && !sdModal.classList.contains('hidden')) {
-      cancelScheduledShutdown();
-    }
-    const delModal = document.getElementById('deleteConfirmModal');
-    if (delModal && !delModal.classList.contains('hidden')) {
-      closeDeleteConfirmModal();
-    }
-  } else if (e.key === 'Enter') {
-    const delModal = document.getElementById('deleteConfirmModal');
-    if (delModal && !delModal.classList.contains('hidden')) {
-      const activeTag = document.activeElement?.id || '';
-      if (activeTag !== 'delConfirmCancelBtn' && activeTag !== 'delConfirmListOnlyBtn') {
-        e.preventDefault();
-        confirmDeleteDL();
-      }
-    }
-  }
-});
 
 async function promptDownloadFromBrowser(req) {
   if (!req || !req.url) return;
   const skipPrompt = localStorage.getItem('superidm_skip_download_prompt') === 'true';
   const filename = req.filename || '';
-  const isDirect = isLikelyDirectFile(filename) || isLikelyDirectFile(req.url);
-  const isAudio = !isDirect && req.format && (req.format.includes('audio') || req.format === 'bestaudio');
-  const isVideo = !isDirect && (isVideoPlatformUrl(req.url) || (req.format && req.format !== 'direct'));
-  const isProg = /\.(exe|msi|bat|cmd|apk|appimage|deb|rpm|dmg|pkg)$/i.test(filename || req.url);
-  const cat = isAudio ? 'Music' : isVideo ? 'Videos' : (isProg ? 'Programs' : 'Auto-detect');
+  const cleanedUrl = cleanTargetUrl(req.url);
+  const isDirect = isLikelyDirectFile(filename) || isLikelyDirectFile(cleanedUrl);
+  const isAudio = !isDirect && isAudioOnlyFormat(req.format);
+  const isVideo = !isDirect && !isAudio && (isVideoPlatformUrl(cleanedUrl) || (req.format && req.format !== 'direct'));
+  const isProg = /\.(exe|msi|bat|cmd|apk|appimage|deb|rpm|dmg|pkg)$/i.test(filename || cleanedUrl);
+  const cat = isAudio ? 'Music' : isVideo ? 'Videos' : (isProg ? 'Programs' : 'Auto');
 
   if (skipPrompt) {
-    addLog('info', `[BROWSER INTERCEPT] Direct start: ${filename || req.url}`);
-    showT('success', curLang === 'ar' ? 'بدء التحميل' : 'Download Started', filename || (isVideo ? 'Video' : 'File'));
-    await addDL(req.url, {
+    addLog('info', `[BROWSER INTERCEPT] Direct start: ${filename || cleanedUrl}`);
+    await addDL(cleanedUrl, {
       filename: filename || undefined,
       format: isDirect ? undefined : req.format,
       cat: cat,
@@ -6527,11 +7026,24 @@ async function promptDownloadFromBrowser(req) {
       headers: req.headers || undefined
     });
   } else {
-    addLog('info', `[BROWSER INTERCEPT] Captured link: ${filename || req.url}`);
+    // If Add Modal is already open (e.g. "Download All Links"), queue instead of clobbering the current URL
+    const addM = document.getElementById('addModal');
+    if (addM && !addM.classList.contains('hidden')) {
+      _pendingPromptQueue.push(req);
+      showT('info', curLang === 'ar' ? 'رابط إضافي بانتظار التأكيد' : 'Queued for Confirmation', `${filename || cleanedUrl} (+${_pendingPromptQueue.length})`);
+      return;
+    }
+
+    addLog('info', `[BROWSER INTERCEPT] Captured link: ${filename || cleanedUrl}`);
+    _pendingBrowserMeta = {
+      url: cleanedUrl,
+      filename: filename || undefined,
+      format: isDirect ? undefined : (req.format || undefined)
+    };
     await openAddModal(true);
     const inp = document.getElementById('urlInp');
     if (inp) {
-      inp.value = cleanTargetUrl(req.url);
+      inp.value = cleanedUrl;
       detectFT();
     }
     if (req.headers && typeof req.headers === 'object') {
@@ -6541,14 +7053,14 @@ async function promptDownloadFromBrowser(req) {
       }
     }
     const catSel = document.getElementById('catSel');
-    if (catSel && cat !== 'Auto-detect') {
+    if (catSel && cat && cat !== 'Auto') {
       catSel.value = cat;
     }
     const btnStart = document.getElementById('btnStartDL');
     if (btnStart) {
       setTimeout(() => btnStart.focus(), 80);
     }
-    showT('info', curLang === 'ar' ? 'جاهز للتحميل' : 'Ready to Download', filename || req.url);
+    showT('info', curLang === 'ar' ? 'جاهز للتحميل' : 'Ready to Download', filename || cleanedUrl);
   }
 }
 

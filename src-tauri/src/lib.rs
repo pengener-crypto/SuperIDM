@@ -80,7 +80,6 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             commands::open_file,
             commands::extract_media_info,
             commands::extract_playlist,
-            commands::start_stream_download,
             commands::refresh_task_link,
             commands::notify_download_complete,
             commands::open_extension_folder,
@@ -106,6 +105,7 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             commands::set_auto_extract,
             commands::set_show_notifications,
             commands::set_browser_rules,
+            commands::get_browser_rules,
             commands::extract_archive,
             commands::schedule_system_shutdown,
             commands::cancel_system_shutdown,
@@ -164,9 +164,12 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
                             let _ = app.emit("tray-resume-all", ());
                         }
                         "quit" => {
-                            // Signal that this is an intentional user-initiated exit
+                            // Signal intentional exit, stop active downloads/yt-dlp trees, and persist state
                             SHOULD_EXIT.store(true, Ordering::SeqCst);
-                            std::process::exit(0);
+                            if let Some(state) = app.try_state::<AppState>() {
+                                graceful_shutdown_all_tasks(&state.manager);
+                            }
+                            app.exit(0);
                         }
                         _ => {}
                     }
@@ -232,10 +235,24 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
 
             // Scan for persistent tasks db and interrupted downloads on startup
             tauri::async_runtime::spawn(async move {
-                // 1. Load saved tasks from database
+                let mut scan_dirs: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+                scan_dirs.insert(download_dir_clone.clone());
+
+                // 1. Load saved tasks from database, transitioning crashed Downloading tasks -> Paused
                 if let Ok(db_tasks) = storage::load_tasks_db().await {
                     let mut mgr = manager_clone.write();
-                    for meta in db_tasks {
+                    for mut meta in db_tasks {
+                        if meta.status == engine::types::TaskStatus::Downloading
+                            || meta.status == engine::types::TaskStatus::Probing
+                        {
+                            meta.status = engine::types::TaskStatus::Paused;
+                        }
+                        let dest_p = PathBuf::from(&meta.destination);
+                        if let Some(parent) = dest_p.parent() {
+                            if parent.is_dir() {
+                                scan_dirs.insert(parent.to_path_buf());
+                            }
+                        }
                         let (cancel_tx, _) = tokio::sync::watch::channel(false);
                         mgr.tasks.insert(
                             meta.id.clone(),
@@ -248,26 +265,39 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
                     }
                 }
 
-                // 2. Scan for any interrupted .part files
-                match storage::scan_for_part_files(&download_dir_clone).await {
-                    Ok(recovered) => {
+                // 2. Scan default Downloads + any custom dirs referenced in tasks_db for `.part.json`
+                //    without overwriting Completed entries already in tasks_db.
+                for dir in scan_dirs {
+                    if let Ok(recovered) = storage::scan_for_part_files(&dir).await {
                         if !recovered.is_empty() {
                             let mut mgr = manager_clone.write();
-                            for meta in recovered {
-                                let (cancel_tx, _) = tokio::sync::watch::channel(false);
-                                mgr.tasks.insert(
-                                    meta.id.clone(),
-                                    engine::downloader::TaskHandle {
-                                        metadata: meta,
-                                        speed_meter: engine::speed::SpeedMeter::new(),
-                                        cancel_token: cancel_tx,
-                                    },
-                                );
+                            for mut meta in recovered {
+                                if meta.status == engine::types::TaskStatus::Downloading
+                                    || meta.status == engine::types::TaskStatus::Probing
+                                {
+                                    meta.status = engine::types::TaskStatus::Paused;
+                                }
+                                let skip = mgr
+                                    .tasks
+                                    .get(&meta.id)
+                                    .map(|existing| {
+                                        existing.metadata.status == engine::types::TaskStatus::Completed
+                                            || existing.metadata.downloaded_bytes() >= meta.downloaded_bytes()
+                                    })
+                                    .unwrap_or(false);
+                                if !skip {
+                                    let (cancel_tx, _) = tokio::sync::watch::channel(false);
+                                    mgr.tasks.insert(
+                                        meta.id.clone(),
+                                        engine::downloader::TaskHandle {
+                                            metadata: meta,
+                                            speed_meter: engine::speed::SpeedMeter::new(),
+                                            cancel_token: cancel_tx,
+                                        },
+                                    );
+                                }
                             }
                         }
-                    }
-                    Err(e) => {
-                        eprintln!("Warning: Failed to scan for interrupted downloads: {}", e);
                     }
                 }
             });
@@ -281,19 +311,47 @@ fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
                     let _ = window.hide();
                 } else {
                     SHOULD_EXIT.store(true, Ordering::SeqCst);
+                    if let Some(state) = window.try_state::<AppState>() {
+                        graceful_shutdown_all_tasks(&state.manager);
+                    }
                 }
             }
         })
         .build(tauri::generate_context!())
         .expect("Error building SuperIDM")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = &event {
-                // Only prevent exit when SHOULD_EXIT is false (window-close).
-                // When the user picks "Exit SuperIDM" from the tray, SHOULD_EXIT
-                // is set to true and we let the process terminate.
                 if !SHOULD_EXIT.load(Ordering::SeqCst) {
                     api.prevent_exit();
+                } else if let Some(state) = app_handle.try_state::<AppState>() {
+                    graceful_shutdown_all_tasks(&state.manager);
                 }
             }
         });
+}
+
+/// Gracefully signal all active workers/yt-dlp trees to stop and flush task metadata to disk.
+fn graceful_shutdown_all_tasks(manager: &Arc<RwLock<DownloadManager>>) {
+    let (had_active, snapshot) = {
+        let mut mgr = manager.write();
+        let mut active = false;
+        for handle in mgr.tasks.values_mut() {
+            if handle.metadata.status == engine::types::TaskStatus::Downloading
+                || handle.metadata.status == engine::types::TaskStatus::Probing
+            {
+                active = true;
+                let _ = handle.cancel_token.send(true);
+                handle.metadata.status = engine::types::TaskStatus::Paused;
+                handle.metadata.updated_at = chrono::Utc::now().timestamp_millis();
+            }
+        }
+        let all: Vec<_> = mgr.tasks.values().map(|h| h.metadata.clone()).collect();
+        (active, all)
+    };
+
+    let _ = storage::save_tasks_db_sync(&snapshot);
+    if had_active {
+        // Give spawned yt-dlp/ffmpeg kill_process_tree & direct chunk flushes a brief grace window
+        std::thread::sleep(std::time::Duration::from_millis(350));
+    }
 }

@@ -9,7 +9,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SRC_EXT = os.path.join(BASE_DIR, "extension")
 VERSION = read_app_version()
 DIST_FIREFOX_ZIP = os.path.join(BASE_DIR, f"SuperIDM_Firefox_v{VERSION}.zip")
-DESKTOP_FIREFOX_ZIP = os.path.join(r"C:\Users\Haider Nasrat\Desktop", f"SuperIDM_Firefox_v{VERSION}.zip")
+DESKTOP_DIR = os.path.join(os.path.expanduser("~"), "Desktop")
+DESKTOP_FIREFOX_ZIP = os.path.join(DESKTOP_DIR, f"SuperIDM_Firefox_v{VERSION}.zip")
 
 
 def build_firefox_package():
@@ -29,15 +30,12 @@ def build_firefox_package():
         }
     }
 
-    # Firefox MV3 uses background.scripts instead of service_worker
+    # Firefox MV3 uses background.scripts instead of service_worker.
+    # NOTE: Keep `"world": "MAIN"` on instagram_helper.js — supported natively since Firefox 128
+    # (and required for page-world fetch/XHR/React Fiber reel detection).
     manifest["background"] = {
         "scripts": ["background.js"]
     }
-
-    # Remove world: MAIN for broader Firefox compatibility
-    for cs in manifest.get("content_scripts", []):
-        if "world" in cs:
-            del cs["world"]
 
     include_files = [
         "background.js",
@@ -67,8 +65,9 @@ def build_firefox_package():
 
     print(f"Successfully created Firefox package: {DIST_FIREFOX_ZIP} ({os.path.getsize(DIST_FIREFOX_ZIP)} bytes)")
 
-    shutil.copy2(DIST_FIREFOX_ZIP, DESKTOP_FIREFOX_ZIP)
-    print(f"Copied to Desktop: {DESKTOP_FIREFOX_ZIP}")
+    if os.path.isdir(DESKTOP_DIR):
+        shutil.copy2(DIST_FIREFOX_ZIP, DESKTOP_FIREFOX_ZIP)
+        print(f"Copied to Desktop: {DESKTOP_FIREFOX_ZIP}")
 
 
 if __name__ == "__main__":

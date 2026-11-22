@@ -70,7 +70,7 @@ function loadSettings(settings) {
   });
 }
 
-function gatherSettings() {
+function gatherToggleSettings() {
   return {
     interceptClicks: $('#togClickIntercept') ? $('#togClickIntercept').checked : true,
     interceptDownloads: $('#togIntercept') ? $('#togIntercept').checked : true,
@@ -79,33 +79,43 @@ function gatherSettings() {
     minFileSizeMB: (() => {
       const n = parseInt($('#minSize')?.value, 10);
       return Number.isFinite(n) && n >= 0 ? n : 1;
-    })(),
-    fileExtensions: $('#fileExtsInput')?.value.trim() || DEFAULT_EXTENSIONS,
-    excludedDomains: $('#excludedDomainsInput')?.value.trim() || ''
+    })()
   };
 }
 
-function saveAllSettings() {
-  const currentSettings = gatherSettings();
-  const token = $('#tokenInput')?.value.trim() || '';
+function gatherAllSettings() {
+  return Object.assign(gatherToggleSettings(), {
+    fileExtensions: $('#fileExtsInput')?.value.trim() || DEFAULT_EXTENSIONS,
+    excludedDomains: $('#excludedDomainsInput')?.value.trim() || ''
+  });
+}
 
-  if (token) {
-    chrome.storage.local.set({ superidm_rpc_token: token });
-  }
+function saveToggleSettings() {
+  chrome.runtime.sendMessage({
+    type: 'update_settings',
+    settings: gatherToggleSettings()
+  });
+}
+
+function saveAllSettings() {
+  const currentSettings = gatherAllSettings();
+  const token = $('#tokenInput')?.value.trim() || '';
 
   chrome.runtime.sendMessage({
     type: 'update_settings',
     settings: currentSettings,
-    token: token || undefined
+    token: token,
+    tokenChanged: true,
+    rulesEdited: true
   });
 }
 
-// Instant save on toggle switches
+// Instant save on toggle switches (does NOT resend stale Rules textareas)
 ['togClickIntercept', 'togIntercept', 'togGrabber', 'togSniff', 'minSize'].forEach(id => {
   const el = $(`#${id}`);
   if (el) {
     el.addEventListener('change', () => {
-      saveAllSettings();
+      saveToggleSettings();
     });
   }
 });
@@ -145,13 +155,22 @@ if (dlBtn && urlInput) {
     const url = urlInput.value.trim();
     if (!url) return;
     chrome.runtime.sendMessage({ type: 'download', url }, (resp) => {
+      const chip = $('#footerChip');
       if (resp && resp.ok) {
         urlInput.value = '';
         urlInput.placeholder = '✅ Sent to SuperIDM!';
+        if (chip) chip.textContent = 'Sent to SuperIDM!';
         setTimeout(() => { urlInput.placeholder = 'Paste URL here...'; }, 2000);
       } else {
-        urlInput.placeholder = '❌ SuperIDM is not running';
-        setTimeout(() => { urlInput.placeholder = 'Paste URL here...'; }, 2000);
+        const errMsg = (resp && resp.error) ? resp.error : 'SuperIDM is not running';
+        if (chip) chip.textContent = '❌ ' + errMsg.slice(0, 34);
+        const origVal = urlInput.value;
+        urlInput.value = '';
+        urlInput.placeholder = '❌ ' + errMsg;
+        setTimeout(() => {
+          urlInput.placeholder = 'Paste URL here...';
+          if (!urlInput.value) urlInput.value = origVal;
+        }, 2500);
       }
     });
   });
@@ -282,12 +301,16 @@ chrome.runtime.sendMessage({ type: 'get_tab_media' }, (resp) => {
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'status') updateStatus(msg.connected);
+  if (msg.type === 'settings_update' && msg.settings) loadSettings(msg.settings);
 });
 
 if (chrome.storage && chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.superidm_rpc_token && changes.superidm_rpc_token.newValue && $('#tokenInput')) {
-      $('#tokenInput').value = changes.superidm_rpc_token.newValue;
+    if (area === 'local' && changes.superidm_rpc_token && $('#tokenInput')) {
+      $('#tokenInput').value = changes.superidm_rpc_token.newValue || '';
+    }
+    if (area === 'local' && changes.superidm_settings && changes.superidm_settings.newValue) {
+      loadSettings(changes.superidm_settings.newValue);
     }
   });
 }

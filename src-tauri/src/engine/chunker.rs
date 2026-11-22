@@ -10,11 +10,11 @@ pub fn calculate_chunks(total_bytes: u64, num_connections: usize) -> Vec<ChunkIn
         return vec![];
     }
 
-    let n = num_connections.max(1) as u64;
+    let n = (num_connections.max(1) as u64).min(total_bytes);
     let chunk_size = total_bytes / n;
     let remainder = total_bytes % n;
 
-    let mut chunks = Vec::with_capacity(num_connections);
+    let mut chunks = Vec::with_capacity(n as usize);
     let mut offset = 0u64;
 
     for i in 0..n {
@@ -180,5 +180,18 @@ mod tests {
         // Only 51 bytes remaining — too small to steal
         let result = steal_work(&mut chunks);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_calculate_chunks_tiny_file_never_inverts_range() {
+        let chunks = calculate_chunks(3, 16);
+        assert_eq!(chunks.len(), 3);
+        for c in &chunks {
+            assert!(c.start_byte <= c.end_byte);
+        }
+        let one_byte = calculate_chunks(1, 8);
+        assert_eq!(one_byte.len(), 1);
+        assert_eq!(one_byte[0].start_byte, 0);
+        assert_eq!(one_byte[0].end_byte, 0);
     }
 }

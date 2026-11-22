@@ -41,53 +41,61 @@ impl BandwidthThrottler {
         }
     }
 
-    /// Acquire `bytes` worth of bandwidth tokens.
-    ///
-    /// If the throttler is unlimited (0), returns immediately via lock-free atomic check.
-    /// Otherwise, waits until enough tokens are available.
+    /// Acquire `bytes` worth of bandwidth tokens (non-cancellable convenience helper).
+    #[cfg(test)]
     pub async fn acquire(&self, bytes: usize) {
+        let wait = self.reserve_wait(bytes).await;
+        if let Some(dur) = wait {
+            tokio::time::sleep(dur).await;
+        }
+    }
+
+    /// Cancellable version of `acquire`: returns `false` immediately if `cancel_rx` fires while waiting.
+    pub async fn acquire_cancellable(
+        &self,
+        bytes: usize,
+        cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
+    ) -> bool {
+        if *cancel_rx.borrow() {
+            return false;
+        }
+        let wait = self.reserve_wait(bytes).await;
+        if let Some(dur) = wait {
+            tokio::select! {
+                _ = tokio::time::sleep(dur) => true,
+                _ = cancel_rx.changed() => !*cancel_rx.borrow(),
+            }
+        } else {
+            true
+        }
+    }
+
+    async fn reserve_wait(&self, bytes: usize) -> Option<Duration> {
         // Fast path: Zero lock overhead when speed is unlimited
         if self.limit_bps.load(Ordering::Relaxed) == 0 {
-            return;
+            return None;
         }
 
         let mut state = self.inner.lock().await;
-
-        // Unlimited mode check inside lock
         if state.limit_bps == 0 {
-            return;
+            return None;
         }
 
-        // Refill tokens based on elapsed time
+        // Refill tokens based on elapsed time (cap positive burst at 1s worth of limit)
         let now = Instant::now();
         let elapsed = now.duration_since(state.last_refill).as_secs_f64();
-        state.tokens += elapsed * state.limit_bps as f64;
-        state.tokens = state.tokens.min(state.limit_bps as f64 * 2.0); // Cap at 2x burst
+        let limit = state.limit_bps as f64;
+        state.tokens = (state.tokens + elapsed * limit).min(limit);
         state.last_refill = now;
 
-        let needed = bytes as f64;
-        if state.tokens >= needed {
-            state.tokens -= needed;
-            return;
+        // Reserve needed bytes up front; negative tokens represent queued debt for subsequent workers
+        state.tokens -= bytes as f64;
+        if state.tokens >= 0.0 {
+            None
+        } else {
+            let wait_secs = (-state.tokens) / limit;
+            Some(Duration::from_secs_f64(wait_secs.min(10.0)))
         }
-
-        // Calculate how long to wait for enough tokens
-        let deficit = needed - state.tokens;
-        let wait_secs = deficit / state.limit_bps as f64;
-        state.tokens = 0.0;
-
-        // Release the lock before sleeping
-        drop(state);
-        tokio::time::sleep(Duration::from_secs_f64(wait_secs)).await;
-
-        // After waking, deduct the tokens we waited for
-        let mut state = self.inner.lock().await;
-        let now = Instant::now();
-        let elapsed = now.duration_since(state.last_refill).as_secs_f64();
-        state.tokens += elapsed * state.limit_bps as f64;
-        state.tokens = state.tokens.min(state.limit_bps as f64 * 2.0);
-        state.last_refill = now;
-        state.tokens -= needed.min(state.tokens);
     }
 
     /// Update the bandwidth limit. Pass 0 for unlimited.

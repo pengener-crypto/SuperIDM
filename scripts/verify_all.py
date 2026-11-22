@@ -9,9 +9,11 @@ Checks:
      calls a function that is actually exported on `window`.
   6. No stale/unsupported `ftp://` protocol claims remain in UI or Rust backend.
 """
+import json
 import os
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
@@ -127,18 +129,51 @@ def main() -> int:
     else:
         print(f"Version sync check OK (v{read_app_version()}).")
 
-    # 2. dist/ parity
-    for name in ("index.html", "tailwind.css"):
-        root_p = os.path.join(BASE_DIR, name)
-        dist_p = os.path.join(BASE_DIR, "dist", name)
-        if not os.path.exists(dist_p):
-            errors.append(f"MISSING dist/{name}")
-        else:
-            with open(root_p, "rb") as f1, open(dist_p, "rb") as f2:
-                if f1.read() != f2.read():
-                    errors.append(f"OUT OF SYNC: dist/{name} differs from {name}")
-    if not any("dist/" in e for e in errors):
-        print("dist/ parity check OK (index.html & tailwind.css match root).")
+    # 2. dist/ parity (only enforced when dist/ exists; clean git clones generate dist/ at build time)
+    dist_dir = os.path.join(BASE_DIR, "dist")
+    if os.path.isdir(dist_dir):
+        for name in ("index.html", "tailwind.css"):
+            root_p = os.path.join(BASE_DIR, name)
+            dist_p = os.path.join(dist_dir, name)
+            if not os.path.exists(dist_p):
+                errors.append(f"MISSING dist/{name}")
+            else:
+                with open(root_p, "rb") as f1, open(dist_p, "rb") as f2:
+                    if f1.read() != f2.read():
+                        errors.append(f"OUT OF SYNC: dist/{name} differs from {name}")
+        if not any("dist/" in e for e in errors):
+            print("dist/ parity check OK (index.html & tailwind.css match root).")
+    else:
+        print("dist/ directory not generated yet; skipping dist parity check.")
+
+    # 2b. Extension manifest, empty rpc_token.json & MSIX manifest checks
+    manifest_p = os.path.join(BASE_DIR, "extension", "manifest.json")
+    try:
+        with open(manifest_p, "r", encoding="utf-8") as f:
+            man = json.load(f)
+        for cs in man.get("content_scripts", []):
+            for asset in cs.get("js", []) + cs.get("css", []):
+                if not os.path.exists(os.path.join(BASE_DIR, "extension", asset)):
+                    errors.append(f"MISSING extension asset referenced in manifest.json: {asset}")
+    except Exception as ex:
+        errors.append(f"Invalid extension/manifest.json: {ex}")
+
+    tok_p = os.path.join(BASE_DIR, "extension", "rpc_token.json")
+    if os.path.exists(tok_p):
+        try:
+            with open(tok_p, "r", encoding="utf-8") as f:
+                tok_val = json.load(f).get("token", "")
+            if tok_val:
+                errors.append("SECURITY: extension/rpc_token.json must be empty before packaging!")
+        except Exception as ex:
+            errors.append(f"Invalid extension/rpc_token.json: {ex}")
+
+    appx_p = os.path.join(BASE_DIR, "msix_build", "AppxManifest.xml")
+    if os.path.exists(appx_p):
+        try:
+            ET.parse(appx_p)
+        except Exception as ex:
+            errors.append(f"Invalid msix_build/AppxManifest.xml: {ex}")
 
     # 3. Node JS + DOM handler + extension check
     res = subprocess.run(

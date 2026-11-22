@@ -25,6 +25,50 @@ let lastDesktopRulesTs = 0;
 let lastRulesSyncAt = 0;
 // Per-tab sniffed media
 const tabMedia = {};
+// Temporarily bypassed URLs (Alt+Click in content.js)
+const bypassedUrls = new Map();
+const BYPASS_WINDOW_MS = 15000;
+let tabMediaSaveTimer = null;
+
+function normalizeBypassUrl(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  return raw.trim().split('#')[0];
+}
+
+function markUrlBypassed(raw) {
+  const key = normalizeBypassUrl(raw);
+  if (!key) return;
+  const now = Date.now();
+  bypassedUrls.set(key, now);
+  if (bypassedUrls.size > 100) {
+    for (const [k, t] of bypassedUrls) {
+      if (now - t > BYPASS_WINDOW_MS) bypassedUrls.delete(k);
+    }
+  }
+}
+
+function isUrlBypassed(raw) {
+  const key = normalizeBypassUrl(raw);
+  if (!key) return false;
+  const ts = bypassedUrls.get(key);
+  if (!ts) return false;
+  if (Date.now() - ts > BYPASS_WINDOW_MS) {
+    bypassedUrls.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function persistTabMedia() {
+  if (!chrome.storage || !chrome.storage.session) return;
+  if (tabMediaSaveTimer) clearTimeout(tabMediaSaveTimer);
+  tabMediaSaveTimer = setTimeout(() => {
+    tabMediaSaveTimer = null;
+    try {
+      chrome.storage.session.set({ superidm_tab_media: tabMedia }).catch(() => {});
+    } catch (e) { /* ignore */ }
+  }, 350);
+}
 
 // ───── Helpers ─────
 function isDomainExcluded(url) {
@@ -41,18 +85,74 @@ function isDomainExcluded(url) {
   }
 }
 
+function extractExtFromStr(str) {
+  if (!str || typeof str !== 'string') return '';
+  const clean = str.toLowerCase().split(/[?#]/)[0];
+  const lastSeg = clean.substring(clean.lastIndexOf('/') + 1);
+  const dotIdx = lastSeg.lastIndexOf('.');
+  if (dotIdx <= 0 || dotIdx === lastSeg.length - 1) return '';
+  const ext = lastSeg.substring(dotIdx + 1).toUpperCase();
+  return /^[A-Z0-9]{1,10}$/.test(ext) ? ext : '';
+}
+
 function isExtensionSupported(url, filename) {
   if (!settings.fileExtensions) return true;
-  const raw = (filename || url || '').toLowerCase();
-  const clean = raw.split(/[?#]/)[0];
-  const dotIdx = clean.lastIndexOf('.');
-  if (dotIdx === -1) return false;
-  const ext = clean.substring(dotIdx + 1).toUpperCase();
   const allowed = settings.fileExtensions
     .split(/[\s,;]+/)
     .map(e => e.trim().replace(/^\./, '').toUpperCase())
     .filter(Boolean);
-  return allowed.includes(ext);
+  if (allowed.length === 0) return false;
+  // Check filename extension first; fall back to URL path if filename lacks an extension
+  const fileExt = extractExtFromStr(filename);
+  if (fileExt) return allowed.includes(fileExt);
+  const urlExt = extractExtFromStr(url);
+  return urlExt ? allowed.includes(urlExt) : false;
+}
+
+const NON_DOWNLOAD_EXTS = new Set([
+  'HTML', 'HTM', 'XHTML', 'PHP', 'ASP', 'ASPX', 'JSP', 'CSS', 'JS', 'MJS',
+  'JSON', 'XML', 'SVG', 'PNG', 'JPG', 'JPEG', 'GIF', 'WEBP', 'ICO', 'BMP', 'TXT'
+]);
+
+function shouldInterceptBrowserDownload(item) {
+  if (!settings.interceptDownloads) return false;
+  if (!item || !item.url) return false;
+  const lower = item.url.toLowerCase();
+  if (lower.startsWith('blob:') || lower.startsWith('data:') ||
+      lower.startsWith('chrome-extension://') || lower.startsWith('edge://') ||
+      lower.startsWith('moz-extension://') || lower.startsWith('about:')) {
+    return false;
+  }
+  if (isUrlBypassed(item.url) || (item.finalUrl && isUrlBypassed(item.finalUrl))) {
+    return false;
+  }
+  if (isDomainExcluded(item.url) || (item.finalUrl && isDomainExcluded(item.finalUrl)) ||
+      (item.referrer && isDomainExcluded(item.referrer))) {
+    return false;
+  }
+
+  const hasMatchingExt = isExtensionSupported(item.url, item.filename);
+  const minSizeMb = (typeof settings.minFileSizeMB === 'number' && settings.minFileSizeMB >= 0) ? settings.minFileSizeMB : 1;
+  const minBytes = minSizeMb * 1024 * 1024;
+  const totalBytes = typeof item.totalBytes === 'number' ? item.totalBytes : -1;
+
+  // Always enforce minFileSizeMB when file size is known and > 0
+  if (minBytes > 0 && totalBytes > 0 && totalBytes < minBytes) {
+    return false;
+  }
+
+  if (hasMatchingExt) {
+    return true;
+  }
+
+  // For extensions NOT in the user's fileExtensions list:
+  // skip common web/image assets, and require known size >= minBytes (unless minFileSizeMB === 0).
+  const detectedExt = extractExtFromStr(item.filename) || extractExtFromStr(item.url);
+  if (detectedExt && NON_DOWNLOAD_EXTS.has(detectedExt)) {
+    return false;
+  }
+  if (minBytes === 0) return true;
+  return totalBytes >= minBytes;
 }
 
 // ───── Token & Settings Persistence ─────
@@ -79,6 +179,15 @@ async function initAuthAndSettings() {
       }
     } catch (e) { /* ignore */ }
   }
+
+  if (chrome.storage && chrome.storage.session) {
+    try {
+      const sess = await chrome.storage.session.get(['superidm_tab_media']);
+      if (sess && sess.superidm_tab_media && typeof sess.superidm_tab_media === 'object') {
+        Object.assign(tabMedia, sess.superidm_tab_media);
+      }
+    } catch (e) { /* ignore */ }
+  }
 }
 const authInitPromise = initAuthAndSettings();
 
@@ -91,6 +200,13 @@ function saveSettings() {
 }
 
 function broadcastSettingsUpdate() {
+  // Notify popup (if open)
+  chrome.runtime.sendMessage({
+    type: 'settings_update',
+    settings: settings
+  }).catch(() => {});
+
+  // Notify all content scripts
   chrome.tabs.query({}, (tabs) => {
     if (!tabs) return;
     tabs.forEach(tab => {
@@ -103,6 +219,40 @@ function broadcastSettingsUpdate() {
       }
     });
   });
+}
+
+async function pushRulesToDesktop() {
+  try { await authInitPromise; } catch (e) {}
+  if (!rpcToken) await pairWithApp();
+  if (!rpcToken) return false;
+
+  const postRules = () => fetchWithTimeout(RPC_HTTP_URL + '/api/rules', {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${rpcToken}`,
+      'X-SuperIDM-Token': rpcToken
+    },
+    body: JSON.stringify({
+      file_extensions: settings.fileExtensions || '',
+      excluded_domains: settings.excludedDomains || '',
+      updated_at: lastDesktopRulesTs
+    })
+  }, 2500);
+
+  try {
+    let res = await postRules();
+    if (res.status === 401) {
+      paired = false;
+      if (await pairWithApp()) {
+        res = await postRules();
+      }
+    }
+    return Boolean(res && res.ok);
+  } catch (e) {
+    return false;
+  }
 }
 
 async function syncDesktopBrowserRules(force = false) {
@@ -215,40 +365,48 @@ async function connectWS() {
   }
 
   try {
-    ws = new WebSocket(RPC_WS_URL);
+    const socket = new WebSocket(RPC_WS_URL);
+    ws = socket;
 
-    ws.onopen = async () => {
+    socket.onopen = async () => {
       try { await authInitPromise; } catch (e) {}
       if (!paired) await pairWithApp();
+      if (ws !== socket || socket.readyState !== WebSocket.OPEN) return;
       wsConnected = paired || Boolean(rpcToken);
       // Send authentication handshake if token available
-      if (rpcToken) {
-        ws.send(JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'superidm.ping',
-          params: { token: rpcToken }
-        }));
+      if (rpcToken && socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'superidm.ping',
+            params: { token: rpcToken }
+          }));
+        } catch (e) { /* socket closed mid-handshake */ }
       }
       broadcastStatus();
       syncDesktopBrowserRules(true);
       console.log('[SuperIDM] Secure connection established with desktop app');
     };
 
-    ws.onclose = () => {
-      wsConnected = false;
-      ws = null;
-      broadcastStatus();
+    socket.onclose = () => {
+      if (ws === socket) {
+        wsConnected = false;
+        ws = null;
+        broadcastStatus();
+      }
       setTimeout(connectWS, RECONNECT_INTERVAL);
     };
 
-    ws.onerror = () => {
-      wsConnected = false;
-      ws = null;
-      broadcastStatus();
+    socket.onerror = () => {
+      if (ws === socket) {
+        wsConnected = false;
+        ws = null;
+        broadcastStatus();
+      }
     };
 
-    ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
       try {
         const resp = JSON.parse(event.data);
         if (resp && resp.error) {
@@ -304,7 +462,7 @@ function pageHeaders(pageUrl) {
   return headers;
 }
 
-async function sendToSuperIDM(url, filename, format, headers, cookies) {
+async function sendToSuperIDM(url, filename, format, headers, cookies, cookieStoreId) {
   const nowTs = Date.now();
   const dupKey = String(url) + '|' + String(format || '');
   const last = recentSends.get(dupKey);
@@ -318,12 +476,12 @@ async function sendToSuperIDM(url, filename, format, headers, cookies) {
     }
   }
 
-  const result = await sendToSuperIDMInternal(url, filename, format, headers, cookies);
+  const result = await sendToSuperIDMInternal(url, filename, format, headers, cookies, cookieStoreId);
   if (!result || !result.ok) recentSends.delete(dupKey); // allow an immediate retry after a failure
   return result;
 }
 
-async function sendToSuperIDMInternal(url, filename, format, headers, cookies) {
+async function sendToSuperIDMInternal(url, filename, format, headers, cookies, cookieStoreId) {
   // If token not loaded yet, try loading it
   if (!rpcToken) {
     try { await authInitPromise; } catch (e) {}
@@ -332,13 +490,18 @@ async function sendToSuperIDMInternal(url, filename, format, headers, cookies) {
 
   // If URL is an Instagram/Facebook CDN chunk, prefer routing active tab's page URL ONLY if it contains an actual post/reel shortcode
   let finalUrl = url;
+  let activeStoreId = cookieStoreId;
   if (typeof finalUrl === 'string' && (finalUrl.includes('fbcdn.net') || finalUrl.includes('cdninstagram.com'))) {
     try {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs && tabs[0] && tabs[0].url && /instagram\.com/i.test(tabs[0].url)) {
-        const match = tabs[0].url.match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i);
-        if (match) {
-          finalUrl = `https://www.instagram.com/reel/${match[2]}/`;
+      if (tabs && tabs[0]) {
+        if (!activeStoreId && tabs[0].cookieStoreId) activeStoreId = tabs[0].cookieStoreId;
+        if (tabs[0].url && /instagram\.com/i.test(tabs[0].url)) {
+          const match = tabs[0].url.match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i);
+          if (match) {
+            const kind = match[1].toLowerCase() === 'reels' ? 'reel' : match[1].toLowerCase();
+            finalUrl = `https://www.instagram.com/${kind}/${match[2]}/`;
+          }
         }
       }
     } catch (e) {}
@@ -362,7 +525,9 @@ async function sendToSuperIDMInternal(url, filename, format, headers, cookies) {
   let finalCookies = cookies;
   if (!finalCookies && chrome.cookies && typeof finalUrl === 'string' && (finalUrl.startsWith('http://') || finalUrl.startsWith('https://'))) {
     try {
-      const cookieList = await chrome.cookies.getAll({ url: finalUrl });
+      const query = { url: finalUrl };
+      if (activeStoreId) query.storeId = activeStoreId;
+      const cookieList = await chrome.cookies.getAll(query);
       if (cookieList && cookieList.length > 0) {
         finalCookies = cookieList.map(c => `${c.name}=${c.value}`).join('; ');
       }
@@ -464,16 +629,22 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  try { await authInitPromise; } catch (e) {}
+  const storeId = tab && tab.cookieStoreId ? tab.cookieStoreId : undefined;
+
   if (info.menuItemId === 'superidm-download-link') {
     let url = info.linkUrl || info.srcUrl;
+    if (url && (url.startsWith('blob:') || url.startsWith('data:'))) {
+      url = (tab && tab.url) || '';
+    }
     // If on Instagram, prefer the Instagram reel/post page URL rather than raw audio/video DASH chunk
-    if (tab && tab.url && (tab.url.includes('instagram.com/reel') || tab.url.includes('instagram.com/p/'))) {
-      if (!info.linkUrl || (!info.linkUrl.includes('/reel/') && !info.linkUrl.includes('/reels/') && !info.linkUrl.includes('/p/'))) {
+    if (tab && tab.url && /instagram\.com\/(reel|reels|p|tv)\//i.test(tab.url)) {
+      if (!info.linkUrl || !/\/(reel|reels|p|tv)\//i.test(info.linkUrl)) {
         url = tab.url;
       }
     }
-    if (url) {
-      const result = await sendToSuperIDM(url, undefined, undefined, pageHeaders(info.pageUrl || (tab && tab.url)));
+    if (url && /^https?:/i.test(url)) {
+      const result = await sendToSuperIDM(url, undefined, undefined, pageHeaders(info.pageUrl || (tab && tab.url)), undefined, storeId);
       if (!result.ok) {
         chrome.notifications.create({
           type: 'basic',
@@ -485,6 +656,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
   } else if (info.menuItemId === 'superidm-download-page-links') {
     if (tab && tab.id) {
+      if (tab.url && isDomainExcluded(tab.url)) {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: 'SuperIDM',
+          message: 'This domain is in your Excluded Domains list.'
+        });
+        return;
+      }
       const allowed = (settings.fileExtensions || DEFAULT_SETTINGS.fileExtensions)
         .split(/[\s,;]+/)
         .map(e => e.trim().replace(/^\./, '').toLowerCase())
@@ -514,7 +694,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             return out.slice(0, 100);
           }
         });
-        const urls = (results && results[0] && results[0].result) || [];
+        const rawUrls = (results && results[0] && results[0].result) || [];
+        const urls = rawUrls.filter(u => !isDomainExcluded(u));
         if (urls.length === 0) {
           chrome.notifications.create({
             type: 'basic',
@@ -528,8 +709,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         let sent = 0;
         let lastError = '';
         for (const u of urls) {
-          const r = await sendToSuperIDM(u, undefined, undefined, hdrs);
-          if (r && r.ok) sent++; else { lastError = (r && r.error) || lastError; if (!sent) break; }
+          const r = await sendToSuperIDM(u, undefined, undefined, hdrs, undefined, storeId);
+          if (r && r.ok) {
+            sent++;
+          } else {
+            lastError = (r && r.error) || lastError;
+            break; // Stop immediately if desktop app goes offline or rejects
+          }
           await new Promise(res => setTimeout(res, 120)); // don't flood the desktop app
         }
         chrome.notifications.create({
@@ -556,90 +742,61 @@ const onDeterminingEvent = dlApi ? dlApi['onDetermining' + 'Filename'] : null;
 if (onDeterminingEvent && typeof onDeterminingEvent.addListener === 'function') {
   // Chromium-based browsers (Chrome, Edge, Brave, Opera)
   onDeterminingEvent.addListener((item, suggest) => {
-    if (!settings.interceptDownloads) {
-      suggest();
-      return;
-    }
-
-    // Skip browser internal downloads, data/blob URLs
-    if (!item.url || item.url.startsWith('blob:') || item.url.startsWith('data:') ||
-        item.url.startsWith('chrome-extension://') || item.url.startsWith('edge://')) {
-      suggest();
-      return;
-    }
-
-    // Skip excluded domains
-    if (isDomainExcluded(item.url) || (item.referrer && isDomainExcluded(item.referrer))) {
-      suggest();
-      return;
-    }
-
-    // Check file extension or size threshold
-    const hasMatchingExt = isExtensionSupported(item.url, item.filename);
-    const minSizeMb = (typeof settings.minFileSizeMB === 'number' && settings.minFileSizeMB >= 0) ? settings.minFileSizeMB : 1;
-    const minBytes = minSizeMb * 1024 * 1024;
-    if (!hasMatchingExt && item.totalBytes > 0 && item.totalBytes < minBytes) {
-      suggest();
-      return;
-    }
-
-    let dlUrl = item.url;
-    // If downloading an Instagram/FB DASH chunk and referrer points to a reel/post, route the page URL so yt-dlp muxes full video and audio
-    if ((dlUrl.includes('fbcdn.net') || dlUrl.includes('cdninstagram.com')) && item.referrer) {
-      if (item.referrer.includes('instagram.com/reel') || item.referrer.includes('instagram.com/p/')) {
-        dlUrl = item.referrer;
-      }
-    }
-
     let handled = false;
     const safeSuggest = () => {
       if (!handled) {
         handled = true;
-        suggest();
+        try { suggest(); } catch (e) {}
       }
     };
 
-    // Wrap sendToSuperIDM with a 2500ms timeout
-    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ ok: false, timeout: true }), 2500));
-    const reqHeaders = item.referrer ? { 'Referer': item.referrer } : undefined;
-
-    Promise.race([sendToSuperIDM(dlUrl, item.filename, null, reqHeaders), timeoutPromise])
-      .then(result => {
-        if (result && result.ok) {
-          handled = true;
-          chrome.downloads.cancel(item.id, () => {
-            if (chrome.runtime.lastError) { /* ignore cancel race */ }
-            chrome.downloads.erase({ id: item.id }, () => {
-              if (chrome.runtime.lastError) { /* ignore */ }
-            });
-          });
-        } else {
-          safeSuggest();
-        }
-      })
-      .catch(() => {
+    const run = async () => {
+      try { await authInitPromise; } catch (e) {}
+      if (!shouldInterceptBrowserDownload(item)) {
         safeSuggest();
-      });
+        return;
+      }
 
+      let dlUrl = item.url;
+      // If downloading an Instagram/FB DASH chunk and referrer points to a reel/post, route the page URL so yt-dlp muxes full video and audio
+      if ((dlUrl.includes('fbcdn.net') || dlUrl.includes('cdninstagram.com')) && item.referrer) {
+        if (/instagram\.com\/(reel|reels|p|tv)\//i.test(item.referrer)) {
+          dlUrl = item.referrer;
+        }
+      }
+
+      const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ ok: false, timeout: true }), 2500));
+      const reqHeaders = item.referrer ? { 'Referer': item.referrer } : undefined;
+      const result = await Promise.race([
+        sendToSuperIDM(dlUrl, item.filename, null, reqHeaders),
+        timeoutPromise
+      ]);
+
+      if (result && result.ok) {
+        handled = true;
+        chrome.downloads.cancel(item.id, () => {
+          if (chrome.runtime.lastError) { /* ignore cancel race */ }
+          chrome.downloads.erase({ id: item.id }, () => {
+            if (chrome.runtime.lastError) { /* ignore */ }
+          });
+        });
+      } else {
+        safeSuggest();
+      }
+    };
+
+    run().catch(() => safeSuggest());
     return true; // Keep suggest channel open asynchronously
   });
 } else if (chrome.downloads && chrome.downloads.onCreated) {
   // Firefox (Gecko) fallback download interceptor
   chrome.downloads.onCreated.addListener(async (item) => {
-    if (!settings.interceptDownloads) return;
-    if (!item.url || item.url.startsWith('blob:') || item.url.startsWith('data:') ||
-        item.url.startsWith('moz-extension://') || item.url.startsWith('about:')) return;
-
-    if (isDomainExcluded(item.url) || (item.referrer && isDomainExcluded(item.referrer))) return;
-
-    const hasMatchingExt = isExtensionSupported(item.url, item.filename);
-    const minSizeMb = (typeof settings.minFileSizeMB === 'number' && settings.minFileSizeMB >= 0) ? settings.minFileSizeMB : 1;
-    const minBytes = minSizeMb * 1024 * 1024;
-    if (!hasMatchingExt && item.totalBytes > 0 && item.totalBytes < minBytes) return;
+    try { await authInitPromise; } catch (e) {}
+    if (!shouldInterceptBrowserDownload(item)) return;
 
     let dlUrl = item.url;
     if ((dlUrl.includes('fbcdn.net') || dlUrl.includes('cdninstagram.com')) && item.referrer) {
-      if (item.referrer.includes('instagram.com/reel') || item.referrer.includes('instagram.com/p/')) {
+      if (/instagram\.com\/(reel|reels|p|tv)\//i.test(item.referrer)) {
         dlUrl = item.referrer;
       }
     }
@@ -735,6 +892,7 @@ function processMediaRequest(details) {
     const idx = list.findIndex(m => m.kind !== 'manifest');
     list.splice(idx === -1 ? 0 : idx, 1);
   }
+  persistTabMedia();
 
   // Notify the tab content script immediately that new media was detected
   chrome.tabs.sendMessage(details.tabId, {
@@ -761,6 +919,7 @@ if (chrome.webRequest) {
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete tabMedia[tabId];
   delete tabUrls[tabId];
+  persistTabMedia();
 });
 
 if (chrome.tabs.onUpdated) {
@@ -769,6 +928,7 @@ if (chrome.tabs.onUpdated) {
     const pageUrl = changeInfo.url.split('#')[0];
     if (tabUrls[tabId] && tabUrls[tabId] !== pageUrl) {
       delete tabMedia[tabId];
+      persistTabMedia();
     }
     tabUrls[tabId] = pageUrl;
   });
@@ -803,47 +963,75 @@ async function refreshConnectionState() {
 
 // ═══════ Message Handler (from popup & content scripts) ═══════
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const storeId = sender && sender.tab && sender.tab.cookieStoreId ? sender.tab.cookieStoreId : undefined;
+
+  if (msg.type === 'bypass_url') {
+    markUrlBypassed(msg.url);
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (msg.type === 'get_status') {
-    if (wsConnected && !msg.force) {
-      sendResponse({ connected: true, settings });
-    } else {
-      refreshConnectionState().then((connected) => {
+    (async () => {
+      try { await authInitPromise; } catch (e) {}
+      if (wsConnected && !msg.force) {
+        sendResponse({ connected: true, settings });
+      } else {
+        const connected = await refreshConnectionState();
         sendResponse({ connected, settings });
-      });
-    }
+      }
+    })();
     return true;
   }
 
   if (msg.type === 'update_settings') {
-    if (msg.settings) {
-      if (msg.settings.fileExtensions !== undefined || msg.settings.excludedDomains !== undefined) {
-        lastDesktopRulesTs = Math.max(lastDesktopRulesTs, Date.now());
+    (async () => {
+      try { await authInitPromise; } catch (e) {}
+      let rulesChanged = false;
+      if (msg.settings) {
+        if (msg.rulesEdited ||
+            (msg.settings.fileExtensions !== undefined && msg.settings.fileExtensions !== settings.fileExtensions) ||
+            (msg.settings.excludedDomains !== undefined && msg.settings.excludedDomains !== settings.excludedDomains)) {
+          rulesChanged = true;
+          lastDesktopRulesTs = Math.max(lastDesktopRulesTs + 1, Date.now());
+        }
+        Object.assign(settings, msg.settings);
       }
-      Object.assign(settings, msg.settings);
-    }
-    if (msg.token) {
-      rpcToken = msg.token;
-      if (ws) { ws.close(); } // Reconnect with new token
-    }
-    saveSettings();
-    broadcastSettingsUpdate();
-    sendResponse({ ok: true, settings });
+      if (msg.tokenChanged) {
+        rpcToken = typeof msg.token === 'string' ? msg.token.trim() : '';
+        paired = false;
+        if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+      } else if (typeof msg.token === 'string' && msg.token.trim() && msg.token.trim() !== rpcToken) {
+        rpcToken = msg.token.trim();
+        paired = false;
+        if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+      }
+      saveSettings();
+      broadcastSettingsUpdate();
+      if (msg.tokenChanged) {
+        refreshConnectionState();
+      }
+      if (rulesChanged) {
+        pushRulesToDesktop().catch(() => {});
+      }
+      sendResponse({ ok: true, settings });
+    })();
     return true;
   }
 
   if (msg.type === 'get_tab_media') {
-    // If sent from a tab's content script, sender.tab is populated
-    if (sender.tab && sender.tab.id) {
-      sendResponse({ media: tabMedia[sender.tab.id] || [] });
-      return true;
-    } else {
-      // If sent from popup, sender.tab is undefined -> query the active tab in current window
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const activeTabId = tabs && tabs[0] ? tabs[0].id : null;
-        sendResponse({ media: (activeTabId && tabMedia[activeTabId]) ? tabMedia[activeTabId] : [] });
-      });
-      return true; // Keep sendResponse channel open for async query
-    }
+    (async () => {
+      try { await authInitPromise; } catch (e) {}
+      if (sender.tab && sender.tab.id) {
+        sendResponse({ media: tabMedia[sender.tab.id] || [] });
+      } else {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const activeTabId = tabs && tabs[0] ? tabs[0].id : null;
+          sendResponse({ media: (activeTabId && tabMedia[activeTabId]) ? tabMedia[activeTabId] : [] });
+        });
+      }
+    })();
+    return true;
   }
 
   if (msg.type === 'intercept_click_download') {
@@ -851,18 +1039,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.referrer) {
       headers = { 'Referer': msg.referrer };
     }
-    sendToSuperIDM(msg.url, msg.filename, null, headers, msg.cookies).then(sendResponse);
+    sendToSuperIDM(msg.url, msg.filename, null, headers, msg.cookies, storeId).then(sendResponse);
     return true;
   }
 
   if (msg.type === 'download') {
-    sendToSuperIDM(msg.url, msg.filename, msg.format, pageHeaders(msg.referrer)).then(sendResponse);
+    sendToSuperIDM(msg.url, msg.filename, msg.format, pageHeaders(msg.referrer), undefined, storeId).then(sendResponse);
     return true;
   }
 
   if (msg.type === 'download_video') {
     // Sniffed CDN streams usually reject requests without the original page as Referer/Origin
-    sendToSuperIDM(msg.url, msg.filename, msg.format, pageHeaders(msg.referrer)).then(sendResponse);
+    sendToSuperIDM(msg.url, msg.filename, msg.format, pageHeaders(msg.referrer), undefined, storeId).then(sendResponse);
     return true;
   }
 });

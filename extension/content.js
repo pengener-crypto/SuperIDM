@@ -2,7 +2,7 @@
 // SuperIDM Browser Extension — Content Script (Floating Video Grabber)
 // ═══════════════════════════════════════════════════════════════
 
-(function() {
+(function () {
   'use strict';
 
   const BADGE_CLASS = 'superidm-video-badge';
@@ -15,20 +15,30 @@
     excludedDomains: ''
   };
 
-  // Helper: check whether current page host is in user's excluded domains list
-  function isCurrentPageExcluded() {
+  // Helper: check whether a given host or current page host is in user's excluded domains list
+  function isUrlExcluded(urlStr) {
     if (!extSettings.excludedDomains) return false;
     try {
       const currentHost = (location.hostname || '').toLowerCase();
-      if (!currentHost) return false;
+      let urlHost = '';
+      if (urlStr) {
+        try { urlHost = new URL(urlStr, location.href).hostname.toLowerCase(); } catch (_) { }
+      }
       const excludedList = extSettings.excludedDomains
         .split(/[\s,;\n]+/)
         .map(d => d.trim().toLowerCase())
         .filter(Boolean);
-      return excludedList.some(d => currentHost === d || currentHost.endsWith('.' + d));
+      return excludedList.some(d =>
+        (currentHost && (currentHost === d || currentHost.endsWith('.' + d))) ||
+        (urlHost && (urlHost === d || urlHost.endsWith('.' + d)))
+      );
     } catch (e) {
       return false;
     }
+  }
+
+  function isCurrentPageExcluded() {
+    return isUrlExcluded(null);
   }
 
   // Helper: should badges be visible?
@@ -40,6 +50,7 @@
   function updateAllBadgeVisibility() {
     const show = shouldShowBadges();
     document.querySelectorAll('.' + BADGE_CLASS).forEach(b => {
+      b.classList.toggle('superidm-hidden', !show);
       b.style.display = show ? '' : 'none';
       if (!show) {
         b.classList.remove('superidm-menu-open');
@@ -186,7 +197,7 @@
   }
 
   // ═══════ Get Video Title ═══════
-  function getVideoTitle() {
+  function getVideoTitle(videoEl) {
     // 1. YouTube Specific
     const ytTitle = document.querySelector('h1.ytd-watch-metadata, #title h1, h1.title, ytd-watch-metadata h1');
     if (ytTitle && ytTitle.textContent.trim()) {
@@ -195,9 +206,13 @@
 
     // 2. Instagram Specific
     if (detectPlatform() === 'instagram') {
-      let reelId = '';
-      const pathMatch = location.pathname.match(/\/(reel|reels|p)\/([A-Za-z0-9_-]+)/i);
-      if (pathMatch) reelId = pathMatch[2];
+      if (videoEl && videoEl.dataset && videoEl.dataset.superidmTitle) {
+        const helperTitle = sanitizeTitle(videoEl.dataset.superidmTitle);
+        if (helperTitle && helperTitle !== 'video') return helperTitle;
+      }
+      let reelId = (videoEl && videoEl.dataset && videoEl.dataset.superidmCode) || '';
+      const pathMatch = location.pathname.match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i);
+      if (!reelId && pathMatch) reelId = pathMatch[2];
 
       const ogMeta = document.querySelector('meta[property="og:title"], meta[name="twitter:title"]');
       if (ogMeta && ogMeta.content) {
@@ -315,6 +330,11 @@
   }
 
   // ═══════ Extract the best Instagram permalink for the current video ═══════
+  function normalizeIgPermalink(kind, code) {
+    const k = (kind || 'reel').toLowerCase() === 'reels' ? 'reel' : (kind || 'reel').toLowerCase();
+    return `https://www.instagram.com/${k}/${code}/`;
+  }
+
   async function getInstagramPermalink(videoEl) {
     if (!videoEl) return null;
 
@@ -323,18 +343,22 @@
       return videoEl.dataset.superidmUrl;
     }
     if (videoEl.dataset && videoEl.dataset.superidmCode) {
-      return `https://www.instagram.com/reel/${videoEl.dataset.superidmCode}/`;
+      return normalizeIgPermalink('reel', videoEl.dataset.superidmCode);
     }
 
-    // 2. Request MAIN world helper with a 250ms timeout
+    // 2. Request MAIN world helper with a 250ms timeout (primitive string detail for Firefox XrayVision compatibility)
     try {
-      const reqId = Date.now().toString();
+      const reqId = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       videoEl.dataset.superidmReq = reqId;
       const helperPromise = new Promise(resolve => {
         const handler = (e) => {
-          if (e.detail?.reqId === reqId) {
+          let payload = e.detail;
+          if (typeof payload === 'string') {
+            try { payload = JSON.parse(payload); } catch (_) { payload = null; }
+          }
+          if (payload && payload.reqId === reqId) {
             document.removeEventListener('superidm:response_reel_info', handler);
-            resolve(e.detail?.url || (e.detail?.code ? `https://www.instagram.com/reel/${e.detail.code}/` : null));
+            resolve(payload.url || (payload.code ? normalizeIgPermalink('reel', payload.code) : null));
           }
         };
         document.addEventListener('superidm:response_reel_info', handler);
@@ -344,26 +368,26 @@
         }, 250);
       });
 
-      document.dispatchEvent(new CustomEvent('superidm:request_reel_info', { detail: { reqId } }));
+      document.dispatchEvent(new CustomEvent('superidm:request_reel_info', { detail: reqId }));
       const helperUrl = await helperPromise;
-      if (helperUrl && /\/(reel|p)\/[A-Za-z0-9_-]+/i.test(helperUrl)) {
+      if (helperUrl && /\/(reel|reels|p|tv)\/[A-Za-z0-9_-]+/i.test(helperUrl)) {
         return helperUrl;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 3. If currently directly on a reel or post page with ID in address bar
     const pathMatch = location.pathname.match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i);
     if (pathMatch) {
-      return `https://www.instagram.com/reel/${pathMatch[2]}/`;
+      return normalizeIgPermalink(pathMatch[1], pathMatch[2]);
     }
 
     // 4. Check modal dialog if open
     const dialog = videoEl.closest('div[role="dialog"]');
     if (dialog) {
-      const dLinks = dialog.querySelectorAll('a[href*="/reel/"], a[href*="/reels/"], a[href*="/p/"]');
+      const dLinks = dialog.querySelectorAll('a[href*="/reel/"], a[href*="/reels/"], a[href*="/p/"], a[href*="/tv/"]');
       for (const dLink of dLinks) {
-        const m = (dLink.getAttribute('href') || '').match(/\/(reel|reels|p)\/([A-Za-z0-9_-]{9,15})/i);
-        if (m) return `https://www.instagram.com/reel/${m[2]}/`;
+        const m = (dLink.getAttribute('href') || '').match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i);
+        if (m) return normalizeIgPermalink(m[1], m[2]);
       }
     }
 
@@ -373,17 +397,17 @@
       const aLinks = article.querySelectorAll('a[href*="/reel/"], a[href*="/reels/"], a[href*="/p/"], a[href*="/tv/"]');
       for (const a of aLinks) {
         const m = (a.getAttribute('href') || '').match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i);
-        if (m) return `https://www.instagram.com/reel/${m[2]}/`;
+        if (m) return normalizeIgPermalink(m[1], m[2]);
       }
     }
 
     // 6. Check parent hierarchy up to 25 levels
     let el = videoEl.parentElement;
     for (let i = 0; i < 25 && el && el !== document.body; i++) {
-      const links = el.querySelectorAll('a[href*="/reel/"], a[href*="/reels/"], a[href*="/p/"]');
+      const links = el.querySelectorAll('a[href*="/reel/"], a[href*="/reels/"], a[href*="/p/"], a[href*="/tv/"]');
       for (const link of links) {
         const m = (link.getAttribute('href') || '').match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i);
-        if (m) return `https://www.instagram.com/reel/${m[2]}/`;
+        if (m) return normalizeIgPermalink(m[1], m[2]);
       }
       el = el.parentElement;
     }
@@ -391,7 +415,8 @@
     // 7. Vertical proximity search
     try {
       const vRect = videoEl.getBoundingClientRect();
-      const allLinks = document.querySelectorAll('a[href*="/reel/"], a[href*="/reels/"], a[href*="/p/"]');
+      const allLinks = document.querySelectorAll('a[href*="/reel/"], a[href*="/reels/"], a[href*="/p/"], a[href*="/tv/"]');
+      let closestKind = null;
       let closestCode = null;
       let minDistance = Infinity;
       allLinks.forEach(a => {
@@ -401,20 +426,21 @@
           const dist = Math.abs((aRect.top + aRect.bottom) / 2 - (vRect.top + vRect.bottom) / 2);
           if (dist < minDistance) {
             minDistance = dist;
+            closestKind = m[1];
             closestCode = m[2];
           }
         }
       });
       if (closestCode && minDistance < 1500) {
-        return `https://www.instagram.com/reel/${closestCode}/`;
+        return normalizeIgPermalink(closestKind, closestCode);
       }
-    } catch(e) {}
+    } catch (e) { }
 
     // 8. OpenGraph meta tag fallback
     const ogMeta = document.querySelector('meta[property="og:url"]');
     if (ogMeta && ogMeta.content) {
-      const m = ogMeta.content.match(/\/(reel|reels|p)\/([A-Za-z0-9_-]{9,15})/i);
-      if (m) return `https://www.instagram.com/reel/${m[2]}/`;
+      const m = ogMeta.content.match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i);
+      if (m) return normalizeIgPermalink(m[1], m[2]);
     }
 
     return null;
@@ -435,9 +461,18 @@
     return newestFirst[0];
   }
 
+  // ═══════ Detect Generic Social Feed Homepages (where location.href is not a single video) ═══════
+  function isSocialFeedHomepage(platform) {
+    const p = (location.pathname || '/').toLowerCase();
+    if (platform === 'tiktok') return !/\/(video|photo)\/\d+/i.test(p);
+    if (platform === 'twitter') return !/\/status\/\d+/i.test(p);
+    if (platform === 'facebook') return !/\/(videos|reel|watch|posts)\//i.test(p) && !/[?&]v=\d+/i.test(location.search || '');
+    return false;
+  }
+
   // ═══════ Send Download Helper ═══════
   async function sendDownload(format, qualityLabel, videoEl) {
-    const title = getVideoTitle();
+    const title = getVideoTitle(videoEl);
     const platform = detectPlatform();
     const filename = `${title}.${qualityLabel === 'MP3' ? 'mp3' : 'mp4'}`;
     let targetUrl = location.href;
@@ -453,13 +488,16 @@
     let sniffedUrl = null;
     try {
       const tabMediaResp = await new Promise(res => {
-        chrome.runtime.sendMessage({ type: 'get_tab_media' }, res);
+        chrome.runtime.sendMessage({ type: 'get_tab_media' }, (r) => {
+          if (chrome.runtime.lastError) res(null);
+          else res(r);
+        });
       });
       if (tabMediaResp && tabMediaResp.media && tabMediaResp.media.length > 0) {
         const best = pickBestMedia(tabMediaResp.media);
         if (best && best.url) sniffedUrl = best.url;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 3. Smart platform & URL resolution
     const host = location.hostname.toLowerCase();
@@ -477,16 +515,14 @@
         const playing = Array.from(document.querySelectorAll('video')).find(v => !v.paused && v.currentSrc && !v.currentSrc.startsWith('blob:'));
         if (playing) {
           targetUrl = playing.currentSrc;
-        } else if (location.pathname.match(/\/(reel|reels|p)\/([A-Za-z0-9_-]{9,15})/i)) {
+        } else if (location.pathname.match(/\/(reel|reels|p|tv)\/([A-Za-z0-9_-]{9,15})/i)) {
           targetUrl = location.href;
-        } else if (sniffedUrl) {
-          targetUrl = sniffedUrl;
         } else {
           showToast('❌ Could not locate Instagram video stream');
           return;
         }
       }
-    } else if (isKnownYtDlp) {
+    } else if (isKnownYtDlp && !isSocialFeedHomepage(platform)) {
       targetUrl = location.href;
     } else {
       if (sniffedUrl) {
@@ -507,6 +543,10 @@
       format: format || 'bestvideo+bestaudio/best',
       referrer: location.href
     }, (resp) => {
+      if (chrome.runtime.lastError) {
+        showToast(`❌ SuperIDM extension error`);
+        return;
+      }
       if (resp && resp.ok) {
         showToast(`Downloading ${qualityLabel || 'Video'}: "${title.substring(0, 25)}..."`);
       } else {
@@ -583,9 +623,13 @@
   // ═══════ Attach Badge to Video or Audio ═══════
   function attachBadge(videoEl) {
     if (!videoEl || videoEl.dataset.superidmBadge) return;
+    const platform = detectPlatform();
+    // On YouTube, the main player gets a single dedicated badge via attachPlatformBadge()
+    if (platform === 'youtube' && videoEl.closest('#movie_player, ytd-player')) {
+      return;
+    }
     videoEl.dataset.superidmBadge = 'true';
 
-    const platform = detectPlatform();
     const isAudio = videoEl.tagName === 'AUDIO';
 
     // Find or create a positioned container
@@ -623,11 +667,12 @@
 
     // Create badge
     const badge = document.createElement('div');
-    badge.className = BADGE_CLASS + (isAudio ? ' superidm-audio-badge' : '');
+    const visible = shouldShowBadges();
+    badge.className = BADGE_CLASS + (isAudio ? ' superidm-audio-badge' : '') + (visible ? '' : ' superidm-hidden');
     const { mainBtn, chevBtn } = createBadgeContent(isAudio);
     badge.appendChild(mainBtn);
     badge.appendChild(chevBtn);
-    badge.style.display = shouldShowBadges() ? '' : 'none';
+    badge.style.display = visible ? '' : 'none';
     badge.style.pointerEvents = 'auto';
     badge.style.zIndex = '2147483647';
 
@@ -662,9 +707,11 @@
   // we catch clicks inside the SuperIDM badge before Instagram's listeners can stop them!
   ['click', 'pointerdown', 'mousedown'].forEach(eventType => {
     window.addEventListener(eventType, (e) => {
+      // Ignore synthetic events (e.g. our own mainBtn.click() / item.click()) to prevent recursion
+      if (!e.isTrusted) return;
       const badges = document.querySelectorAll('.' + BADGE_CLASS);
       for (const badge of badges) {
-        if (badge.offsetParent === null || badge.style.display === 'none') continue;
+        if (badge.classList.contains('superidm-hidden') || badge.offsetParent === null || badge.style.display === 'none') continue;
         const rect = badge.getBoundingClientRect();
 
         const menu = badge.querySelector('.' + MENU_CLASS);
@@ -673,13 +720,13 @@
         if (isMenuOpen) {
           const menuRect = menu.getBoundingClientRect();
           if (e.clientX >= menuRect.left && e.clientX <= menuRect.right &&
-              e.clientY >= menuRect.top && e.clientY <= menuRect.bottom) {
+            e.clientY >= menuRect.top && e.clientY <= menuRect.bottom) {
             inMenu = true;
           }
         }
 
         const inBadge = e.clientX >= rect.left && e.clientX <= rect.right &&
-                        e.clientY >= rect.top && e.clientY <= rect.bottom;
+          e.clientY >= rect.top && e.clientY <= rect.bottom;
 
         if (inBadge || inMenu) {
           e.stopPropagation();
@@ -741,14 +788,16 @@
         const containerStyle = getComputedStyle(container);
         if (containerStyle.position === 'static') container.style.position = 'relative';
 
+        const visible = shouldShowBadges();
         const badge = document.createElement('div');
-        badge.className = BADGE_CLASS + ' superidm-yt-badge';
+        badge.className = BADGE_CLASS + ' superidm-yt-badge' + (visible ? '' : ' superidm-hidden');
         const { mainBtn, chevBtn } = createBadgeContent(false, 'Download');
         badge.appendChild(mainBtn);
         badge.appendChild(chevBtn);
-        badge.style.display = shouldShowBadges() ? '' : 'none';
+        badge.style.display = visible ? '' : 'none';
 
         const videoEl = player.querySelector('video');
+        if (videoEl) videoEl.dataset.superidmBadge = 'true';
         const menu = createQualityMenu(videoEl);
         badge.appendChild(menu);
 
@@ -827,40 +876,37 @@
       if (lastSeg && lastSeg.includes('.')) {
         return decodeURIComponent(lastSeg).replace(/[\\/:*?"<>|\r\n\t]+/g, '_');
       }
-    } catch (e) {}
+    } catch (e) { }
     return null;
   }
 
-  function shouldInterceptUrl(urlStr, downloadAttr) {
+  function shouldInterceptUrl(urlStr, hasDownloadAttr) {
     if (!urlStr || typeof urlStr !== 'string') return false;
     const lowerUrl = urlStr.trim().toLowerCase();
 
-    // Skip in-page anchors, javascript, mailto, tel
-    if (lowerUrl.startsWith('javascript:') || lowerUrl.startsWith('#') || lowerUrl.startsWith('mailto:') || lowerUrl.startsWith('tel:')) {
+    // Skip in-page anchors, javascript, mailto, tel, and local/browser-memory URLs
+    if (lowerUrl.startsWith('javascript:') || lowerUrl.startsWith('#') ||
+      lowerUrl.startsWith('mailto:') || lowerUrl.startsWith('tel:') ||
+      lowerUrl.startsWith('blob:') || lowerUrl.startsWith('data:')) {
       return false;
     }
     // Skip browser internal protocols
-    if (lowerUrl.startsWith('chrome:') || lowerUrl.startsWith('edge:') || lowerUrl.startsWith('about:') || lowerUrl.startsWith('chrome-extension:')) {
+    if (lowerUrl.startsWith('chrome:') || lowerUrl.startsWith('edge:') ||
+      lowerUrl.startsWith('about:') || lowerUrl.startsWith('chrome-extension:') ||
+      lowerUrl.startsWith('moz-extension:')) {
       return false;
     }
-    if ((lowerUrl.startsWith('blob:') || lowerUrl.startsWith('data:')) && !downloadAttr) {
+    if (!lowerUrl.startsWith('http://') && !lowerUrl.startsWith('https://')) {
       return false;
     }
 
     // Check if domain is excluded
-    if (extSettings.excludedDomains) {
-      try {
-        const urlHost = new URL(urlStr, location.href).hostname.toLowerCase();
-        const currentHost = location.hostname.toLowerCase();
-        const excludedList = extSettings.excludedDomains.split(/[\s,;\n]+/).map(d => d.trim().toLowerCase()).filter(Boolean);
-        if (excludedList.some(d => urlHost === d || urlHost.endsWith('.' + d) || currentHost === d || currentHost.endsWith('.' + d))) {
-          return false;
-        }
-      } catch (e) {}
+    if (isUrlExcluded(urlStr)) {
+      return false;
     }
 
-    // If explicit download attribute is present
-    if (downloadAttr) {
+    // If explicit download attribute is present (supports boolean <a download>)
+    if (hasDownloadAttr) {
       return true;
     }
 
@@ -881,32 +927,42 @@
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return false;
   }
 
   function handleLinkClick(e) {
-    // Only intercept when desktop app is connected and click interception is enabled
+    // Only intercept primary left-clicks when desktop app is connected and click interception is enabled
+    if (e.button !== 0) return;
     if (!appConnected || extSettings.interceptClicks === false) return;
 
-    // 1. Bypass Key: Alt key held down -> BYPASS SuperIDM and let browser download naturally
-    if (e.altKey) {
-      return; // Standard IDM Alt bypass behavior
-    }
-
     // Find closest anchor tag
-    const anchor = e.target.closest('a[href]');
+    const anchor = e.target && e.target.closest ? e.target.closest('a[href]') : null;
     if (!anchor) return;
 
     const href = anchor.href;
     if (!href) return;
+
+    // 1. Bypass Key: Alt key held down -> BYPASS SuperIDM (including browser download listener!)
+    if (e.altKey) {
+      try {
+        chrome.runtime.sendMessage({ type: 'bypass_url', url: href }, () => {
+          if (chrome.runtime.lastError) { /* ignore */ }
+        });
+      } catch (_) { }
+      return;
+    }
+
+    const hasDownloadAttr = anchor.hasAttribute('download');
     const downloadAttr = anchor.getAttribute('download');
 
-    // 2. Force Key: Ctrl / Meta key held down -> FORCE download through SuperIDM for any http(s) link!
-    const forceIntercept = (e.ctrlKey || e.metaKey) && (href.startsWith('http://') || href.startsWith('https://'));
+    // 2. Force Key: Ctrl + Shift + Click (or Cmd + Shift + Click on macOS) -> force download any http(s) link
+    // (Leaves standard Ctrl+Click untouched for opening links in a new tab, and respects Excluded Domains.)
+    const forceIntercept = (e.ctrlKey || e.metaKey) && e.shiftKey &&
+      /^https?:/i.test(href) && !isUrlExcluded(href);
 
-    if (!forceIntercept && !shouldInterceptUrl(href, downloadAttr)) {
+    if (!forceIntercept && !shouldInterceptUrl(href, hasDownloadAttr)) {
       return;
     }
 
@@ -918,8 +974,8 @@
     const filename = getCleanFileName(href, downloadAttr);
     const displayTitle = filename || anchor.textContent.trim().slice(0, 30) || 'Download';
 
-    // Show stylish instant floating toast
-    showToast(`⚡ SuperIDM: جاري التحميل "${displayTitle}" (اضغط Alt للتجاوز)`);
+    // Show instant floating toast
+    showToast(`⚡ SuperIDM: Downloading "${displayTitle}" (Hold Alt to bypass)`);
 
     // Send to background service worker
     chrome.runtime.sendMessage({
@@ -928,10 +984,8 @@
       filename: filename || undefined,
       referrer: location.href
     }, (resp) => {
-      if (resp && resp.ok) {
-        // Successfully handed over to desktop app
-      } else {
-        showToast(`❌ ${resp?.error || 'SuperIDM desktop is not responding'}`);
+      if (chrome.runtime.lastError || !resp || !resp.ok) {
+        showToast(`❌ ${(resp && resp.error) || 'SuperIDM desktop is not responding'}`);
         // Fallback to native navigation after small delay if desktop engine failed
         setTimeout(() => {
           window.location.href = href;
@@ -940,9 +994,8 @@
     });
   }
 
-  // Attach click & auxclick listeners on document in CAPTURE phase
+  // Attach primary click listener on document in CAPTURE phase (never hijack middle-click / auxclick)
   document.addEventListener('click', handleLinkClick, true);
-  document.addEventListener('auxclick', handleLinkClick, true);
 
   // ═══════ Init ═══════
   function init() {

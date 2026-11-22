@@ -187,46 +187,36 @@ pub async fn start_download(
     let task_id = Uuid::new_v4().to_string();
 
     let default_dir = state.manager.read().default_download_dir.clone();
-    let dest_dir = if destination.is_empty() || destination.contains("Users\\User") {
+    let trimmed_dest = destination.trim();
+    let dest_dir = if trimmed_dest.is_empty()
+        || trimmed_dest.eq_ignore_ascii_case(r"C:\Users\User\Downloads")
+    {
         default_dir
     } else {
-        let p = PathBuf::from(&destination);
-        if p.exists() || p.parent().map(|par| par.exists()).unwrap_or(false) {
-            p
-        } else {
-            default_dir
-        }
+        PathBuf::from(trimmed_dest)
     };
     let _ = tokio::fs::create_dir_all(&dest_dir).await;
 
-    // Route through yt-dlp media extraction engine if:
-    // 1. Neither the filename nor URL looks like a direct file download (.zip, .exe, .rar, etc.)
-    // AND
-    // 2. Either it's a known media platform URL, OR format_id was explicitly requested
-    let fn_is_direct = filename
-        .as_deref()
-        .map(crate::engine::extractor::MediaExtractor::is_likely_direct_file)
-        .unwrap_or(false);
-    let url_is_direct = crate::engine::extractor::MediaExtractor::is_likely_direct_file(&url);
-    let is_direct_file = fn_is_direct || url_is_direct;
-
-    let use_media_engine = !is_direct_file
-        && (crate::engine::extractor::MediaExtractor::is_platform_url(&url) || format_id.is_some());
+    // Unified media-vs-direct routing shared by start_download, pause_download, and resume_download
+    let use_media_engine = should_use_media_engine(&url, filename.as_deref(), format_id.as_deref());
     if use_media_engine {
         let (cancel_tx, cancel_rx) = watch::channel(false);
         let (prog_tx, mut prog_rx) = mpsc::channel::<(f64, f64, u64, u64, f64, bool, Option<String>)>(128);
 
+        let requested_filename = filename.clone();
         let initial_name = filename.unwrap_or_else(|| "Video_Stream.mp4".to_string());
         let file_path = dest_dir.join(&initial_name);
         let now = chrono::Utc::now().timestamp_millis();
 
-        let is_audio_cat = format_id
-            .as_deref()
-            .map(|f| {
-                let fl = f.to_lowercase();
-                fl.contains("audio") || fl == "mp3"
-            })
-            .unwrap_or(false);
+        let is_audio_cat = crate::engine::extractor::MediaExtractor::is_audio_only_format(format_id.as_deref());
+        let effective_category = {
+            let c_low = category.trim().to_ascii_lowercase();
+            if c_low.is_empty() || c_low == "auto" || c_low == "auto-detect" || c_low == "general" || c_low == "other" {
+                if is_audio_cat { "Music".to_string() } else { "Videos".to_string() }
+            } else {
+                category.clone()
+            }
+        };
 
         let metadata = DownloadMetadata {
             id: task_id.clone(),
@@ -240,7 +230,7 @@ pub async fn start_download(
             supports_range: true,
             num_connections: num_connections.clamp(1, 32),
             priority,
-            category: if is_audio_cat { "Music".to_string() } else { "Videos".to_string() },
+            category: effective_category,
             format_id: format_id.clone(),
             custom_headers: headers.clone(),
             chunks: Vec::new(),
@@ -270,6 +260,7 @@ pub async fn start_download(
         let dest_dir_watch = dest_dir.clone();
         let cancel_c = cancel_rx.clone();
         let format_id_c = format_id.clone();
+        let custom_fn_c = requested_filename;
         let media_headers_c: Vec<(String, String)> = headers.clone().unwrap_or_default();
         let app_err = app.clone();
         let task_id_err = task_id.clone();
@@ -298,16 +289,19 @@ pub async fn start_download(
             (mgr.throttler.clone(), mgr.max_retries)
         };
         let mgr_err_arc = state.manager.clone();
+        let conns_ext = num_connections.clamp(1, 16);
         tokio::spawn(async move {
             let rate_limit_bps = throttler_ext.get_limit().await;
             let res = crate::engine::extractor::MediaExtractor::download_media_stream(
                 &client_c,
                 &url_c,
                 &dest_dir_ext,
+                custom_fn_c.as_deref(),
                 format_id_c.as_deref(),
                 &media_headers_c,
                 rate_limit_bps,
                 max_retries_ext,
+                conns_ext,
                 prog_tx,
                 cancel_c,
             ).await;
@@ -442,7 +436,7 @@ pub async fn start_download(
         mgr.http_client.clone()
     };
 
-    let probe = downloader::probe_url(&client, &url).await?;
+    let probe = downloader::probe_url_with_headers(&client, &url, headers.as_deref()).await?;
 
     // Determine filename:
     // 1. If caller provided an explicit descriptive filename (e.g. from browser extension or user), prioritize it!
@@ -568,7 +562,7 @@ pub async fn start_download(
     // Create cancel token
     let (cancel_tx, cancel_rx) = watch::channel(false);
 
-    // Register task in state
+    // Register task in state and persist tasks_db immediately so crash/exit never loses the task
     {
         let mut mgr = state.manager.write();
         mgr.tasks.insert(
@@ -579,6 +573,10 @@ pub async fn start_download(
                 cancel_token: cancel_tx,
             },
         );
+    }
+    {
+        let all_tasks: Vec<_> = state.manager.read().tasks.values().map(|h| h.metadata.clone()).collect();
+        let _ = storage::save_tasks_db(&all_tasks).await;
     }
 
     // Spawn chunk workers with shared event channel and dynamic limit tracking
@@ -620,15 +618,18 @@ pub async fn start_download(
         });
     }
 
+    // CRITICAL: hold WeakSender (not strong Sender) in CoordinatorContext so `event_rx.recv()`
+    // returns `None` immediately when all chunk workers exit (on failure, pause, or cancel)!
     let coordinator_ctx = CoordinatorContext {
         client: client.clone(),
         throttler: throttler.clone(),
-        event_tx: event_tx.clone(),
+        event_tx: event_tx.downgrade(),
         cancel_rx: cancel_rx.clone(),
         custom_headers: headers.clone(),
         chunk_limits: chunk_limits.clone(),
         max_retries,
     };
+    drop(event_tx);
 
     // Spawn Coordinator task
     let manager_arc = state.manager.clone();
@@ -674,12 +675,23 @@ pub async fn start_download(
     Ok(task_id)
 }
 
+/// Unified check determining whether a task should run on the yt-dlp media extractor vs direct HTTP engine.
+fn should_use_media_engine(url: &str, filename: Option<&str>, format_id: Option<&str>) -> bool {
+    let fn_is_direct = filename
+        .map(crate::engine::extractor::MediaExtractor::is_likely_direct_file)
+        .unwrap_or(false);
+    let url_is_direct = crate::engine::extractor::MediaExtractor::is_likely_direct_file(url);
+    let is_direct_file = fn_is_direct || url_is_direct;
+    !is_direct_file
+        && (crate::engine::extractor::MediaExtractor::is_platform_url(url) || format_id.is_some())
+}
+
 /// Context needed by the coordinator to dynamically spawn work-stealing workers.
 #[derive(Clone)]
 pub struct CoordinatorContext {
     pub client: reqwest::Client,
     pub throttler: BandwidthThrottler,
-    pub event_tx: mpsc::Sender<WorkerEvent>,
+    pub event_tx: mpsc::WeakSender<WorkerEvent>,
     pub cancel_rx: watch::Receiver<bool>,
     pub custom_headers: Option<Vec<(String, String)>>,
     pub chunk_limits: downloader::ChunkLimitMap,
@@ -697,6 +709,7 @@ async fn run_coordinator(
     coordinator_ctx: Option<CoordinatorContext>,
 ) {
     let mut last_emit = tokio::time::Instant::now();
+    let mut last_part_save = tokio::time::Instant::now();
     let mut buffered_offsets: std::collections::HashMap<usize, u64> = std::collections::HashMap::new();
     let mut buffered_bytes: u64 = 0;
 
@@ -716,7 +729,7 @@ async fn run_coordinator(
         let pending_offsets = std::mem::take(&mut buffered_offsets);
         let pending_bytes = std::mem::replace(&mut buffered_bytes, 0);
 
-        let (is_completed, payload) = {
+        let (is_completed, payload, periodic_meta) = {
             let mut mgr = manager.write();
             if let Some(handle) = mgr.tasks.get_mut(&task_id) {
                 // Apply buffered progress
@@ -733,56 +746,63 @@ async fn run_coordinator(
                 match event {
                     WorkerEvent::ChunkDone { chunk_index } => {
                         if chunk_index < handle.metadata.chunks.len() {
-                            handle.metadata.chunks[chunk_index].completed = true;
-                            handle.metadata.chunks[chunk_index].current_byte =
-                                handle.metadata.chunks[chunk_index].end_byte + 1;
+                            let c = &mut handle.metadata.chunks[chunk_index];
+                            c.completed = true;
+                            // CRITICAL: For unknown-length downloads (end_byte == 0, total_bytes == 0),
+                            // NEVER overwrite current_byte to 0+1=1! Keep actual downloaded bytes.
+                            if c.end_byte > 0 {
+                                c.current_byte = c.end_byte + 1;
+                            } else if c.current_byte > 0 {
+                                c.end_byte = c.current_byte - 1;
+                            }
                         }
 
                         // Dynamic Work Stealing: An idle worker steals remaining work from longest active chunk
                         let all_chunks_done = handle.metadata.chunks.iter().all(|c| c.completed);
                         if !all_chunks_done && handle.metadata.supports_range && handle.metadata.chunks.len() < 32 {
                             if let Some(ref ctx) = coordinator_ctx {
-                                if let Some((donor_idx, new_chunk)) = crate::engine::chunker::steal_work(&mut handle.metadata.chunks) {
-                                    // Update donor chunk's atomic limit
-                                    {
-                                        let limits = ctx.chunk_limits.read();
-                                        if let Some(donor_atomic) = limits.get(&donor_idx) {
-                                            donor_atomic.store(handle.metadata.chunks[donor_idx].end_byte, std::sync::atomic::Ordering::SeqCst);
+                                if let Some(c_tx) = ctx.event_tx.upgrade() {
+                                    if let Some((donor_idx, new_chunk)) = crate::engine::chunker::steal_work(&mut handle.metadata.chunks) {
+                                        // Update donor chunk's atomic limit
+                                        {
+                                            let limits = ctx.chunk_limits.read();
+                                            if let Some(donor_atomic) = limits.get(&donor_idx) {
+                                                donor_atomic.store(handle.metadata.chunks[donor_idx].end_byte, std::sync::atomic::Ordering::SeqCst);
+                                            }
                                         }
+                                        // Register new chunk's atomic limit
+                                        {
+                                            let mut limits = ctx.chunk_limits.write();
+                                            limits.insert(new_chunk.index, Arc::new(std::sync::atomic::AtomicU64::new(new_chunk.end_byte)));
+                                        }
+
+                                        let c_client = ctx.client.clone();
+                                        let c_url = handle.metadata.url.clone();
+                                        let c_chunk = new_chunk.clone();
+                                        let c_path = file_path.clone();
+                                        let c_throttler = ctx.throttler.clone();
+                                        let c_cancel = ctx.cancel_rx.clone();
+                                        let c_headers = ctx.custom_headers.clone();
+                                        let c_limits = Some(ctx.chunk_limits.clone());
+                                        let c_retries = ctx.max_retries;
+
+                                        handle.metadata.chunks.push(new_chunk);
+
+                                        tokio::spawn(async move {
+                                            downloader::download_chunk_with_retry(
+                                                c_client,
+                                                c_url,
+                                                c_chunk,
+                                                c_path,
+                                                c_throttler,
+                                                c_tx,
+                                                c_cancel,
+                                                c_headers,
+                                                c_limits,
+                                                c_retries,
+                                            ).await;
+                                        });
                                     }
-                                    // Register new chunk's atomic limit
-                                    {
-                                        let mut limits = ctx.chunk_limits.write();
-                                        limits.insert(new_chunk.index, Arc::new(std::sync::atomic::AtomicU64::new(new_chunk.end_byte)));
-                                    }
-
-                                    let c_client = ctx.client.clone();
-                                    let c_url = handle.metadata.url.clone();
-                                    let c_chunk = new_chunk.clone();
-                                    let c_path = file_path.clone();
-                                    let c_throttler = ctx.throttler.clone();
-                                    let c_tx = ctx.event_tx.clone();
-                                    let c_cancel = ctx.cancel_rx.clone();
-                                    let c_headers = ctx.custom_headers.clone();
-                                    let c_limits = Some(ctx.chunk_limits.clone());
-                                    let c_retries = ctx.max_retries;
-
-                                    handle.metadata.chunks.push(new_chunk);
-
-                                    tokio::spawn(async move {
-                                        downloader::download_chunk_with_retry(
-                                            c_client,
-                                            c_url,
-                                            c_chunk,
-                                            c_path,
-                                            c_throttler,
-                                            c_tx,
-                                            c_cancel,
-                                            c_headers,
-                                            c_limits,
-                                            c_retries,
-                                        ).await;
-                                    });
                                 }
                             }
                         }
@@ -797,7 +817,7 @@ async fn run_coordinator(
                 if all_done {
                     handle.metadata.status = TaskStatus::Completed;
                     let dld = handle.metadata.downloaded_bytes();
-                    if handle.metadata.total_bytes == 0 || handle.metadata.total_bytes == 50 * 1024 * 1024 {
+                    if handle.metadata.total_bytes == 0 {
                         handle.metadata.total_bytes = dld;
                     }
                 }
@@ -835,21 +855,40 @@ async fn run_coordinator(
                     eta_secs: eta,
                 };
 
-                (all_done, Some(pl))
+                let checkpoint = if !is_comp && last_part_save.elapsed() >= Duration::from_secs(3) {
+                    Some(handle.metadata.clone())
+                } else {
+                    None
+                };
+
+                (all_done, Some(pl), checkpoint)
             } else {
-                (false, None)
+                (false, None, None)
             }
         };
 
-        if let Some(pl) = payload {
+        if let Some(meta_snap) = periodic_meta {
+            let _ = storage::save_part_json_atomic(&file_path, &meta_snap).await;
+            last_part_save = tokio::time::Instant::now();
+        }
+
+        if let Some(mut pl) = payload {
             if is_completed {
-                // Truncate and flush physical file to exact downloaded size to guarantee video playability
+                // Truncate/flush physical file safely: only truncate when exact total_bytes was known;
+                // for unknown-size downloads, sync reported size to actual disk length so we never truncate data!
                 if let Ok(file) = storage::open_shared_file(&file_path) {
-                    let actual_len = pl.downloaded_bytes;
-                    if actual_len > 0 {
-                        let _ = file.set_len(actual_len).await;
-                        let _ = file.sync_all().await;
+                    let disk_len = file.metadata().await.map(|m| m.len()).unwrap_or(0);
+                    if pl.total_bytes > 0 && disk_len >= pl.total_bytes {
+                        let _ = file.set_len(pl.total_bytes).await;
+                    } else if disk_len > pl.downloaded_bytes {
+                        pl.downloaded_bytes = disk_len;
+                        pl.total_bytes = disk_len;
+                        let mut mgr = manager.write();
+                        if let Some(h) = mgr.tasks.get_mut(&task_id) {
+                            h.metadata.total_bytes = disk_len;
+                        }
                     }
+                    let _ = file.sync_all().await;
                 }
                 let _ = app.emit("download_progress", &pl);
                 let _ = storage::delete_part_json(&file_path).await;
@@ -996,9 +1035,8 @@ pub async fn pause_download(
     };
 
     if let (Some(fp), Some(meta), Some(pl)) = (file_path_opt, metadata_opt, payload_opt) {
-        let is_media = crate::engine::extractor::MediaExtractor::is_media_url(&meta.url)
-            || meta.format_id.is_some()
-            || meta.chunks.len() <= 1 && meta.chunks.first().map(|c| c.end_byte == 0).unwrap_or(true);
+        let is_media = should_use_media_engine(&meta.url, Some(&meta.filename), meta.format_id.as_deref())
+            || (meta.chunks.len() <= 1 && meta.chunks.first().map(|c| c.end_byte == 0 && meta.total_bytes == 0).unwrap_or(true));
         if !is_media {
             let _ = storage::save_part_json_atomic(&fp, &meta).await;
         }
@@ -1020,11 +1058,17 @@ pub async fn resume_download(
     taskId: Option<String>,
 ) -> Result<(), String> {
     let id = task_id.or(taskId).ok_or_else(|| "Missing task_id".to_string())?;
+    let (cancel_tx, cancel_rx) = watch::channel(false);
     let (metadata, client, throttler) = {
         let mut mgr = state.manager.write();
         if let Some(handle) = mgr.tasks.get_mut(&id) {
+            // Prevent spawning duplicate concurrent workers if already Downloading or Completed
+            if handle.metadata.status == TaskStatus::Downloading || handle.metadata.status == TaskStatus::Completed {
+                return Ok(());
+            }
+            // Signal any prior token cleanly before installing the fresh one
+            let _ = handle.cancel_token.send(true);
             handle.metadata.status = TaskStatus::Downloading;
-            let (cancel_tx, _) = watch::channel(false);
             handle.cancel_token = cancel_tx;
             (
                 handle.metadata.clone(),
@@ -1036,17 +1080,8 @@ pub async fn resume_download(
         }
     };
 
-    let (cancel_tx, cancel_rx) = watch::channel(false);
-    {
-        let mut mgr = state.manager.write();
-        if let Some(handle) = mgr.tasks.get_mut(&id) {
-            handle.cancel_token = cancel_tx;
-        }
-    }
-
-    // If media stream extractor task: resume stream extractor
-    if crate::engine::extractor::MediaExtractor::is_media_url(&metadata.url)
-        || metadata.format_id.is_some()
+    // Unified media-vs-direct routing (covers all ~55 platforms identically to start_download!)
+    if should_use_media_engine(&metadata.url, Some(&metadata.filename), metadata.format_id.as_deref())
         || metadata.chunks.is_empty()
     {
         let dest_path = PathBuf::from(&metadata.destination);
@@ -1061,7 +1096,9 @@ pub async fn resume_download(
         let (prog_tx, mut prog_rx) = mpsc::channel(128);
         let url_c = metadata.url.clone();
         let format_id_c = metadata.format_id.clone();
+        let custom_fn_c = Some(metadata.filename.clone());
         let media_headers_c: Vec<(String, String)> = metadata.custom_headers.clone().unwrap_or_default();
+        let conns_c = metadata.num_connections.clamp(1, 16);
         let dest_dir_ext = dest_dir.clone();
         let dest_dir_watch = dest_dir.clone();
         let cancel_c = cancel_rx.clone();
@@ -1079,10 +1116,12 @@ pub async fn resume_download(
                 &client_c,
                 &url_c,
                 &dest_dir_ext,
+                custom_fn_c.as_deref(),
                 format_id_c.as_deref(),
                 &media_headers_c,
                 rate_limit_bps,
                 max_retries_c,
+                conns_c,
                 prog_tx,
                 cancel_c,
             ).await {
@@ -1236,8 +1275,23 @@ pub async fn resume_download(
         }
     }
 
-    // 2. Verify remote file hasn't changed on the server (ETag / Last-Modified / Content-Length)
-    if let Ok(probe) = downloader::probe_url(&client, &resume_meta.url).await {
+    // 2. If partial file was deleted from disk, reset chunks so we don't leave zero-filled holes
+    if !file_path.exists() {
+        for c in &mut resume_meta.chunks {
+            c.current_byte = c.start_byte;
+            c.completed = false;
+            c.retry_count = 0;
+        }
+        if let Some(parent) = file_path.parent() {
+            let _ = tokio::fs::create_dir_all(parent).await;
+        }
+        if resume_meta.total_bytes > 0 {
+            let _ = storage::preallocate_file(&file_path, resume_meta.total_bytes).await;
+        }
+    }
+
+    // 3. Verify remote file hasn't changed on the server (using saved custom_headers for Auth/Cookies!)
+    if let Ok(probe) = downloader::probe_url_with_headers(&client, &resume_meta.url, resume_meta.custom_headers.as_deref()).await {
         if !downloader::validate_consistency(&resume_meta, &probe) {
             crate::engine::extractor::record_engine_log(format!(
                 "[resume] Remote file changed on server for {}; resetting chunks for clean download",
@@ -1315,12 +1369,13 @@ pub async fn resume_download(
     let coordinator_ctx = CoordinatorContext {
         client: client.clone(),
         throttler: throttler.clone(),
-        event_tx: event_tx.clone(),
+        event_tx: event_tx.downgrade(),
         cancel_rx: cancel_rx.clone(),
         custom_headers: resume_headers,
         chunk_limits: chunk_limits.clone(),
         max_retries,
     };
+    drop(event_tx);
 
     let manager_arc = state.manager.clone();
     let app_handle = app.clone();
@@ -1713,15 +1768,18 @@ pub async fn open_file(
 
     #[cfg(target_os = "windows")]
     {
-        let path_str = target_file.to_string_lossy().to_string();
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", &path_str])
+        // explorer.exe delegates safely via ShellExecute without cmd.exe `&`/`%` interpretation or console flash
+        std::process::Command::new("explorer.exe")
+            .arg(&target_file)
             .spawn()
             .map_err(|e| format!("Failed to open file: {}", e))?;
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = open::that(&target_file);
+        std::process::Command::new("xdg-open")
+            .arg(&target_file)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
     }
 
     Ok(())
@@ -1753,145 +1811,6 @@ pub async fn extract_playlist(
     };
 
     crate::engine::extractor::MediaExtractor::extract_playlist_info(&client, &url).await
-}
-
-/// Start an adaptive HLS/DASH streaming download with auto-muxing.
-#[tauri::command]
-pub async fn start_stream_download(
-    state: State<'_, AppState>,
-    app: AppHandle,
-    request: serde_json::Value,
-) -> Result<String, String> {
-    let req_obj = if let Some(inner) = request.get("request") { inner } else { &request };
-
-    let url = req_obj.get("url").and_then(|v| v.as_str()).ok_or_else(|| "Missing 'url'".to_string())?.to_string();
-    let filename = req_obj.get("filename").and_then(|v| v.as_str()).unwrap_or("stream_video.mp4").to_string();
-    let destination = req_obj.get("destination").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let category = req_obj.get("category").and_then(|v| v.as_str()).unwrap_or("Videos").to_string();
-
-    let task_id = Uuid::new_v4().to_string();
-    let default_dir = state.manager.read().default_download_dir.clone();
-    let dest_dir = if destination.is_empty() || destination.contains("Users\\User") {
-        default_dir
-    } else {
-        PathBuf::from(&destination)
-    };
-
-    let _ = tokio::fs::create_dir_all(&dest_dir).await;
-    let file_path = dest_dir.join(&filename);
-
-    let (cancel_tx, cancel_rx) = watch::channel(false);
-    let (prog_tx, mut prog_rx) = mpsc::channel::<(usize, usize, u64)>(128);
-
-    let client = state.manager.read().http_client.clone();
-    let now = chrono::Utc::now().timestamp_millis();
-
-    let metadata = DownloadMetadata {
-        id: task_id.clone(),
-        url: url.clone(),
-        destination: file_path.to_string_lossy().to_string(),
-        filename: filename.clone(),
-        total_bytes: 0,
-        status: TaskStatus::Downloading,
-        etag: None,
-        last_modified: None,
-        supports_range: true,
-        num_connections: 8,
-        priority: 1,
-        category,
-        format_id: None,
-        custom_headers: None,
-        chunks: Vec::new(),
-        created_at: now,
-        updated_at: now,
-    };
-
-    {
-        let mut mgr = state.manager.write();
-        mgr.tasks.insert(
-            task_id.clone(),
-            TaskHandle {
-                metadata,
-                speed_meter: SpeedMeter::new(),
-                cancel_token: cancel_tx,
-            },
-        );
-    }
-
-    let client_c = client.clone();
-    let url_c = url.clone();
-    let out_c = file_path.clone();
-    let cancel_c = cancel_rx.clone();
-
-    // Spawn stream worker
-    tokio::spawn(async move {
-        let _ = crate::engine::stream::StreamEngine::download_hls_stream(
-            client_c,
-            url_c,
-            out_c,
-            8,
-            prog_tx,
-            cancel_c,
-        ).await;
-    });
-
-    // Progress watcher
-    let app_handle = app.clone();
-    let task_id_c = task_id.clone();
-    let mgr_arc = state.manager.clone();
-
-    tokio::spawn(async move {
-        let mut speed_meter = SpeedMeter::new();
-        while let Some((done, total, total_bytes)) = prog_rx.recv().await {
-            let progress = if total > 0 { done as f64 / total as f64 } else { 0.0 };
-            speed_meter.record(total_bytes);
-
-            let is_comp = done >= total;
-            let spd = speed_meter.speed_bps();
-
-            {
-                let mut mgr = mgr_arc.write();
-                if let Some(h) = mgr.tasks.get_mut(&task_id_c) {
-                    h.metadata.total_bytes = (total_bytes as f64 / progress.max(0.01)) as u64;
-                    if h.metadata.chunks.is_empty() {
-                        h.metadata.chunks.push(ChunkInfo {
-                            index: 0,
-                            start_byte: 0,
-                            end_byte: h.metadata.total_bytes,
-                            current_byte: total_bytes,
-                            completed: is_comp,
-                            retry_count: 0,
-                        });
-                    } else {
-                        h.metadata.chunks[0].current_byte = total_bytes;
-                        h.metadata.chunks[0].completed = is_comp;
-                    }
-                    if is_comp {
-                        h.metadata.status = TaskStatus::Completed;
-                    }
-                }
-            }
-
-            let payload = ProgressPayload {
-                id: task_id_c.clone(),
-                status: if is_comp { TaskStatus::Completed } else { TaskStatus::Downloading },
-                downloaded_bytes: total_bytes,
-                total_bytes: (total_bytes as f64 / progress.max(0.01)) as u64,
-                progress,
-                speed: if is_comp { 0.0 } else { spd },
-                chunks: vec![],
-                eta_secs: if spd > 0.0 && progress > 0.001 && progress < 1.0 { ((1.0 - progress) * total_bytes as f64 / progress) / spd } else { 0.0 },
-            };
-
-            let _ = app_handle.emit("download_progress", &payload);
-
-            if is_comp {
-                break;
-            }
-        }
-    });
-
-    Ok(task_id)
 }
 
 /// Refresh an expired temporary signed URL using the original source link or a new direct URL.
@@ -2046,6 +1965,7 @@ pub fn poll_rpc_downloads(
                 "url": req.url,
                 "filename": req.filename,
                 "format": req.format,
+                "headers": req.headers,
             })
         })
         .collect()
@@ -2148,7 +2068,7 @@ pub async fn update_extractor_core(state: State<'_, AppState>) -> Result<String,
     // Repair leftovers (loop: one pair merged per call)
     let mut repaired = 0;
     while repaired < 50 {
-        match MediaExtractor::auto_merge_unmerged_parts(&client, &download_dir).await {
+        match MediaExtractor::auto_merge_unmerged_parts(&client, &download_dir, None).await {
             Some(_) => repaired += 1,
             None => break,
         }
@@ -2185,20 +2105,25 @@ pub async fn set_window_title(window: tauri::Window, title: String) -> Result<()
     window.set_title(&title).map_err(|e| e.to_string())
 }
 
-/// Open an external URL in the default web browser (or Edge for store links).
+/// Open an external HTTP/HTTPS URL safely in the default web browser without shell command parsing.
 #[tauri::command]
 pub fn open_external_url(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        return Err("Only http:// and https:// URLs can be opened externally".to_string());
+    }
     #[cfg(target_os = "windows")]
     {
-        let _ = std::process::Command::new("cmd")
-            .args(&["/c", "start", "", &url])
+        // explorer.exe opens URLs via ShellExecute safely (handles `&` query params without cmd.exe injection!)
+        std::process::Command::new("explorer.exe")
+            .arg(trimmed)
             .spawn()
             .map_err(|e| format!("Failed to open URL: {}", e))?;
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = std::process::Command::new("xdg-open")
-            .arg(&url)
+        std::process::Command::new("xdg-open")
+            .arg(trimmed)
             .spawn()
             .map_err(|e| format!("Failed to open URL: {}", e))?;
     }
@@ -2412,7 +2337,9 @@ pub async fn export_diagnostic_report(
 
     let out_dir = dirs::desktop_dir().unwrap_or(download_dir);
     let out_path = out_dir.join("SuperIDM_Diagnostic_Report.txt");
-    let _ = tokio::fs::write(&out_path, report.as_bytes()).await;
+    tokio::fs::write(&out_path, report.as_bytes())
+        .await
+        .map_err(|e| format!("Failed to save diagnostic report to {}: {}", out_path.display(), e))?;
 
     Ok(serde_json::json!({
         "path": out_path.to_string_lossy().to_string(),
@@ -2498,6 +2425,17 @@ pub fn set_browser_rules(
     mgr.browser_excluded_domains = excl;
     mgr.browser_rules_updated_at = ts;
     ts
+}
+
+/// Read the latest browser capture rules (including updates pushed from the extension Popup via POST /api/rules).
+#[tauri::command]
+pub fn get_browser_rules(state: State<'_, AppState>) -> serde_json::Value {
+    let mgr = state.manager.read();
+    serde_json::json!({
+        "file_extensions": mgr.browser_file_extensions,
+        "excluded_domains": mgr.browser_excluded_domains,
+        "updated_at": mgr.browser_rules_updated_at,
+    })
 }
 
 /// Manually extract a downloaded archive file into a sibling folder.
